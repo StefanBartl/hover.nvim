@@ -70,15 +70,22 @@ that register into it, so a host's `setup()` is never the thing that has to pull
 It is a tidiness measure rather than a requirement: `require("hover.registry")` resolves
 whenever it is called.
 
-Configuration goes in the same call:
+Configuration goes in the same call — the whole spec, so it can be pasted as
+it stands:
 
 ```lua
-config = function()
-  require("hover").enable({
-    mode = "manual",
-    keymaps = { show = "<leader>k" },
-  })
-end,
+{
+  "StefanBartl/hover.nvim",
+  lazy = false,
+  priority = 900,
+  dependencies = { "StefanBartl/lib.nvim" },
+  config = function()
+    require("hover").enable({
+      mode = "manual",
+      keymaps = { show = "<leader>k" },
+    })
+  end,
+}
 ```
 
 ## packer.nvim
