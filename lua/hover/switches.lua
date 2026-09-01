@@ -3,10 +3,17 @@
 ---@description
 --- One table drives the public API (`hover.set`/`hover.enabled`), the
 --- `:Hover <feature> <state>` routes, their `<Tab>` completion, the
---- `:Hover status` report and the `:checkhealth hover` section. A tenth
+--- `:Hover status` report and the `:checkhealth hover` section. A ninth
 --- switch is one entry here and nothing else -- and dispatch, completion and
 --- documentation cannot drift apart, because there is only one of them
 --- (`UI-20`, `UI-21`).
+---
+--- That claim was not quite true until the eighth switch was added and
+--- proved it: `usrcmds.route_path` was a hand-written mapping of which
+--- switches nest under which, so `code` landed as `:Hover code` at the top
+--- level instead of `:Hover paths code`, and nothing failed. It reads
+--- `implies` now, so the command tree is derived from this table like
+--- everything else -- see the note there.
 ---
 --- **Implication runs upward only.** Turning `fetch` on turns `web` on, and
 --- `web` turns `links` on: fetching with no float to show it in would do the

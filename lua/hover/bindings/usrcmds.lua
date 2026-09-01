@@ -51,20 +51,38 @@ local function to_bool(state)
 end
 
 ---@internal
---- The route path for one switch. `web` and `fetch` nest under `links`
---- because that is what they are -- the command tree should read like the
---- implication chain, not like a flat list of seven booleans.
+--- The route path for one switch: the implication chain, read as a command
+--- tree. `fetch` implies `web` implies `links`, so it is
+--- `:Hover links web fetch`; `code` and `missing` both imply `paths`, so they
+--- are `:Hover paths code` and `:Hover paths missing`.
+---
+--- **Derived rather than written down.** This was a hand-maintained
+--- `if name == "web" then ... elseif ...` chain, and it broke the moment a
+--- switch was added without a matching branch: `hover.switches` says a new
+--- switch is one table entry and nothing else, and that was true of dispatch,
+--- completion, `status` and `:checkhealth` but quietly not of this. The
+--- eighth switch landed as `:Hover code` at the top level instead of
+--- `:Hover paths code`, with nothing failing to say so. Reading `implies`
+--- gives exactly the same paths for every switch that existed before, and
+--- cannot fall behind the table it now reads from.
+---
+--- The `seen` guard is for a chain that points at itself. Nothing in
+--- `SWITCHES` does today; a cycle here would hang the command registration at
+--- startup, which is a bad way to find out.
 ---@param name string
 ---@return string[]
 local function route_path(name)
-  if name == "web" then
-    return { "links", "web" }
-  elseif name == "fetch" then
-    return { "links", "web", "fetch" }
-  elseif name == "missing" then
-    return { "paths", "missing" }
+  local path = { name }
+  local seen = { [name] = true }
+  local cursor = switches.spec(name)
+
+  while cursor and cursor.implies and not seen[cursor.implies] do
+    table.insert(path, 1, cursor.implies)
+    seen[cursor.implies] = true
+    cursor = switches.spec(cursor.implies)
   end
-  return { name }
+
+  return path
 end
 
 ---@internal

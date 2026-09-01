@@ -158,4 +158,60 @@ describe("hover.set_mode", function()
     assert.is_true(config.is_enabled())
     assert.is_false(config.is_auto())
   end)
+
+  -- The command tree is the third consumer of this table, after dispatch and
+  -- `status`, and the one that used to be able to fall behind it silently.
+  -- `route_path` was a hand-written `if name == "web" then ... elseif` chain;
+  -- a switch added without a matching branch landed at the top level instead
+  -- of under its parent, and nothing anywhere failed. It is derived from
+  -- `implies` now, and this is what says so.
+  describe("the command tree", function()
+    --- Every `:Hover …` route path the verb was registered with.
+    ---@return table<string, true>
+    local function registered_paths()
+      require("hover.bindings.usrcmds").setup()
+      local registry = require("lib.nvim.bindings.usercmd.composer.registry")
+      local out = {}
+      for _, handle in ipairs(registry.all()) do
+        if handle:name() == "Hover" then
+          for _, route in ipairs(handle:spec().routes or {}) do
+            out[table.concat(route.path or {}, " ")] = true
+          end
+        end
+      end
+      return out
+    end
+
+    it("nests every switch under the switch it implies", function()
+      local paths = registered_paths()
+      for _, name in ipairs(switches.names()) do
+        local spec = switches.spec(name)
+        local want = name
+        local cursor, guard = spec, 0
+        while cursor and cursor.implies and guard < 10 do
+          want = cursor.implies .. " " .. want
+          cursor = switches.spec(cursor.implies)
+          guard = guard + 1
+        end
+        assert.is_true(
+          paths[want] == true,
+          ("switch %q should be reachable as `:Hover %s`"):format(name, want)
+        )
+      end
+    end)
+
+    it("puts no switch at the top level that implies something", function()
+      -- The exact shape of the bug: `code` implies `paths`, so a bare
+      -- `:Hover code` route means the nesting was lost.
+      local paths = registered_paths()
+      for _, name in ipairs(switches.names()) do
+        if switches.spec(name).implies then
+          assert.is_nil(
+            paths[name],
+            ("%q implies something, so `:Hover %s` must not exist on its own"):format(name, name)
+          )
+        end
+      end
+    end)
+  end)
 end)
