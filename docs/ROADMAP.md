@@ -7,25 +7,6 @@ A concept that ships gets deleted from here rather than marked done.
 
 ## Open
 
-### Scoping bare paths to comments and strings
-
-**The remaining half of the noise problem.** In a code buffer a path is almost
-always inside a comment or a string literal — never in the middle of an
-expression. Gating the bare-path source on "is the cursor in a comment or a
-string" would remove nearly all remaining false starts in source files while
-leaving prose, `.txt`, commit messages and `:messages` dumps untouched (no
-parser, no gate).
-
-Two things to settle first, and they are why this is not done:
-
-- **Fail-open, not fail-closed.** A buffer with no parser, a parser that fails
-  to load, or a language whose grammar names the node something else must fall
-  through to "check anyway" (`ERR-20`). A silently skipped region is much worse
-  than an occasional extra float.
-- **The cost is per `CursorHold`.** `vim.treesitter.get_captures_at_pos` on
-  every trigger in every buffer needs measuring against the `<cfile>` gate it
-  would sit in front of, not assumed to be cheaper.
-
 ### A `repository` target type, for reposcope.nvim
 
 [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) already keeps

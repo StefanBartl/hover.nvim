@@ -59,6 +59,7 @@
 ---@class Hover.PathsConfig
 ---@field enabled? boolean # Whether a path written in prose hovers. Default true.
 ---@field missing? boolean # Whether text that resolves to nothing may be marked broken. Default true, and gated behind `hover.bare_path.is_unambiguous_path`.
+---@field code? boolean # Whether a path may be found in executable code, not just a source file's comments and strings. Default false; see `hover.scope`.
 
 --- Office documents (`.docx`, `.xlsx`, `.pptx`, `.odt`, the legacy binary
 --- formats). Off means a badge saying what the file is; on means

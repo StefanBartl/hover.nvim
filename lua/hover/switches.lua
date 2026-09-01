@@ -76,6 +76,14 @@ local SWITCHES = {
     off_msg = "a path that resolves to nothing stays silent",
     desc = "whether a bare path that resolves to nothing is reported as broken",
   },
+  code = {
+    path = { "paths", "code" },
+    implies = "paths",
+    label = "paths in code",
+    on_msg = "paths hover anywhere in a source file, expressions included",
+    off_msg = "in a parsed buffer, paths hover in comments and strings only",
+    desc = "whether a bare path hovers inside executable code, not just comments and strings",
+  },
   images = {
     path = { "inline_images" },
     label = "inline images",
@@ -95,7 +103,7 @@ local SWITCHES = {
 --- The order `status` and `:checkhealth` list them in: the hierarchy, read
 --- top down, rather than whatever `pairs` happens to produce.
 ---@type string[]
-local ORDER = { "links", "web", "fetch", "paths", "missing", "images", "office" }
+local ORDER = { "links", "web", "fetch", "paths", "missing", "code", "images", "office" }
 
 --- Every switch name, in display order.
 ---@return string[]

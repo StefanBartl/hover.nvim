@@ -120,6 +120,20 @@ return {
     -- anywhere else here.
     ---@type boolean
     missing = true,
+
+    -- Whether a path may also be found in executable code, rather than only
+    -- in the comments and strings of a source file. Off: in a parsed buffer
+    -- a position Treesitter identifies as code is skipped before the
+    -- resolver ever runs. This is the half of the bare-path noise that no
+    -- rule about the *text* can remove -- `vim.api.foo` and `a / b` are not
+    -- textually different from a path, only positionally.
+    --
+    -- It costs nothing in prose: a buffer with no parser, a position with no
+    -- captures, and a capture family this plugin does not recognise are all
+    -- allowed through, so `.txt`, logs, `:messages` and ordinary markdown
+    -- paragraphs are untouched. See `hover.scope`.
+    ---@type boolean
+    code = false,
   },
 
   --- Office documents (`.docx`, `.xlsx`, `.pptx`, `.odt`, and the legacy

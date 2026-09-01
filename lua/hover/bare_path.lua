@@ -297,8 +297,20 @@ end
 --- that resolves to nothing is simply not a target, and no float opens at
 --- all. The stricter `is_unambiguous_path` test still runs underneath it --
 --- the switch turns the whole class off, it does not loosen the rule.
+---
+--- `opts.code` is the `:Hover paths code` switch, and like `opts.missing` it
+--- is taken as the caller's word rather than read back out of the
+--- configuration: **only an explicit `false` applies the gate.** `hover.show`
+--- passes `config.paths_code_enabled()`, which is false by default, so in the
+--- plugin the gate is on; a direct call to this function with no opts behaves
+--- exactly as it did before the switch existed.
+---
+--- With the gate applied, a position Treesitter identifies as executable code
+--- is not a target at all, which is what keeps `vim.api.foo` and `a / b` from
+--- reaching the resolver. See `hover.scope` for what counts as code and for
+--- the five ways it declines to decide.
 ---@param bufnr? integer
----@param opts? { missing?: boolean } `missing` defaults to true.
+---@param opts? { missing?: boolean, code?: boolean } Both default to true.
 ---@return Hover.Source|nil
 function M.under_cursor(bufnr, opts)
   opts = opts or {}
@@ -326,9 +338,22 @@ function M.under_cursor(bufnr, opts)
     return nil
   end
 
-  local token =
-    trim_delimiters(type(vim.fn.expand("<cfile>")) == "string" and vim.fn.expand("<cfile>") or "")
+  local cfile = vim.fn.expand("<cfile>")
+  local token = trim_delimiters(type(cfile) == "string" and cfile or "")
   if not looks_like_path(token) then
+    return nil
+  end
+
+  -- Second gate, and deliberately *after* the first rather than in front of
+  -- it. In a source file a path is written in a comment or a string and never
+  -- inside an expression, so a position identifiable as executable code is
+  -- not a target. The order is the measured part: this gate costs ~90 us
+  -- because answering means parsing, against ~1.1 us for the token gate
+  -- above. It is affordable only because the token gate rejects 99.8% of
+  -- cursor positions before it -- put first it would cost every CursorHold
+  -- in every buffer. It fails open in every direction it can: see
+  -- `hover.scope`.
+  if opts.code == false and not require("hover.scope").allows_path(bufnr, row, col) then
     return nil
   end
 

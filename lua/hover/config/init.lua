@@ -204,6 +204,17 @@ function M.missing_enabled()
   return M.paths_enabled() and type(paths) == "table" and paths.missing ~= false
 end
 
+--- Whether a bare path may also be found in executable code, rather than
+--- only in a source file's comments and strings.
+---
+--- Note the default: unlike every other flag here this one defaults to
+--- *false*, so the test is `== true` rather than `~= false`.
+---@return boolean
+function M.paths_code_enabled()
+  local paths = M.get().paths
+  return M.paths_enabled() and type(paths) == "table" and paths.code == true
+end
+
 --- Whether office documents are converted for a real page preview, rather
 --- than described by a badge.
 ---@return boolean

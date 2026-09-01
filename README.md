@@ -52,6 +52,7 @@ See ./docs/architecture.md#modules for details.
 - [Modes](#modes)
 - [The `:Hover` command](#the-hover-command)
 - [Bare paths](#bare-paths)
+- [Where a bare path is looked for](#where-a-bare-path-is-looked-for)
 - [Waving one hover away](#waving-one-hover-away)
 - [Scrolling a preview](#scrolling-a-preview)
 - [Configuration](#configuration)
@@ -70,7 +71,7 @@ See ./docs/architecture.md#modules for details.
 | Preview on cursor rest | A float over whatever the cursor points at — a link, or a path written as plain text, in any filetype | [What it previews](#what-it-previews) |
 | `:Hover show` / `show({ force = true })` | One preview, here and now, ignoring every volume switch | [The `:Hover` command](#the-hover-command) |
 | `:Hover mode [auto\|manual\|off]` | The switch above every other switch. `manual` keeps every preview and gives up only the automatic trigger | [Modes](#modes) |
-| Seven runtime switches | `links`, `links web`, `links web fetch`, `paths`, `paths missing`, `images`, `office` — declared once, feeding routes, completion, `status` and `:checkhealth` alike | [The `:Hover` command](#the-hover-command) |
+| Eight runtime switches | `links`, `links web`, `links web fetch`, `paths`, `paths missing`, `paths code`, `images`, `office` — declared once, feeding routes, completion, `status` and `:checkhealth` alike | [The `:Hover` command](#the-hover-command) |
 | `:Hover status` | The mode and every switch, in one message | [The `:Hover` command](#the-hover-command) |
 | Bare-path resolution | A path in prose, a code comment or a `:messages` dump is a target too — truncated ones included | [Bare paths](#bare-paths) |
 | `hover.scroll(1)` / `scroll(-1)` | Page through a file's head or a PDF's pages without leaving the document | [Scrolling a preview](#scrolling-a-preview) |
@@ -285,6 +286,7 @@ toggles.
 | `:Hover links web fetch [on\|off\|toggle]` | fetch for status code and title. Implies `links web on` |
 | `:Hover paths [on\|off\|toggle]` | whether a path written in prose hovers |
 | `:Hover paths missing [on\|off\|toggle]` | whether a path resolving to nothing is marked broken |
+| `:Hover paths code [on\|off\|toggle]` | whether a path hovers inside executable code, not just comments and strings. Implies `paths on` |
 | `:Hover images [on\|off\|toggle]` | whether pictures are drawn, or described |
 | `:Hover office [on\|off\|toggle]` | whether office documents render through a PDF |
 
@@ -341,6 +343,59 @@ github.com/user/repo                                    -- nor an extension mid-
 None of this touches a target that **exists** — `docs/` and `and/or` both hover normally
 the moment something of that name is on disk. The rules only decide whether *absence* is
 worth asserting. `:Hover paths missing off` turns the class off entirely.
+
+## Where a bare path is looked for
+
+The rules above are about the *text*. There is a second question, about the
+*position*, and it is the one that removes the rest of the noise in a source
+file: **a path is written in a comment or inside a string, never in the middle
+of an expression.**
+
+That matters because the remaining false positives are not textually different
+from a path. `vim.api.nvim_buf_get_lines` has dots and components; `alpha /
+beta` has a separator and two parts, exactly like `docs/BINDINGS.md`. No rule
+about the characters can separate them, because there is nothing to separate —
+only where they sit differs.
+
+So in a buffer Treesitter can parse, a position it identifies as executable
+code is not searched at all:
+
+```lua
+-- see ./docs/BINDINGS.md          hovers  (a comment)
+local p = "./docs/BINDINGS.md"  -- hovers  (a string)
+local x = vim.api.nvim_get_mode -- silent  (an expression)
+local r = alpha / beta          -- silent  (an expression)
+```
+
+**The rule is inverted from the obvious one, deliberately.** "Allow only in a
+comment or a string" sounds equivalent and is not: it assumes prose buffers
+have no parser, and markdown, gitcommit and rst all do. Under that rule a path
+in an ordinary markdown paragraph would stop hovering — which is most of what
+this feature exists for. The question asked instead is whether the position is
+*positively identifiable as code*, and everything else is allowed:
+
+| At the cursor | Answer |
+| --- | --- |
+| no parser for this buffer — `.txt`, a log, a `:messages` dump | looked for |
+| a parser, but nothing captured here — an ordinary markdown paragraph | looked for |
+| a comment, a string, any markup capture | looked for |
+| only code captures — a variable, an operator, a keyword | skipped |
+| a capture family this plugin has never heard of | looked for |
+
+Three of those five are permissive, and the two that are not need positive
+evidence. A grammar nobody anticipated, a parser that fails to load, a query
+that throws — each falls through to "look anyway", because a feature that
+silently stops working in one language is much worse than an occasional extra
+float.
+
+`:Hover paths code on` turns the position check off entirely and goes back to
+letting the text decide alone. `:Hover show` ignores it regardless: asking
+about this exact spot is already the answer to "is this worth asking about".
+
+It costs nothing where it does not run. The token check comes first and
+rejects the overwhelming majority of cursor positions — 530 of 531 in this
+plugin's own largest source file — so the parse behind this section happens
+only for text that already looks like a path.
 
 ## Waving one hover away
 
@@ -441,6 +496,7 @@ require("hover").setup({
 | `links.timeout_ms` | `2000` | |
 | `paths.enabled` | `true` | Whether a path written without link syntax hovers. |
 | `paths.missing` | `true` | Whether a bare path resolving to nothing may be marked broken. |
+| `paths.code` | `false` | Whether a bare path hovers inside executable code. Off: in a parsed buffer, only comments and strings are searched. Prose is untouched — see [Where a bare path is looked for](#where-a-bare-path-is-looked-for). |
 | `office.convert` | `false` | Whether a `.docx`/`.xlsx`/`.pptx`/… is converted to a PDF and shown as a page. |
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | |
@@ -541,6 +597,7 @@ Two traps, both of which cost days:
 | `hover.classify` | Target string → typed target. Pure, no I/O beyond one `fs_stat` |
 | `hover.formats` | What an extension names, and whether it is convertible |
 | `hover.bare_path` | Paths with no link syntax; asks gopath.nvim when present |
+| `hover.scope` | Whether the cursor sits somewhere a path could be written at all |
 | `hover.bare_url` | URLs with no link syntax, in any filetype |
 | `hover.float` | The window |
 | `hover.health` | `:checkhealth hover` |

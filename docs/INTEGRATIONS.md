@@ -248,6 +248,7 @@ Two things to settle first, and they are why this is not done yet:
 | a link hovers but shows no title or status code | that is `web on` without `web fetch on`; the offline preview never touches the network |
 | a fetched link keeps showing an old status | fetch results are cached for the session; `:Hover links web off` then `on` drops the cache |
 | nothing hovers anywhere | `enable()` never ran from a non-lazy spec, `:Hover off` was typed and forgotten, or `vim.g.hover_disable` is set |
+| a path in source code does not hover, but the same text in a comment does | the position gate — **hover.nvim**. `:Hover paths code on` turns it off; see [Where a bare path is looked for](../README.md#where-a-bare-path-is-looked-for) |
 | one path stopped hovering while everything else still works | it was dismissed with `q`/`<Esc>`. It re-arms at the next target the cursor resolves, or immediately via `show({ force = true })` |
 | `q` starts no macro, or `<Esc>` does nothing | a hover is on screen and has borrowed that key — **hover.nvim**, and only until the float closes, which hands it back rather than deleting it |
 

@@ -142,6 +142,8 @@ toggles. >
   :Hover paths [on|off|toggle]           bare paths in prose hover
   :Hover paths missing [on|off|toggle]   a path resolving to nothing is
                                          marked broken
+  :Hover paths code [on|off|toggle]      bare paths hover inside code, not
+                                         just comments and strings
   :Hover images [on|off|toggle]          pictures are drawn, or described
   :Hover office [on|off|toggle]          office documents render via PDF
 <
@@ -151,6 +153,16 @@ turning `links` back on restores what you had.
 
 `links off` is about how a target was FOUND, not what it is. If the same text
 is also a resolvable bare path, `paths` decides it.
+
+`paths code` is about WHERE a bare path is looked for, not what it looks like.
+Off (the default), a position Treesitter identifies as executable code is
+skipped: a path lives in a comment or a string, never inside an expression,
+and `vim.api.foo` or `a / b` are not textually different from a path -- only
+positionally. The rule is inverted from "allow only comments and strings",
+because markdown, gitcommit and rst have parsers too and a path in an ordinary
+paragraph must keep hovering. Anything not positively identifiable as code is
+allowed: no parser, no captures, an unfamiliar capture family, a query that
+throws. `:Hover show` ignores this switch entirely.
 
 Every change is announced, because "off" is otherwise invisible.
 
@@ -233,7 +245,7 @@ worth asserting.
     inline_images = true,
     filetypes = "*",
     links = { enabled = true, web = false, fetch = false, timeout_ms = 2000 },
-    paths = { enabled = true, missing = true },
+    paths = { enabled = true, missing = true, code = false },
     office = { convert = false, timeout_ms = 60000 },
     scroll_keys = {
       down = { "<M-PageDown>", "<C-Down>" },

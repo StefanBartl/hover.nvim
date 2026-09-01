@@ -211,6 +211,11 @@ function M.target_under_cursor(bufnr, opts)
     -- Forced, the broken-target marker is wanted: "there is nothing here"
     -- is the answer someone asking about this exact text came for.
     missing = force or config.missing_enabled(),
+    -- Forced, the position gate goes too: someone asking about this exact
+    -- text has already said the text is worth asking about, and being told
+    -- "no" because the cursor is inside an expression would be answering a
+    -- question nobody asked.
+    code = force or config.paths_code_enabled(),
   })
 end
 
