@@ -27,11 +27,6 @@ section, a URL taken apart -- or, when the target does not exist, that.
 A file whose bytes are not text (a .docx, an archive, an executable) gets a
 badge naming the format rather than a float full of its bytes.
 
-NOTE: lewis6991/hover.nvim is an unrelated plugin for LSP-style hover
-providers. The repository names do not collide, but the Lua module root does:
-both ship `lua/hover/`, so installing both leaves whichever is earlier on
-'runtimepath' shadowing the other.
-
 ==============================================================================
 2. REQUIREMENTS                                            *hover-requirements*
 
@@ -41,12 +36,20 @@ StefanBartl/lib.nvim is a HARD dependency -- required with no fallback. The
 debounce, the notifier, the LRU cache, the autocmd helpers and the `:Hover`
 command composer all come from it.
 
-Four optional contributors, none required: >
+Four optional contributors, none required. What each one adds (+), and what
+the hover falls back to without it (-): >
 
-  markdown.nvim   link and <figure> scanning; #heading section previews
-  images.nvim     draws the picture into the float
-  pdfport.nvim    rasterizes a PDF page; converts an office document
-  gopath.nvim     resolves truncated paths and :line:col suffixes
+  markdown.nvim  + link and <figure> scanning; #heading section previews
+                 - only bare paths hover; file.md#frag shows the file head
+
+  images.nvim    + draws the picture into the float, over OSC 1337
+                 - an image (or a PDF page) is described as text instead
+
+  pdfport.nvim   + rasterizes a PDF page; converts an office document
+                 - a PDF shows its size; an office file shows a badge
+
+  gopath.nvim    + resolves truncated paths and :line:col suffixes
+                 - ordinary paths still resolve, truncated ones do not
 <
 Without any of them you still get file heads, directory listings, image and
 PDF metadata, the binary badge, the "does not exist" answer, and -- once

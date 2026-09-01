@@ -40,15 +40,14 @@ See ./docs/architecture.md#modules for details.
 └───────────────────────────────────┘
 ```
 
-> **On the name.** [lewis6991/hover.nvim](https://github.com/lewis6991/hover.nvim) is an
-> unrelated and well-known plugin for LSP-style hover providers. The repository names do
-> not collide, but the Lua module root does: both ship `lua/hover/`, so installing both
-> leaves whichever is earlier on `'runtimepath'` shadowing the other. Pick one.
+---
 
 ## Table of contents
 
+- [Capabilities](#capabilities)
 - [What it previews](#what-it-previews)
 - [Quickstart](#quickstart)
+- [Integrations](#integrations)
 - [What is opt-in, and why](#what-is-opt-in-and-why)
 - [Modes](#modes)
 - [The `:Hover` command](#the-hover-command)
@@ -59,7 +58,28 @@ See ./docs/architecture.md#modules for details.
 - [Contributing from a plugin](#contributing-from-a-plugin)
 - [Two things that must not be changed casually](#two-things-that-must-not-be-changed-casually)
 - [Modules](#modules)
-- [Literature and references](#literature-and-references)
+- [Documentation](#documentation)
+
+---
+
+## Capabilities
+
+| Capability | What it does | Details |
+| --- | --- | --- |
+| `require("hover").enable()` | Installs the trigger, attaches the buffers that are already open, registers `:Hover`. Idempotent | [Quickstart](#quickstart) |
+| Preview on cursor rest | A float over whatever the cursor points at — a link, or a path written as plain text, in any filetype | [What it previews](#what-it-previews) |
+| `:Hover show` / `show({ force = true })` | One preview, here and now, ignoring every volume switch | [The `:Hover` command](#the-hover-command) |
+| `:Hover mode [auto\|manual\|off]` | The switch above every other switch. `manual` keeps every preview and gives up only the automatic trigger | [Modes](#modes) |
+| Seven runtime switches | `links`, `links web`, `links web fetch`, `paths`, `paths missing`, `images`, `office` — declared once, feeding routes, completion, `status` and `:checkhealth` alike | [The `:Hover` command](#the-hover-command) |
+| `:Hover status` | The mode and every switch, in one message | [The `:Hover` command](#the-hover-command) |
+| Bare-path resolution | A path in prose, a code comment or a `:messages` dump is a target too — truncated ones included | [Bare paths](#bare-paths) |
+| `hover.scroll(1)` / `scroll(-1)` | Page through a file's head or a PDF's pages without leaving the document | [Scrolling a preview](#scrolling-a-preview) |
+| `hover.dismiss()` | Wave one float away and keep it away, until the cursor reaches another target | [Waving one hover away](#waving-one-hover-away) |
+| `hover.registry.register()` | Another plugin contributes a *source* or a *preview*; hover.nvim never says its name | [Contributing from a plugin](#contributing-from-a-plugin) |
+| `:checkhealth hover` | One check per soft dependency, asking for the entry point actually called rather than for the module | [Bindings](docs/BINDINGS.md) |
+| `vim.g.hover_disable` | Forces `mode = "off"` from a plugin spec, outranking anything a host configures | [Modes](#modes) |
+
+---
 
 ## What it previews
 
@@ -75,17 +95,11 @@ See ./docs/architecture.md#modules for details.
 | an http(s) link | host, path and decoded query; plus status code and title with fetching on |
 | a target that does not exist | that — often the most useful answer of all |
 
-Every contributor below is optional, and **none of them is required**:
+Half of that list is somebody else's work. Every plugin that contributes to it is
+optional and **none of them is required** — see [Integrations](#integrations) for what
+each one brings, and what its row degrades to when it is absent.
 
-| Plugin | Contributes | Without it |
-| --- | --- | --- |
-| **markdown.nvim** | finding a link / `<figure>` in a line; `#heading` section previews | only bare paths start a hover; `file.md#frag` shows the file's head |
-| **images.nvim** | draws the picture into the float (OSC 1337) | an image target shows format, dimensions and size as text |
-| **pdfport.nvim** | rasterizes page 1 of a PDF; converts an office document to a PDF | a PDF shows its size and why it could not be rendered |
-| **gopath.nvim** | resolves truncated paths (`...nvim/init.lua:42`) and `:line:col` suffixes | ordinary relative and absolute paths still resolve; truncated ones do not |
-
-The long version — every entry point, and a table reading each symptom back to the plugin
-that owns it — is [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md).
+---
 
 ## Quickstart
 
@@ -113,6 +127,70 @@ so `:Hover mode auto` is reachable even from a session where nothing turned it o
 
 `enable(opts)` also takes the configuration table, so switching it on and configuring it
 is one call.
+
+---
+
+## Integrations
+
+hover.nvim draws one float and knows almost nothing. Nearly everything interesting in it
+— reading a markdown link, resolving a truncated path, turning a `.png` into pixels,
+turning page 3 of a PDF into a `.png` — is somebody else's job, done by a sibling plugin
+that may or may not be installed.
+
+[lib.nvim] is the one **hard** dependency. Everything else here is **soft**: reached
+through a `pcall`, optional in both directions, and worth exactly one row of the table
+below. With none of them installed the hover still gives file heads, directory listings,
+image and PDF metadata, a badge for files that hold no text, URL details once the web
+hover is switched on, and the "this target does not exist" answer.
+
+### What each plugin brings
+
+| Plugin | What it is on its own | What it adds to the hover | Without it |
+| --- | --- | --- | --- |
+| [lib.nvim] — **required** | A reusable Lua/Neovim helper library with no third-party dependencies, shared by every plugin in this ecosystem | The `:Hover` verb and its `<Tab>` completion (`bindings.usercmd.composer`), the debounce behind `delay_ms`, the notifier every switch announcement goes through, the LRU under the preview cache, the autocmd helpers, and `image_preview.detect()` — which drawing provider is installed | hover.nvim does not load. This is the one dependency with no fallback |
+| [markdown.nvim] | A self-contained Markdown toolkit: headings/TOC/folding, GFM tables, links and references, a cursor-action dispatcher | The link scanner — `[text](target)`, an `<img src>`/`<a href>`, or a whole captioned `<figure>` under the cursor becomes a target — and the `#heading` section preview, so `file.md#modules` opens on *that section* instead of the file's head. The single biggest upgrade this plugin can receive | Only bare paths start a hover, and `file.md#frag` shows the file's first lines |
+| [images.nvim] | Shows images in the terminal over OSC 1337 — `:Image`, galleries, clipboard paste, zen view. The only provider that draws on native Windows Neovim in WezTerm | The picture itself, drawn into the float: pixel size where the header parser cannot read the format (WebP, SVG), the letterboxing fit, the `draw_inset` the anchor keeps free on every side, the deferred draw, and the terminal clear when the float closes. Also what makes a rasterized PDF page visible at all | An image target shows format, dimensions and size as text — and so does a PDF page |
+| [pdfport.nvim] | PDFs in both directions: seven extraction backends, plus nine producers for creating, merging and rasterizing | `render_page()` — page 1 of a PDF as a PNG, and every further page scrolled to. And, once `:Hover office on`, `create()` runs LibreOffice headless so a `.docx`/`.xlsx`/`.pptx` becomes a page too | A PDF shows its size and why there is no page; an office document shows a badge naming the format |
+| [gopath.nvim] | Multi-phase navigation from the cursor: LSP → Treesitter → whole-line extraction → suffix search → fuzzy alternate | `resolve_at_cursor()`, asked *before* Vim's own `<cfile>`: a truncated `...nvim/init.lua`, a `:line:col` suffix, a file findable only through `&path`/`rtp`. That is the "a path in `:messages` should hover too" case | Ordinary relative and absolute paths still resolve; truncated ones do not |
+| [snacks.nvim] / [image.nvim] | Image providers speaking the Kitty graphics protocol | Recognised as providers, but neither can draw into an arbitrary existing window, so a picture still falls back to text. images.nvim wins whenever several are installed | Nothing changes |
+| [reposcope.nvim] — *planned* | Search, preview and clone repositories from GitHub / GitLab / Codeberg, keeping every README it fetched in a cache keyed `owner/repo` | Nothing yet. The natural feature — cursor on `owner/repo`, that README's head in the float — needs no change here at all: it is a registry source plus a preview | No repository hover. Two questions have to be settled first — see [the roadmap](docs/ROADMAP.md) |
+
+### The two doors
+
+There are exactly two ways a plugin and the hover reach each other, and they are not
+interchangeable.
+
+| Door | How it works | Who arrives through it |
+| --- | --- | --- |
+| **Registry** (inbound) | The plugin calls `hover.registry.register(name, …)` and hands over a *source* ("what is under the cursor?") or a *preview* ("how do I render a target of this type?"). hover.nvim never says its name, and a sixth contributor needs no change here | markdown.nvim |
+| **Named soft dependency** (outbound) | hover.nvim `pcall(require, …)`s the plugin by name from inside its own preview code, guarded so a missing plugin is a `nil` rather than an error | images.nvim, pdfport.nvim, gopath.nvim |
+
+Door 1 is the better shape; door 2 is the honest one. A *capability* can be registered —
+"here is a function that previews an anchor" says everything the framework needs to know.
+A *renderer* cannot, because the hover has to negotiate with it: measure a picture,
+subtract the drawing inset, hand back a geometry, defer a draw by one tick, clear the
+terminal on close. That is a conversation with one specific API, not a callback, and
+pretending otherwise would put an images.nvim-shaped interface into a library that would
+then have exactly one implementor.
+
+The practical consequence is worth knowing before opening an issue: **a plugin can be
+listed here and still not be the cause of the bug you are looking at.** Door-2 plugins
+are named inside hover.nvim's own source, so their names turn up in comments, module docs
+and stack traces belonging to code they never ran.
+
+[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) is the long version — every entry point, and
+a table reading each symptom back to the plugin that owns it.
+
+[lib.nvim]: https://github.com/StefanBartl/lib.nvim
+[markdown.nvim]: https://github.com/StefanBartl/markdown.nvim
+[images.nvim]: https://github.com/StefanBartl/images.nvim
+[pdfport.nvim]: https://github.com/StefanBartl/pdfport.nvim
+[gopath.nvim]: https://github.com/StefanBartl/gopath.nvim
+[reposcope.nvim]: https://github.com/StefanBartl/reposcope.nvim
+[snacks.nvim]: https://github.com/folke/snacks.nvim
+[image.nvim]: https://github.com/3rd/image.nvim
+
+---
 
 ## What is opt-in, and why
 
@@ -468,15 +546,24 @@ Two traps, both of which cost days:
 | `hover.preview.url` | URL details, optional fetch |
 | `hover.preview.media` | Images and PDF pages, via whatever provider is installed |
 
-## Literature and references
+---
 
-- [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md) — who reaches whom, through which door,
-  and what degrades when a plugin is absent.
-- [`docs/BINDINGS.md`](docs/BINDINGS.md) — every keymap, user command and autocmd this
-  plugin installs.
-- [`docs/ROADMAP.md`](docs/ROADMAP.md) — what is deliberately not built yet.
-- `:help hover` — the vimdoc, same content, offline.
-- Neovim, `:help nvim_open_win()`, `:help CursorHold`, `:help 'updatetime'`,
-  `:help maparg()` / `:help mapset()` — the four APIs the borrowed-key lifecycle rests on.
+## Documentation
+
+- [Integrations](docs/INTEGRATIONS.md) — who reaches whom, through which door, what
+  degrades when a plugin is absent, and a table reading each symptom back to the plugin
+  that owns it.
+- [Bindings cheatsheet](docs/BINDINGS.md) — every keymap, user command, autocmd,
+  highlight group and global variable this plugin installs, and which keys are borrowed
+  rather than owned.
+- [Roadmap](docs/ROADMAP.md) — what is deliberately not built yet, what would have to be
+  settled first, and what was considered and rejected.
+- `:help hover` — the vimdoc: the same ground, offline.
+
+### References
+
+- Neovim: `:help nvim_open_win()`, `:help CursorHold`, `:help 'updatetime'`,
+  `:help maparg()` / `:help mapset()` — the four APIs the borrowed-key lifecycle rests
+  on.
 - [iTerm2 inline images protocol (OSC 1337)](https://iterm2.com/documentation-images.html)
   — how images.nvim draws into the float.
