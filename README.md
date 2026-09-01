@@ -126,7 +126,12 @@ configuration choice. `:Hover` itself is registered from `plugin/hover.lua` rega
 so `:Hover mode auto` is reachable even from a session where nothing turned it on.
 
 `enable(opts)` also takes the configuration table, so switching it on and configuring it
-is one call.
+is one call. **`opts = {}` is not a substitute** — lazy.nvim turns that into a `setup()`
+call, which configures the hover and never switches it on, leaving a plugin that is
+loaded, configured and completely inert.
+
+See [docs/installation.md](docs/installation.md) for packer.nvim, vim-plug, mini.deps, a
+local checkout, and how to check that it worked.
 
 ---
 
@@ -550,6 +555,9 @@ Two traps, both of which cost days:
 
 ## Documentation
 
+- [Installation](docs/installation.md) — requirements, every plugin manager, and the two
+  rules that decide whether the hover works at all: `enable()` rather than `setup()`, and
+  not lazy-loading it.
 - [Integrations](docs/INTEGRATIONS.md) — who reaches whom, through which door, what
   degrades when a plugin is absent, and a table reading each symptom back to the plugin
   that owns it.
