@@ -1,0 +1,22 @@
+---@module 'hover.notify'
+---@brief This plugin's notifier, created once.
+---@description
+--- A thin re-export of `lib.nvim.notify`, which is where the implementation
+--- lives and stays -- nothing is reimplemented here (`LUA-03`).
+---
+--- It exists so the bracket prefix is written once rather than at every call
+--- site, which is also what keeps `[hover.nvim]` from drifting into three
+--- spellings across the modules that report state changes.
+---
+--- Deliberately **not** annotated with `Lib.Notify.Notifier`. That type is
+--- lib.nvim's, and whether LuaLS can see it depends on the library
+--- injection: naming it makes the annotation an `undefined-doc-name`
+--- wherever lib.nvim is a runtime dependency but not on the checking
+--- workspace's library path. Inference gets the right type where the
+--- library is visible and reports nothing where it is not -- and a parallel
+--- stand-in class would be worse than either, since the original could never
+--- be assigned to it (`LLS-20`).
+---
+---@see lib.nvim.notify
+
+return require("lib.nvim.notify").create("[hover.nvim]")

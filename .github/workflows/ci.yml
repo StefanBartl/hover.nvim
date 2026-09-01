@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  stylua:
+    name: stylua (format check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: JohnnyMorganz/stylua-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          version: latest
+          args: --check lua/ plugin/ TESTS/ scripts/
+
+  luacheck:
+    name: luacheck (lint)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: leafo/gh-actions-lua@v10
+        with:
+          luaVersion: "5.1"
+      - uses: leafo/gh-actions-luarocks@v4
+      - run: luarocks install luacheck
+      - run: luacheck lua plugin
+
+  tests:
+    name: plenary specs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Both are resolved by scripts/minimal_init.lua from .deps/ -- see the
+      # three lookup paths it documents. lib.nvim is a hard dependency, so a
+      # run without it is not a degraded run, it is no run at all.
+      - uses: actions/checkout@v4
+        with:
+          repository: StefanBartl/lib.nvim
+          path: .deps/lib.nvim
+      - uses: actions/checkout@v4
+        with:
+          repository: nvim-lua/plenary.nvim
+          path: .deps/plenary.nvim
+      - uses: rhysd/action-setup-vim@v1
+        with:
+          neovim: true
+          version: stable
+      - run: scripts/test.sh

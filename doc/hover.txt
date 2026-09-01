@@ -1,0 +1,328 @@
+*hover.txt*   Preview whatever the cursor is resting on
+
+==============================================================================
+CONTENTS                                                       *hover-contents*
+
+  1. Introduction .................... |hover-introduction|
+  2. Requirements .................... |hover-requirements|
+  3. Setup ........................... |hover-setup|
+  4. What is opt-in .................. |hover-opt-in|
+  5. Modes ........................... |hover-modes|
+  6. Commands ........................ |hover-commands|
+  7. Keys ............................ |hover-keys|
+  8. Bare paths ...................... |hover-bare-paths|
+  9. Configuration ................... |hover-config|
+ 10. API ............................. |hover-api|
+ 11. Registry ........................ |hover-registry|
+ 12. Health .......................... |hover-health|
+
+==============================================================================
+1. INTRODUCTION                                            *hover-introduction*
+
+Rest the cursor on something that points at a file -- a markdown link, or a
+path written as plain text -- and a small float shows what it points at: a
+file's first lines, a directory's entries, a picture, a PDF page, a markdown
+section, a URL taken apart -- or, when the target does not exist, that.
+
+A file whose bytes are not text (a .docx, an archive, an executable) gets a
+badge naming the format rather than a float full of its bytes.
+
+NOTE: lewis6991/hover.nvim is an unrelated plugin for LSP-style hover
+providers. The repository names do not collide, but the Lua module root does:
+both ship `lua/hover/`, so installing both leaves whichever is earlier on
+'runtimepath' shadowing the other.
+
+==============================================================================
+2. REQUIREMENTS                                            *hover-requirements*
+
+Neovim 0.10 or newer.
+
+StefanBartl/lib.nvim is a HARD dependency -- required with no fallback. The
+debounce, the notifier, the LRU cache, the autocmd helpers and the `:Hover`
+command composer all come from it.
+
+Four optional contributors, none required: >
+
+  markdown.nvim   link and <figure> scanning; #heading section previews
+  images.nvim     draws the picture into the float
+  pdfport.nvim    rasterizes a PDF page; converts an office document
+  gopath.nvim     resolves truncated paths and :line:col suffixes
+<
+Without any of them you still get file heads, directory listings, image and
+PDF metadata, the binary badge, the "does not exist" answer, and -- once
+`:Hover links web on` -- URL details.
+
+==============================================================================
+3. SETUP                                                          *hover-setup*
+                                                                *hover.enable()*
+>lua
+  require("hover").enable()
+<
+Installs the FileType trigger, attaches to buffers already open, registers
+`:Hover`, and is idempotent.
+
+Put it somewhere that is NOT lazy-loaded. A path in a .txt or a code comment
+is a target too, so a spec that only loads on markdown leaves the feature
+silently dead in every other filetype.
+
+`enable(opts)` also takes the configuration table (see |hover-config|), so
+switching it on and configuring it is one call.
+
+`:Hover` itself is registered from plugin/hover.lua regardless, so
+`:Hover mode auto` is reachable even from a session where nothing ran
+`enable()`.
+
+==============================================================================
+4. WHAT IS OPT-IN                                                *hover-opt-in*
+
+A float that opens unasked is welcome only when both hold:
+
+  1. The target was explicit. Link syntax is the author stating "this points
+     somewhere". A bare path in prose is this plugin guessing.
+  2. The preview says something the line does not. A file's first lines cannot
+     be read off the link text. A URL's host and path can -- they ARE the link
+     text.
+
+Cost breaks the tie. That yields these defaults:
+
+  ON    link to a local file, image or PDF; a bare path that resolves;
+        directory listings; pictures drawn into the float
+  OFF   http(s) links (the offline preview restates the link)
+  OFF   fetching a link (a request to that host, per link brushed past)
+  OFF   office documents rendered (a LibreOffice start, per document)
+
+Web links are off because documentation is made of links: on permanently,
+reading a README becomes a slideshow and the float lands over the paragraph
+being read. Fetching is off a second time on top of that, because it is a
+disclosure -- `:Hover links web on` alone never touches the network.
+
+==============================================================================
+5. MODES                                                          *hover-modes*
+
+The switch above every other switch. >
+
+  auto     the trigger opens a float, as configured. The default.
+  manual   nothing opens by itself. `:Hover show`, `keymaps.show` and
+           show({ force = true }) still answer IN FULL, web links included.
+  off      nothing opens at all.
+<
+`manual` is the answer to "I am reading a document made of links right now"
+without deciding class by class which noise is acceptable. >lua
+
+  require("hover").setup({
+    mode = "manual",
+    keymaps = { show = "<leader>k" },
+  })
+<
+                                                          *g:hover_disable*
+`vim.g.hover_disable = true` forces "off" and outranks anything a plugin
+configured. It is where a user says "not on this machine" from a plugin spec's
+`init`, before anything loads. |hover.set_mode()| keeps it in step, so the two
+cannot disagree.
+
+==============================================================================
+6. COMMANDS                                                    *hover-commands*
+                                                                       *:Hover*
+
+Every route completes with <Tab>. The state argument may be omitted, which
+toggles. >
+
+  :Hover show                            one hover, here, now -- ignores
+                                         every volume switch
+  :Hover status                          the mode and every switch
+  :Hover mode [auto|manual|off]          set the mode; omitted, report it
+  :Hover toggle                          off if on, back to auto if off
+
+  :Hover links [on|off|toggle]           link syntax hovers at all
+  :Hover links web [on|off|toggle]       http(s) links hover
+  :Hover links web fetch [on|off|toggle] fetch for status code and title
+  :Hover paths [on|off|toggle]           bare paths in prose hover
+  :Hover paths missing [on|off|toggle]   a path resolving to nothing is
+                                         marked broken
+  :Hover images [on|off|toggle]          pictures are drawn, or described
+  :Hover office [on|off|toggle]          office documents render via PDF
+<
+Implication runs UPWARD only. `fetch` turns on `web`, which turns on `links`.
+Switching `links` off silences web links without clearing their flag, so
+turning `links` back on restores what you had.
+
+`links off` is about how a target was FOUND, not what it is. If the same text
+is also a resolvable bare path, `paths` decides it.
+
+Every change is announced, because "off" is otherwise invisible.
+
+==============================================================================
+7. KEYS                                                            *hover-keys*
+
+Most keys here are BORROWED, not owned: they exist for as long as one float is
+on screen and are handed back the moment it closes, restoring whatever mapping
+they displaced rather than deleting it. The float is not focusable, so it can
+never hold a mapping of its own.
+>
+  q, <Esc>                    dismiss this hover until the cursor reaches
+                              another target. Bound for EVERY hover.
+  <M-PageDown>, <C-Down>      next screenful of lines, or next PDF page
+  <M-PageUp>, <C-Up>          back
+<
+Both scroll pairs are bound, because a key that is not on the keyboard cannot
+be pressed: laptop and 60% layouts often reach PageUp/PageDown only through an
+Fn chord. Ctrl rather than Alt on the arrows: <M-Up>/<M-Down> is a widespread
+"move this line" binding.
+
+Scroll keys are bound ONLY when there is something to scroll. An image, or a
+file that already fits, leaves them alone entirely.
+
+The dismissal is a suppression, not a close: under CursorHold the event fires
+again after any keystroke followed by 'updatetime' of quiet, so a key bound to
+hide() would make the float vanish and bring it straight back. It ends by
+itself at the next target the cursor resolves.
+
+The cost is that `q` records no macro for as long as one float is up.
+
+A configured key list REPLACES the default rather than extending it; an empty
+list binds nothing.
+
+No key is owned by default. `keymaps.show` is the one available, and it is the
+one worth setting in `mode = "manual"`.
+
+==============================================================================
+8. BARE PATHS                                                *hover-bare-paths*
+
+A path in prose, a code comment or a `:messages` dump is a target too. Two
+rules keep it from firing constantly:
+
+It must look like a path -- a separator, an extension, or a `...` truncation,
+AND at least one alphanumeric character somewhere.
+
+A missing path is reported only when it cannot have been anything else: >
+
+  a truncation                          ...nvim/init.lua
+  a drive or UNC prefix                 C:\Users\x   \\server\share
+  an extension on the LAST component    docs/gone.md   ./src/app.ts
+<
+Everything else stays silent -- including text that really is a path
+(`~/notes`, `/etc/hosts`, `lua/lib/nvim`). That is a deliberate loss: this is
+the only preview class whose value goes NEGATIVE when it is wrong. The cases
+it exists to prevent, each of which used to open a confident "no such file"
+float over ordinary prose: >
+
+  and/or   input/output   sortiert/        a separator is not evidence
+  2026/09/01   TODO/FIXME/DONE             nor is a component count
+  github.com/user/repo                     nor an extension mid-path
+  ./components/Button                      every extension-less JS import
+<
+None of this touches a target that EXISTS: `and/or` hovers normally the moment
+something of that name is on disk. The rules only decide whether ABSENCE is
+worth asserting.
+
+==============================================================================
+9. CONFIGURATION                                                 *hover-config*
+                                                                *hover.setup()*
+>lua
+  require("hover").setup({
+    mode = "auto",                  -- "auto" | "manual" | "off"
+    trigger = { "CursorHold" },     -- or { "cursor" }, or { "mouse" }
+    delay_ms = 250,
+    placeholder_grace_ms = 250,
+    max_lines = 20,
+    max_width = 80,
+    border = "rounded",
+    inline_images = true,
+    filetypes = "*",
+    links = { enabled = true, web = false, fetch = false, timeout_ms = 2000 },
+    paths = { enabled = true, missing = true },
+    office = { convert = false, timeout_ms = 60000 },
+    scroll_keys = {
+      down = { "<M-PageDown>", "<C-Down>" },
+      up = { "<M-PageUp>", "<C-Up>" },
+    },
+    dismiss_keys = { "q", "<Esc>" },
+    keymaps = { show = false },
+  })
+<
+`trigger`: "CursorHold" follows 'updatetime' and adds `delay_ms` on top.
+"cursor" is CursorMoved plus this plugin's own debounce, so `delay_ms` is
+absolute and nothing fires while the cursor stands still. "mouse" also needs
+`:set mousemoveevent`, which is never set for you.
+
+The pre-1.0 spelling of three options is still accepted and normalized:
+`enabled = false` reads as `mode = "off"`, `bare_paths` as `paths.enabled`,
+and `url = { hover, fetch, timeout_ms }` as the `links` fields.
+
+==============================================================================
+10. API                                                             *hover-api*
+
+                                                                 *hover.show()*
+hover.show({opts})                        Show the hover for whatever is under
+                                          the cursor. `opts.force` ignores
+                                          every volume switch. Returns whether
+                                          a float was opened.
+                                                                 *hover.hide()*
+hover.hide()                              Close any open hover.
+                                                              *hover.dismiss()*
+hover.dismiss()                           Close it and keep it closed until
+                                          the cursor reaches another target.
+                                          Returns false when none was open.
+                                               *hover.scroll()*
+hover.scroll({delta})                     Scroll the open hover. Positive is
+                                          forward. Returns false when there is
+                                          nothing to scroll.
+                                                             *hover.set_mode()*
+hover.set_mode({mode})                    "auto" | "manual" | "off". Returns
+                                          the mode, or nil plus a message.
+                                                                 *hover.mode()*
+hover.mode()                              The mode in effect right now.
+                                                               *hover.toggle()*
+hover.toggle({on})                        Off, or back to "auto".
+                                                                  *hover.set()*
+hover.set({name}, {on})                   Turn one switch on, off, or over.
+                                          Names: links, web, fetch, paths,
+                                          missing, images, office. Returns the
+                                          state, or nil plus a message.
+                                                              *hover.enabled()*
+hover.enabled({name})                     Whether one switch is in effect,
+                                          implications included.
+                                                               *hover.status()*
+hover.status()                            { mode, switches } -- for a
+                                          statusline or a report.
+                                                   *hover.target_under_cursor()*
+hover.target_under_cursor({bufnr}, {opts})
+                                          The target under the cursor, or nil.
+                                          `opts.force` opens every volume gate.
+
+==============================================================================
+11. REGISTRY                                                   *hover-registry*
+>lua
+  require("hover.registry").register("your.nvim", {
+    sources = {
+      function(bufnr, row, col)
+        return find_target(bufnr, row, col)  -- , { kind = "yours" }
+      end,
+    },
+    previews = {
+      anchor = function(target, opts, bufnr)
+        return section_of(target, bufnr)
+      end,
+    },
+  })
+<
+Sources are tried in registration order, before the built-in bare-path source.
+Re-registering under the same name REPLACES that plugin's contribution, so a
+setup() running twice does not leave two copies firing on every hover. A
+source that throws is skipped and the next one still runs.
+
+Target types a preview can claim: image, pdf, office, markdown, file,
+directory, url, anchor, missing. Returning nil declines, and the built-in
+preview runs instead.
+
+==============================================================================
+12. HEALTH                                                       *hover-health*
+>
+  :checkhealth hover
+<
+Reports the hard dependency, one check per soft dependency (asking for the
+entry point actually called, not just whether the module loads), every switch
+state, and the two configurations that silently do nothing: manual mode with
+no key bound, and every preview class switched off.
+
+vim:tw=78:ts=8:ft=help:norl:
