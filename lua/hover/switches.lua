@@ -10,8 +10,8 @@
 ---
 --- That claim was not quite true until the eighth switch was added and
 --- proved it: `usrcmds.route_path` was a hand-written mapping of which
---- switches nest under which, so `code` landed as `:Hover code` at the top
---- level instead of `:Hover paths code`, and nothing failed. It reads
+--- switches nest under which, so `code` landed as a bare top-level route
+--- rather than under `paths`, and nothing failed. It reads
 --- `implies` now, so the command tree is derived from this table like
 --- everything else -- see the note there.
 ---

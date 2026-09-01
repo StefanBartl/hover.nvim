@@ -20,7 +20,7 @@
 ---    from there it is a PDF hover — the same rasterize-and-draw path, and
 ---    the same paging keys. That means a LibreOffice start-up per document,
 ---    which is seconds rather than milliseconds, so it is opt-in and not the
----    default. `:Lib hover office on` switches it on for the session.
+---    default. `:Hover office on` switches it on for the session.
 ---
 --- **Converted PDFs are kept, keyed by file and mtime.** The expensive part
 --- is LibreOffice starting, not the hover, and a reader who looks at a
@@ -141,7 +141,7 @@ function M.preview(target, opts, on_result)
     -- The hint names the command rather than the config key: this float is
     -- being read by someone who just hovered a document and got a badge, and
     -- the next thing they can do about it is one command away.
-    return badge(target, "no text preview  ·  :Lib hover office on")
+    return badge(target, "no text preview  ·  :Hover office on")
   end
 
   local key = key_for(target.path)

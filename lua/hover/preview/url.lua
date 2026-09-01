@@ -7,7 +7,7 @@
 --- `hover.url.hover` is off because dev documentation is *made* of links. A
 --- hover that opens on every one of them turns reading a README into a
 --- flickering slideshow, and the float lands over the text being read.
---- `:Lib hover web on` is the reader saying "for the next while, links are
+--- `:Hover links web on` is the reader saying "for the next while, links are
 --- what I am interested in".
 ---
 --- `hover.url.fetch` is off on top of that because fetching is a disclosure:
@@ -21,7 +21,7 @@
 --- Fetching goes through `lib.nvim.net.curl`, and results are cached by the
 --- hover for the session: a URL is not re-fetched every time the cursor
 --- passes it, which also means a server that has since recovered still shows
---- its old status until the cache is dropped (`:Lib hover web off` / `on`
+--- its old status until the cache is dropped (`:Hover links web off` / `on`
 --- does that).
 
 local M = {}

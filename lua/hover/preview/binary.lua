@@ -89,7 +89,7 @@ end
 --- line saying what could still be done about it.
 ---
 --- The `note` is how the office preview offers its own escape hatch
---- ("`:Lib hover office on`") without this module knowing that feature
+--- ("`:Hover office on`") without this module knowing that feature
 --- exists.
 ---@param target Hover.Target
 ---@param opts? { note?: string, label?: string }

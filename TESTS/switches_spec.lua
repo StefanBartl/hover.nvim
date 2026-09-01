@@ -214,4 +214,68 @@ describe("hover.set_mode", function()
       end
     end)
   end)
+
+  -- Every `:Hover …` this plugin names in its own source has to be a command
+  -- that exists. Two bugs of exactly this shape landed within a day of each
+  -- other: `preview/office.lua` put `:Lib hover office on` in the badge a
+  -- reader sees when a `.docx` will not render -- a command deleted with
+  -- lib.nvim's copy -- and the `code` switch registered as `:Hover code`
+  -- while every document called it `:Hover paths code`. Neither failed
+  -- anything. A float telling someone to type a command that does not exist
+  -- is worse than saying nothing.
+  describe("the commands this plugin names in its own text", function()
+    local STATES = { on = true, off = true, toggle = true, auto = true, manual = true }
+
+    --- Every `lua/**/*.lua` file, read.
+    ---@return table<string, string>
+    local function sources()
+      local out = {}
+      for _, file in ipairs(vim.fn.glob(vim.fn.getcwd() .. "/lua/**/*.lua", false, true)) do
+        local fd = io.open(file, "r")
+        if fd then
+          out[file] = fd:read("*a")
+          fd:close()
+        end
+      end
+      return out
+    end
+
+    it("names only commands that are actually registered", function()
+      local files = sources()
+      assert.is_true(vim.tbl_count(files) > 0, "found no sources to scan")
+
+      require("hover.bindings.usrcmds").setup()
+      local registry = require("lib.nvim.bindings.usercmd.composer.registry")
+      local routes = {}
+      for _, handle in ipairs(registry.all()) do
+        if handle:name() == "Hover" then
+          for _, route in ipairs(handle:spec().routes or {}) do
+            routes[table.concat(route.path or {}, " ")] = true
+          end
+        end
+      end
+
+      local bad = {}
+      for file, text in pairs(files) do
+        for mention in text:gmatch(":Hover([ a-z]*)") do
+          local words = {}
+          for word in mention:gmatch("%a+") do
+            words[#words + 1] = word
+          end
+          -- Trailing state arguments are not part of the route path:
+          -- `:Hover paths on` is the `paths` route with an argument.
+          while #words > 0 and STATES[words[#words]] do
+            table.remove(words)
+          end
+          local path = table.concat(words, " ")
+          -- A bare `:Hover` is the verb itself and always exists.
+          if path ~= "" and not routes[path] then
+            bad[#bad + 1] = ("%s names `:Hover %s`"):format(vim.fn.fnamemodify(file, ":."), path)
+          end
+        end
+      end
+
+      assert.same({}, bad)
+    end)
+  end)
 end)

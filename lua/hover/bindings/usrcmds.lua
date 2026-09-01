@@ -61,8 +61,8 @@ end
 --- switch was added without a matching branch: `hover.switches` says a new
 --- switch is one table entry and nothing else, and that was true of dispatch,
 --- completion, `status` and `:checkhealth` but quietly not of this. The
---- eighth switch landed as `:Hover code` at the top level instead of
---- `:Hover paths code`, with nothing failing to say so. Reading `implies`
+--- eighth switch landed as a bare top-level `code` route rather than under
+--- `paths`, with nothing failing to say so. Reading `implies`
 --- gives exactly the same paths for every switch that existed before, and
 --- cannot fall behind the table it now reads from.
 ---
