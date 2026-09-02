@@ -85,24 +85,6 @@ the same word.
 ASCII mock-up of the float, which explains the idea but not the feel — the
 thing worth showing is how little it interrupts reading, and a still cannot.
 
-### Zoom for a picture, by mouse wheel
-
-The keys are built: `+` and `-` are borrowed while a hover with a picture is
-open, and a step scales the box the picture is fitted into. What is not built
-is the pointer.
-
-Two things stand in the way, and both are properties of the float rather than
-of zoom. The float is not focusable, so it never receives a wheel event and
-cannot be clicked into; the pointer has to be *located* instead, with
-`getmousepos()` inside a global `<ScrollWheelUp>` map, which is a global
-mapping taken for a float that may not be there. And it needs `mouse` set,
-which is the user's own setting and is never set on their behalf — so for
-anyone without it the feature is silent, which is a case for `:Hover why`
-rather than a default.
-
-Decide first whether a global wheel map is acceptable at all. If it is not,
-the keys already cover the feature and this stays unbuilt.
-
 ### A sharp zoom for a PDF page
 
 Zooming a PDF page today draws the same PNG into a larger area, so it is free
