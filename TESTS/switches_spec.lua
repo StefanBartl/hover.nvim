@@ -486,6 +486,13 @@ describe("every switch, generically", function()
     -- guess: every switch path carries a concrete boolean before any merge.
     local defaults = require("hover.config.DEFAULTS")
     for _, name in ipairs(switches.names()) do
+      -- Annotated rather than inferred: the walk starts at `Hover.Config` and
+      -- descends out of it, which LuaLS reads as `cast-local-type` -- but only
+      -- on some runs. Measured 2026-09-02 on unchanged source: one scan in
+      -- five reported it, four reported nothing. A diagnostic that flickers is
+      -- worse than one that stands, because this scan is read as a regression
+      -- signal and a `+1` then costs a hunt for a change that never happened.
+      ---@type any
       local node = defaults
       for _, key in ipairs(switches.spec(name).path) do
         assert.is_table(node, ("%q has a path that leaves the defaults"):format(name))
