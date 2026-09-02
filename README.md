@@ -534,7 +534,7 @@ require("hover").setup({
 | `links.timeout_ms` | `2000` | |
 | `paths.enabled` | `true` | Whether a path written without link syntax hovers. |
 | `paths.missing` | `true` | Whether a bare path resolving to nothing may be marked broken. |
-| `positions` | `true` | Whether a registered *position* preview may open a float â€” a plugin saying something about where the cursor is, when it points at nothing. Costs nothing with none registered. |
+| `positions` | `true` | Whether a registered *position* preview may open a float — a plugin saying something about where the cursor is, when it points at nothing. Costs nothing with none registered. |
 | `paths.code` | `false` | Whether a bare path hovers inside executable code. Off: in a parsed buffer, only comments and strings are searched. Prose is untouched — see [Where a bare path is looked for](#where-a-bare-path-is-looked-for). |
 | `office.convert` | `false` | Whether a `.docx`/`.xlsx`/`.pptx`/… is converted to a PDF and shown as a page. |
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
@@ -621,7 +621,7 @@ Target types a preview can claim: `image`, `pdf`, `office`, `markdown`, `file`,
 
 Some things worth saying are not about a *target* at all. That a line uses a
 deprecated API, how often this token occurs in the buffer, what the module in
-this `require` actually does â€” none of those is something the cursor points
+this `require` actually does — none of those is something the cursor points
 at, and the framework used to have no way to express them: no target meant no
 hover, full stop.
 
@@ -630,8 +630,8 @@ A third kind of contribution answers for the **position**:
 ```lua
 require("hover.registry").register("your.nvim", {
   -- Asked only after every source declined, because a target is the more
-  -- specific reading of the same place. Returns finished content â€” there is
-  -- nothing to classify â€” or nil to decline.
+  -- specific reading of the same place. Returns finished content — there is
+  -- nothing to classify — or nil to decline.
   positions = {
     function(bufnr, row, col)
       local note = something_about(bufnr, row)
@@ -679,7 +679,7 @@ Three things follow from the shape, and each is load-bearing:
   buffer, so a stale entry would be a *wrong* answer rather than an old one.
   Freshness belongs to the plugin that registered it.
 - **It is your job to be quiet.** The framework has no shape heuristic to
-  apply here â€” it cannot know what your answer is about. Answer only where
+  apply here — it cannot know what your answer is about. Answer only where
   there is something worth interrupting a reader for. `:Hover positions off`
   exists for when that judgement turns out wrong, and it is a blunt
   instrument: it silences every registered plugin at once.

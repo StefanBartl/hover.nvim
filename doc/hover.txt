@@ -311,8 +311,10 @@ hover.toggle({on})                        Off, or back to "auto".
                                                                   *hover.set()*
 hover.set({name}, {on})                   Turn one switch on, off, or over.
                                           Names: links, web, fetch, paths,
-                                          missing, images, office. Returns the
-                                          state, or nil plus a message.
+                                          missing, code, positions, images,
+                                          office -- hover.switches.names() is
+                                          the list. Returns the state, or nil
+                                          plus a message.
                                                               *hover.enabled()*
 hover.enabled({name})                     Whether one switch is in effect,
                                           implications included.
