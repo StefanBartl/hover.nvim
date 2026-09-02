@@ -37,10 +37,23 @@ one thing work once, on one machine.
 
 | | |
 | --- | --- |
-| **Checked** | *never* |
-| **On** | — |
+| **Checked** | 2026-09-02 — **the picture half. The text half is still unchecked**, see below. |
+| **On** | Windows 11, WezTerm, Neovim 0.12.2, images.nvim present |
 | **How** | Hover an image, then press `+` a few times and `-` back. The float grows and shrinks with it, and the picture fills it edge to edge at every size. Then hover a *text* file and run `:Hover resize` a few times: the float grows and more lines appear in it — `+` is deliberately not bound there. |
 | **Watch for** | The **frame** growing while the picture inside it does not — that is the one failure a spec cannot see. `TESTS/resize_spec.lua` pins the geometry all the way to `nvim_win_get_config`, but the cell area is only a *request* to the terminal, and whether the drawing actually followed it is visible and nothing else. Also: letterboxing that drifts as the box grows (the picture no longer centred, or gaining a margin on one side only), which would mean the inset is being added at the wrong end of the scaling. |
+
+**What was seen:** `+` several times and `-` back, over an image. The float
+grows and shrinks with it and the picture fills it edge to edge at every size
+— so the picture followed the cell area rather than the frame growing around a
+picture that stayed put, which was the one failure no spec can reach.
+
+**Still unchecked: the text half.** `+` and `-` are deliberately not bound over
+a text hover — they are motions there — so the check is a different gesture:
+hover a text file and run `:Hover resize` a few times. The float should grow
+*and more lines appear in it*. That distinction is the whole reason the feature
+was renamed, and it is the half a spec covers least convincingly: the spec
+asserts the float's geometry, and "more lines are in it" is what a reader
+actually looks for.
 
 Measured, not seen, on 2026-09-02: a 1200×675 image at the default `80×20`
 grows through five steps on a 210×55 terminal (71×20 cells of picture up to
@@ -82,7 +95,7 @@ usable, so `hover.float.contains` does the rectangle test itself.
 
 | | |
 | --- | --- |
-| **Checked** | 2026-09-02 — **the cache half. The sweep is still unchecked**, see below. |
+| **Checked** | 2026-09-02, and confirmed a second time the same day — **the conversion and the cache. The sweep is still unchecked**, see below. |
 | **On** | Windows 11, WezTerm, Neovim 0.12.2, pdfport.nvim + LibreOffice 25.x |
 | **How** | `:Hover office on`, then hover a `.docx`. The first one costs a LibreOffice start, which is seconds. Then `:qa`, restart, `:Hover office on`, and hover the same document again. |
 | **Watch for** | The badge saying LibreOffice is missing rather than a failed conversion — `can_create("office")` is asked first, precisely so the answer is a sentence and not a hang. On Windows that badge is the *expected* first result even with LibreOffice installed, because its installer does not extend `PATH`; the fix is in [installation.md](installation.md#soffice-on-windows-installing-libreoffice-is-not-enough) and it is not a bug in this path. |
