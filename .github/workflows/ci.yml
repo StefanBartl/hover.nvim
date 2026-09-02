@@ -29,9 +29,29 @@ jobs:
       - run: luarocks install luacheck
       - run: luacheck lua plugin
 
+  # Both platforms, because REL-19 asks for both and only one of them was
+  # ever automated. The parts that differ are real: path separators, `tempname()`,
+  # and the file-mode question that broke the very first run here (a `.sh`
+  # committed 100644 out of a Windows checkout). Everything below is invoked as
+  # `bash scripts/test.sh` rather than `scripts/test.sh` for that last reason --
+  # it does not depend on an executable bit that a Windows filesystem does not
+  # have.
+  #
+  # Not covered on either runner, and not pretended to be: the previews that
+  # need a terminal -- drawing images, rasterizing a PDF, converting an office
+  # document. Those have no CI anywhere and are evidenced only by hand.
   tests:
-    name: plenary specs
-    runs-on: ubuntu-latest
+    name: plenary specs (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing must not cancel the other: which of the two broke
+      # is the whole information content of this job.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       # Both are resolved by scripts/minimal_init.lua from .deps/ -- see the
@@ -49,4 +69,4 @@ jobs:
         with:
           neovim: true
           version: stable
-      - run: scripts/test.sh
+      - run: bash scripts/test.sh
