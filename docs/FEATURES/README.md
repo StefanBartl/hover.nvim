@@ -21,6 +21,10 @@ rejected, and the bugs that changed the design.
 - **[CONTRIBUTIONS.md](CONTRIBUTIONS.md)** — the registry: what another plugin
   or your own config can add, what `on_request` is for, and the bug that only a
   live wiring could find.
+- **[RESIZE.md](RESIZE.md)** — one operation with two honest answers, why it is
+  called resize rather than zoom, why `+` and `-` are bound over a picture but
+  the wheel is bound everywhere, and why the ceiling is found by stepping into
+  it rather than carried as a number.
 - **[INTEGRATIONS.md](../INTEGRATIONS.md)** (one level up) — who is wired to
   whom, through which door, and what degrades when a plugin is absent.
 

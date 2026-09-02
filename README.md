@@ -557,7 +557,9 @@ box and the picture is drawn larger. For text they come apart — the font size 
 the terminal emulator and Neovim cannot change it, so a bigger box shows *more lines*, not
 larger ones. Only one of the two answers is magnification, and calling both of them zoom
 would be wrong about the other. A real zoom — a cropped detail you can pan around — is a
-separate feature; see [the roadmap](docs/ROADMAP.md).
+separate feature; see [the roadmap](docs/ROADMAP.md). The whole reasoning, including the
+two measurements behind the pointer gate, is in
+[docs/FEATURES/RESIZE.md](docs/FEATURES/RESIZE.md).
 
 `zoom_keys` is still accepted as the old spelling of `resize_keys`, and `hover.zoom(delta)`
 still calls `hover.resize(delta)`.
