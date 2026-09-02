@@ -387,8 +387,8 @@ describe("hover.registry position previews", function()
           -- promising to decline them is what is under test, so the
           -- suppression is the honest answer rather than a workaround
           -- (`LLS-40`).
-          ---@diagnostic disable-next-line: return-type-mismatch
           function()
+            ---@diagnostic disable-next-line: return-type-mismatch
             return answer
           end,
         },
