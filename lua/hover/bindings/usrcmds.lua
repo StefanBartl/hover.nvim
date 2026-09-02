@@ -170,6 +170,17 @@ function M.routes()
       desc = "Report the mode and every switch in one message",
       run = report_status,
     },
+    {
+      path = { "why" },
+      -- The counterpart to `status`: that one says what is configured, this
+      -- one says what happened *here*. A hover that does not open is silent
+      -- by design and has seven possible reasons, which look identical from
+      -- the outside.
+      desc = "Say why nothing hovered at the cursor",
+      run = function()
+        require("hover.notify").info(table.concat(hover().why(), "\n"))
+      end,
+    },
   }
 
   for _, name in ipairs(switches.names()) do

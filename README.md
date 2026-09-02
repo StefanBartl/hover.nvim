@@ -73,6 +73,7 @@ See ./docs/architecture.md#modules for details.
 | `:Hover mode [auto\|manual\|off]` | The switch above every other switch. `manual` keeps every preview and gives up only the automatic trigger | [Modes](#modes) |
 | Nine runtime switches | `links`, `links web`, `links web fetch`, `paths`, `paths missing`, `paths code`, `positions`, `images`, `office` — declared once, feeding routes, completion, `status` and `:checkhealth` alike | [The `:Hover` command](#the-hover-command) |
 | `:Hover status` | The mode and every switch, in one message | [The `:Hover` command](#the-hover-command) |
+| `:Hover why` | Why nothing hovered at the cursor: which of the seven gates refused, named, with the command that opens it | [The `:Hover` command](#the-hover-command) |
 | Bare-path resolution | A path in prose, a code comment or a `:messages` dump is a target too — truncated ones included | [Bare paths](#bare-paths) |
 | `hover.scroll(1)` / `scroll(-1)` | Page through a file's head or a PDF's pages without leaving the document | [Scrolling a preview](#scrolling-a-preview) |
 | `hover.dismiss()` | Wave one float away and keep it away, until the cursor reaches another target | [Waving one hover away](#waving-one-hover-away) |
@@ -279,6 +280,7 @@ toggles.
 |---|---|
 | `:Hover show` | one hover, here, now, ignoring every volume switch |
 | `:Hover status` | the mode and every switch, in one message |
+| `:Hover why` | why nothing hovered *here* — which of the gates refused, and what to type about it |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |

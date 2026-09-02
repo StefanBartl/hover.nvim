@@ -356,7 +356,7 @@ end
 --- reaching the resolver. See `hover.scope` for what counts as code and for
 --- the five ways it declines to decide.
 ---@param bufnr? integer
----@param opts? { missing?: boolean, code?: boolean, force?: boolean } `missing` and `code` default to true; `force` runs the full resolver.
+---@param opts? { missing?: boolean, code?: boolean, force?: boolean, trace?: table } `missing` and `code` default to true; `force` runs the full resolver; `trace`, when given, is filled with which gate refused.
 ---@return Hover.Source|nil
 function M.under_cursor(bufnr, opts)
   opts = opts or {}
@@ -379,14 +379,25 @@ function M.under_cursor(bufnr, opts)
   -- Cheap gate before anything else: the cursor has to sit on non-blank text
   -- that could be part of a path at all. Without this, every CursorHold in
   -- prose would reach gopath's resolver pipeline.
+  local trace = opts.trace
+
   local char = line:sub(col + 1, col + 1)
   if char == "" or char:match("%s") then
+    if trace then
+      trace.stopped_at = "blank"
+    end
     return nil
   end
 
   local cfile = vim.fn.expand("<cfile>")
   local token = trim_delimiters(type(cfile) == "string" and cfile or "")
+  if trace then
+    trace.token = token
+  end
   if not looks_like_path(token) then
+    if trace then
+      trace.stopped_at = "shape"
+    end
     return nil
   end
 
@@ -400,6 +411,9 @@ function M.under_cursor(bufnr, opts)
   -- in every buffer. It fails open in every direction it can: see
   -- `hover.scope`.
   if opts.code == false and not require("hover.scope").allows_path(bufnr, row, col) then
+    if trace then
+      trace.stopped_at = "scope"
+    end
     return nil
   end
 
@@ -428,6 +442,9 @@ function M.under_cursor(bufnr, opts)
   -- same answer a broken *link* already gets.
   if not resolved then
     if opts.missing == false then
+      if trace then
+        trace.stopped_at = "missing_off"
+      end
       return nil
     end
     -- Tested without the `:line[:col]` suffix: `docs/gone.md:42` is as
@@ -435,6 +452,9 @@ function M.under_cursor(bufnr, opts)
     -- in an extension, and that is what the test looks for.
     local path_token = (split_location(token))
     if not is_unambiguous_path(path_token) then
+      if trace then
+        trace.stopped_at = "ambiguous"
+      end
       return nil
     end
     resolved = path_token

@@ -83,6 +83,7 @@ omitted, which toggles.
 | --- | --- |
 | `:Hover show` | one hover, here, now, ignoring every volume switch |
 | `:Hover status` | the mode and every switch, in one message |
+| `:Hover why` | why nothing hovered at the cursor -- which gate refused, and what to type about it |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |

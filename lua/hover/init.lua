@@ -562,6 +562,111 @@ function M.show_position(bufnr, opts)
   return true
 end
 
+--- Why nothing opened here.
+---
+--- **The gap this fills.** A hover that does not open is silent by design,
+--- and there are now seven independent reasons for it: the mode, the volume
+--- switch for that class, an active dismissal, the non-blank character check,
+--- the token shape test, the position gate, and "nothing on disk". From the
+--- outside all seven look identical -- a cursor sitting on something that
+--- does not hover -- and the only way to tell them apart was to read the
+--- source.
+---
+--- **It runs the real pipeline.** The one thing this must not become is a
+--- second implementation of the rules: the moment it answers from its own
+--- copy, it can be confidently wrong in exactly the situation it exists for.
+--- So it calls the same predicates in the same order, and `bare_path`
+--- reports where it stopped through an optional `trace` table rather than
+--- being re-derived here. The cost on the hot path is one nil check per
+--- gate, and nothing is allocated unless someone asked.
+--- Returns the report rather than emitting it: the notifying belongs to the
+--- command layer, the way `status` already works (`ERR-04`).
+---@return string[] lines
+function M.why()
+  local bufnr = api.nvim_get_current_buf()
+  local out = {}
+
+  local function say(fmt, ...)
+    out[#out + 1] = select("#", ...) > 0 and fmt:format(...) or fmt
+  end
+
+  say("mode: %s", M.mode())
+  if not config.is_enabled() then
+    say("  nothing hovers in this mode. `:Hover mode auto` turns it back on.")
+    return out
+  end
+
+  if vim.bo[bufnr].buftype ~= "" then
+    say("buffer: buftype=%q -- never attached to.", vim.bo[bufnr].buftype)
+    say("  A picker, tree, terminal or dashboard has no document to hover in.")
+    return out
+  end
+
+  local found = M.target_under_cursor(bufnr, {})
+  if found then
+    local target = classify.classify(
+      found.target,
+      (function()
+        local n = api.nvim_buf_get_name(bufnr)
+        return n ~= "" and n or nil
+      end)()
+    )
+    say("target: %s (%s, via %s)", found.target, target.type, found.kind or "source")
+    if target.type == "url" and not config.web_enabled() then
+      say("  but web links are off. `:Hover links web on`.")
+    elseif _suppressed and _suppressed == identity(target) then
+      say("  but it was dismissed. Move off it, or `:Hover show`.")
+    else
+      say("  this should hover. If it does not, that is a bug worth reporting.")
+    end
+    return out
+  end
+
+  -- Nothing was found. Ask the bare-path pipeline where it gave up.
+  if not config.paths_enabled() then
+    say("bare paths: off. `:Hover paths on`.")
+  else
+    local trace = {}
+    require("hover.bare_path").under_cursor(bufnr, {
+      missing = config.missing_enabled(),
+      code = config.paths_code_enabled(),
+      trace = trace,
+    })
+    local token = trace.token and ("%q"):format(trace.token) or "(none)"
+    local why = ({
+      blank = "the cursor is on whitespace.",
+      shape = ("%s is not shaped like a path -- no separator, no extension, no truncation."):format(
+        token
+      ),
+      scope = ("%s sits in executable code, where a path is not looked for. `:Hover paths code on`."):format(
+        token
+      ),
+      missing_off = ("%s resolved to nothing, and the broken-target marker is off."):format(token),
+      ambiguous = ("%s resolved to nothing, and could have been prose. `:Hover paths missing` only reports the unambiguous ones."):format(
+        token
+      ),
+    })[trace.stopped_at]
+    say("bare path: %s", why or ("nothing under the cursor (token: %s)"):format(token))
+  end
+
+  local registry = require("hover.registry")
+  if registry.has_sources() then
+    say("sources: registered, and none claimed this position.")
+  else
+    say("sources: none registered. markdown.nvim contributes the link scanner.")
+  end
+
+  if registry.has_positions() then
+    if not config.positions_enabled() then
+      say("positions: registered, but the class is off. `:Hover positions on`.")
+    else
+      say("positions: registered, and none had anything to say here.")
+    end
+  end
+
+  return out
+end
+
 --- Scroll the open hover's content by `delta` steps.
 ---
 --- A page for a PDF (and for an office document, which has become one by the

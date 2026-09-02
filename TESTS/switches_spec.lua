@@ -279,3 +279,114 @@ describe("hover.set_mode", function()
     end)
   end)
 end)
+
+-- `:Hover why`. A hover that does not open is silent by design and has seven
+-- possible reasons, which look identical from the outside. The one thing this
+-- must not become is a second implementation of the rules -- so what these
+-- specs pin is that it names the *right* reason, case by case, rather than
+-- that it produces some output.
+describe("hover.why", function()
+  local hover = require("hover")
+  local api = vim.api
+  local root, win, prev_buf, prev_isfname, buf
+
+  before_each(function()
+    config.reset()
+    -- `set_mode` keeps this in step with the runtime mode, and it outlives
+    -- `config.reset()` -- the same trap the specs above already guard.
+    vim.g.hover_disable = nil
+    require("hover.registry").reset()
+    root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    vim.fn.writefile({ "# real" }, root .. "/real.md")
+
+    win = api.nvim_get_current_win()
+    prev_buf = api.nvim_win_get_buf(win)
+    prev_isfname = vim.o.isfname
+    vim.o.isfname = "@,48-57,/,.,-,_,+,,,#,$,%,~,=,:"
+
+    buf = api.nvim_create_buf(true, false)
+    api.nvim_buf_set_name(buf, root .. "/notes.md")
+    api.nvim_win_set_buf(win, buf)
+  end)
+
+  after_each(function()
+    pcall(api.nvim_win_set_buf, win, prev_buf)
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    vim.o.isfname = prev_isfname
+    vim.fn.delete(root, "rf")
+    config.reset()
+    vim.g.hover_disable = nil
+    require("hover.registry").reset()
+  end)
+
+  ---@param line string
+  ---@param col integer
+  ---@return string
+  local function why_at(line, col)
+    api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+    api.nvim_win_set_cursor(win, { 1, col })
+    return table.concat(hover.why(), "\n")
+  end
+
+  it("names the mode when the mode is what stopped it", function()
+    hover.set_mode("off")
+    local report = why_at("see ./real.md ok", 4)
+    assert.is_truthy(report:find("mode: off", 1, true))
+    assert.is_truthy(report:find("Hover mode auto", 1, true))
+  end)
+
+  it("names the buffer type, which is checked before anything else", function()
+    local scratch = api.nvim_create_buf(false, true)
+    api.nvim_win_set_buf(win, scratch)
+    api.nvim_buf_set_lines(scratch, 0, -1, false, { "see ./real.md ok" })
+    api.nvim_win_set_cursor(win, { 1, 4 })
+    local report = table.concat(hover.why(), "\n")
+    assert.is_truthy(report:find("buftype", 1, true))
+    api.nvim_win_set_buf(win, buf)
+    pcall(api.nvim_buf_delete, scratch, { force = true })
+  end)
+
+  it("reports the target when there is one", function()
+    local report = why_at("see ./real.md ok", 4)
+    assert.is_truthy(report:find("target:", 1, true))
+    assert.is_truthy(report:find("./real.md", 1, true))
+  end)
+
+  it("says the token is not shaped like a path, and shows the token", function()
+    local report = why_at("ordinary prose here", 2)
+    assert.is_truthy(report:find("not shaped like a path", 1, true))
+    assert.is_truthy(report:find("ordinary", 1, true))
+  end)
+
+  it("says the class is off when bare paths are off", function()
+    config.setup({ paths = { enabled = false } })
+    local report = why_at("see ./real.md ok", 4)
+    assert.is_truthy(report:find("bare paths: off", 1, true))
+  end)
+
+  it("mentions a registered position preview that had nothing to say", function()
+    require("hover.registry").register("p", {
+      positions = {
+        function()
+          return nil
+        end,
+      },
+    })
+    local report = why_at("ordinary prose here", 2)
+    assert.is_truthy(report:find("positions:", 1, true))
+  end)
+
+  it("says the position class is off when it is", function()
+    require("hover.registry").register("p", {
+      positions = {
+        function()
+          return { lines = { "x" } }
+        end,
+      },
+    })
+    config.setup({ positions = false })
+    local report = why_at("ordinary prose here", 2)
+    assert.is_truthy(report:find("Hover positions on", 1, true))
+  end)
+end)

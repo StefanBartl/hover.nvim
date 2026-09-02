@@ -206,25 +206,6 @@ the same word.
 
 ## Features
 
-### Say why nothing happened
-
-**The gap that made today's bugs expensive.** A hover that does not open is
-silent by design, and there are now seven independent reasons for it: the
-mode, the volume switch for that class, the dismissal, a non-blank character
-check, the token shape test, the position gate, and "nothing on disk". From
-the outside all seven look identical.
-
-`:Hover why` would run the pipeline for the cursor position and report which
-gate refused, without opening anything. Everything it needs already exists as
-a value — `hover.status()`, `bare_path.is_unambiguous_path`,
-`scope.allows_path`, `config.*_enabled()`.
-
-To settle: **it must not become a second implementation of the pipeline.**
-The moment it answers from its own copy of the rules it can be wrong in the
-one situation it exists for. It has to be the real path, instrumented — which
-means `under_cursor` growing an optional trace parameter, and that is a change
-to the hot path for the sake of a debug command.
-
 ### Pin a float
 
 A preview is transient by design: move the cursor and it is gone, which is
