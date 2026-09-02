@@ -495,3 +495,58 @@ describe("every switch, generically", function()
     end
   end)
 end)
+
+-- The master switch, and the one gate `force` must not open.
+--
+-- `force` is for the volume switches: a key pressed on purpose is not the
+-- noise problem those solve, so an explicit request answers for a web link
+-- even with `links web off`. The *mode* is not one of them. `mode = "off"`
+-- reads "nothing at all", and `vim.g.hover_disable` -- a reader's veto over a
+-- host plugin that switched the hover on -- reaches the code as that mode.
+--
+-- Until 2026-09-02 `show` skipped the check whenever `force` was set, so
+-- `:Hover show`, `keymaps.show` and any host's own keymap (markdown.nvim
+-- binds one) opened a float in both cases. `:Hover why` reported "mode: off"
+-- as the reason nothing had appeared, which is the shape of the bug: two
+-- routes disagreeing about the same switch.
+describe("the master switch against an explicit request", function()
+  local hover = require("hover")
+  local registry = require("hover.registry")
+
+  before_each(function()
+    config.reset()
+    registry.reset()
+    vim.g.hover_disable = nil
+    -- Something that always answers, so a `false` can only come from a gate.
+    registry.register("probe", {
+      positions = {
+        function()
+          return { lines = { "probe" } }
+        end,
+      },
+    })
+  end)
+
+  after_each(function()
+    hover.hide()
+    config.reset()
+    registry.reset()
+    vim.g.hover_disable = nil
+  end)
+
+  it("refuses a forced request in mode off", function()
+    config.setup({ mode = "off" })
+    assert.is_false(hover.show({ force = true }))
+  end)
+
+  it("refuses a forced request under vim.g.hover_disable", function()
+    config.setup({ mode = "auto" })
+    vim.g.hover_disable = true
+    assert.is_false(hover.show({ force = true }))
+  end)
+
+  it("still answers a forced request in manual, the mode that is for it", function()
+    config.setup({ mode = "manual" })
+    assert.is_true(hover.show({ force = true }))
+  end)
+end)

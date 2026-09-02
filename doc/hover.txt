@@ -126,7 +126,8 @@ without deciding class by class which noise is acceptable. >lua
 `vim.g.hover_disable = true` forces "off" and outranks anything a plugin
 configured. It is where a user says "not on this machine" from a plugin spec's
 `init`, before anything loads. |hover.set_mode()| keeps it in step, so the two
-cannot disagree.
+cannot disagree. An explicit request does not override it: `force` opens the
+volume switches, never the mode. "Silent unless asked" is `mode = "manual"`.
 
 ==============================================================================
 6. COMMANDS                                                    *hover-commands*

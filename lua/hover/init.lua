@@ -452,7 +452,14 @@ end
 ---@return boolean shown
 function M.show(opts)
   opts = opts or {}
-  if not opts.force and not config.is_enabled() then
+  -- `force` opens the volume gates, not the master switch. `mode = "off"`
+  -- reads "nothing at all", and `vim.g.hover_disable` -- a reader's veto over
+  -- a host plugin that switched this on -- arrives here as exactly that mode.
+  -- A host's own keymap calling `show({ force = true })` must not be able to
+  -- defeat it, which is what skipping this check let it do. "Silent by
+  -- itself, still answering in full when asked" is `mode = "manual"`, and
+  -- that is the whole reason the mode exists.
+  if not config.is_enabled() then
     return false
   end
 

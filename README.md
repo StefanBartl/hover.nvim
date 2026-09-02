@@ -303,7 +303,10 @@ spec before anything loads — one setting rather than two that can disagree:
 ```
 
 That outranks anything a plugin configures: a host enabling its hover cannot override you
-switching the feature off.
+switching the feature off — **including its keymaps**. An explicit request
+(`:Hover show`, `keymaps.show`, a host's own key calling `show({ force = true })`) opens
+every volume switch but not this one, because a veto a keypress can defeat is not a veto.
+The mode for "silent by itself, still answering when asked" is `manual`.
 
 ## The `:Hover` command
 
