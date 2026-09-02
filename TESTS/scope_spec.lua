@@ -281,9 +281,12 @@ describe("hover.scope", function()
       local asked = 0
       local buf = require_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
       local real = vim.treesitter.get_captures_at_pos
-      vim.treesitter.get_captures_at_pos = function(...)
+      -- The real signature rather than varargs: the stub stands in for a
+      -- typed function, and `(...)` makes it look like it takes none.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.treesitter.get_captures_at_pos = function(b, r, c)
         asked = asked + 1
-        return real(...)
+        return real(b, r, c)
       end
       scope.allows_path(buf, 1, 11)
       scope.allows_path(buf, 1, 11)
@@ -299,9 +302,12 @@ describe("hover.scope", function()
       local asked = 0
       local buf = require_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
       local real = vim.treesitter.get_captures_at_pos
-      vim.treesitter.get_captures_at_pos = function(...)
+      -- The real signature rather than varargs: the stub stands in for a
+      -- typed function, and `(...)` makes it look like it takes none.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.treesitter.get_captures_at_pos = function(b, r, c)
         asked = asked + 1
-        return real(...)
+        return real(b, r, c)
       end
       scope.allows_path(buf, 1, 11)
       scope.allows_path(buf, 1, 12)
@@ -314,9 +320,12 @@ describe("hover.scope", function()
       local asked = 0
       local buf = require_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
       local real = vim.treesitter.get_captures_at_pos
-      vim.treesitter.get_captures_at_pos = function(...)
+      -- The real signature rather than varargs: the stub stands in for a
+      -- typed function, and `(...)` makes it look like it takes none.
+      ---@diagnostic disable-next-line: duplicate-set-field
+      vim.treesitter.get_captures_at_pos = function(b, r, c)
         asked = asked + 1
-        return real(...)
+        return real(b, r, c)
       end
       scope.allows_path(buf, 1, 11)
       vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "local x = ./docs/BINDINGS.md" })
