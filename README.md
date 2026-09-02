@@ -54,7 +54,7 @@ See ./docs/architecture.md#modules for details.
 - [Bare paths](#bare-paths)
 - [Where a bare path is looked for](#where-a-bare-path-is-looked-for)
 - [Waving one hover away](#waving-one-hover-away)
-- [Zooming a picture](#zooming-a-picture)
+- [Resizing the hover](#resizing-the-hover)
 - [Scrolling a preview](#scrolling-a-preview)
 - [Configuration](#configuration)
 - [Contributing from your own config](#contributing-from-your-own-config)
@@ -79,7 +79,7 @@ See ./docs/architecture.md#modules for details.
 | `:Hover why` | Why nothing hovered at the cursor: which of the seven gates refused, named, with the command that opens it | [The `:Hover` command](#the-hover-command) |
 | Bare-path resolution | A path in prose, a code comment or a `:messages` dump is a target too — truncated ones included | [Bare paths](#bare-paths) |
 | `hover.scroll(1)` / `scroll(-1)` | Page through a file's head or a PDF's pages without leaving the document | [Scrolling a preview](#scrolling-a-preview) |
-| `hover.zoom(1)` / `zoom(-1)` | `+` and `-` make a picture larger or smaller, up to whatever room the terminal has | [Zooming a picture](#zooming-a-picture) |
+| `hover.resize(1)` / `resize(-1)` | make the float bigger or smaller: a picture is drawn larger, a text preview shows more lines | [Resizing the hover](#resizing-the-hover) |
 | `hover.dismiss()` | Wave one float away and keep it away, until the cursor reaches another target | [Waving one hover away](#waving-one-hover-away) |
 | `hover.pin()` | Keep one float on screen while the cursor goes elsewhere — for comparing rather than reading. One float, so the trigger opens nothing while it is up | [The `:Hover` command](#the-hover-command) |
 | `hover.registry.register()` | Another plugin contributes a *source* or a *preview*; hover.nvim never says its name | [Contributing from a plugin](#contributing-from-a-plugin) |
@@ -321,7 +321,7 @@ toggles.
 | `:Hover status` | the mode and every switch — as a chooser where picking a line toggles it, or as one message where lib.nvim has no UI kit |
 | `:Hover why` | why nothing hovered *here* — which of the gates refused, and what to type about it |
 | `:Hover pin` | keep this float on screen while the cursor goes elsewhere; again releases it |
-| `:Hover zoom [in\|out]` | make the picture in the open hover bigger or smaller. Omitted, it zooms in |
+| `:Hover resize [bigger\|smaller]` | make the hover on screen bigger or smaller. Omitted, bigger |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |
@@ -511,18 +511,25 @@ your own mapping, which works whether or not a hover happens to be open:
 vim.keymap.set("n", "<C-d>", function() require("hover").scroll(1) end)
 ```
 
-## Zooming a picture
+## Resizing the hover
 
-While a hover with a **picture** in it is open — an image, or a PDF/office page, which is
-a PNG by the time you are looking at it:
+While a hover is open, one step multiplies the box the previewer is given — `max_width`
+and `max_lines` — by 1.25. **Two honest answers to one operation:** a picture is drawn
+larger, a text preview shows *more lines*.
 
-| Key | Does |
-| --- | --- |
-| `+` | the picture, one step larger |
-| `-` | one step smaller |
-| `<M-ScrollWheelUp>` | one step larger — **only while the pointer is over the float** |
-| `<M-ScrollWheelDown>` | one step smaller, same rule |
-| `:Hover zoom [in\|out]` | the same step from the command line; omitted, it zooms in |
+| Key | Does | Bound for |
+| --- | --- | --- |
+| `+` | one step larger | **a hover with a picture only** |
+| `-` | one step smaller | as above |
+| `<M-ScrollWheelUp>` | one step larger | **any** hover — but only while the pointer is over the float |
+| `<M-ScrollWheelDown>` | one step smaller | as above |
+| `:Hover resize [bigger\|smaller]` | the same step from the command line; omitted, bigger | any hover, no key at all |
+
+**`+` and `-` are bound only over a picture, and that is a decision about what a key
+costs.** They are real motions in normal mode; displacing them is worth it over an image
+and not over every float that happens to be up. The wheel and `:Hover resize` cost nobody
+a key and therefore apply to **any** hover — which is also the keyboard way to resize a
+text preview.
 
 One key per direction rather than two. The scroll pairs are doubled because a key that is
 not on the keyboard cannot be pressed; `+` and `-` are on every keyboard, so that argument
@@ -531,7 +538,7 @@ is the indent operator, and borrowing an operator buys convenience nobody asked 
 
 **The wheel obeys a different rule than the keys, and it is the rule you already
 have for a wheel.** `+` acts on the one float there is, wherever the pointer happens
-to be. A wheel *points*, so `<M-ScrollWheelUp>` acts on what it is aimed at: it zooms
+to be. A wheel *points*, so `<M-ScrollWheelUp>` acts on what it is aimed at: it resizes
 only while the pointer sits on the float, its border ring included. Pointing elsewhere
 does nothing, which is the honest answer rather than a missing one.
 
@@ -541,34 +548,39 @@ below the cursor, so its top border sits on the cursor's own row — and under
 pointer already is. You do not have to move it onto the picture first.
 
 Alt rather than Ctrl, because `<C-ScrollWheel>` is the terminal emulator's own zoom
-nearly everywhere. And the wheel needs `'mouse'` to include your mode — with it empty
-no wheel event reaches Neovim at all and the mapping is inert rather than broken.
-`:checkhealth hover` says so, because from the outside those look identical.
+nearly everywhere — and this is not that. The wheel also needs `'mouse'` to include your
+mode: with it empty no wheel event reaches Neovim at all, and the mapping is inert rather
+than broken. `:checkhealth hover` says so, because from the outside those look identical.
 
-**Text is not zoomable, and that is not an omission.** The font size belongs to the
-terminal emulator and Neovim cannot change it, so "zoom" for text could only mean a larger
-float — which shows *more*, not anything *larger*. That is `max_lines`, and it is a
-different feature that should keep its own name. The keys are bound on the picture, so a
-text hover never takes them.
+**Why this is `resize` and not `zoom`.** For a picture the two coincide: ask for a bigger
+box and the picture is drawn larger. For text they come apart — the font size belongs to
+the terminal emulator and Neovim cannot change it, so a bigger box shows *more lines*, not
+larger ones. Only one of the two answers is magnification, and calling both of them zoom
+would be wrong about the other. A real zoom — a cropped detail you can pan around — is a
+separate feature; see [the roadmap](docs/ROADMAP.md).
+
+`zoom_keys` is still accepted as the old spelling of `resize_keys`, and `hover.zoom(delta)`
+still calls `hover.resize(delta)`.
 
 **The ceiling is your terminal, and the plugin finds it rather than carrying a number.** A
 step multiplies the box the picture is fitted into by 1.25; the letterboxing and the clamp
 against the screen still happen exactly where they did. A step that changes nothing is
-stepped back off, so holding `+` does not run the zoom off somewhere you have to press it
-back from. Measured against a real Neovim, a 1200×675 image at the default `80×20`:
+stepped back off, so holding `+` does not run the level off somewhere you have to press it
+back from. The comparison is against the float's *clamped* size — twenty lines shown for
+twenty-five asked is a refusal, and a step that missed it would run the level away. Measured against a real Neovim, a 1200×675 image at the default `80×20`:
 
 | Terminal | Steps in | Picture goes from | to |
 | --- | --- | --- | --- |
 | 210×55 | five | 71×20 cells | 181×51 |
 | 80×24 | **none** | 71×20 | 71×20 — 20 rows is already `lines - 4` |
 
-A PDF page is not re-rasterized, so zooming one costs nothing and is correspondingly
-unsharp. A sharp version would be a second render at a higher DPI, and the page cache is
+A PDF page is not re-rasterized, so making one bigger costs nothing and is
+correspondingly unsharp. A sharp version would be a second render at a higher DPI, and the page cache is
 keyed on path, mtime and page number — without one.
 
 ```lua
 require("hover").setup({
-  zoom_keys = {
+  resize_keys = {
     larger = { "+", "<C-=>" },      -- a string or a list
     smaller = "-",
     wheel_larger = { "<M-ScrollWheelUp>" },
@@ -577,8 +589,9 @@ require("hover").setup({
 })
 ```
 
-`hover.zoom(delta)` is public, like `scroll`, and returns `false` when there is no picture
-to zoom.
+`hover.resize(delta)` is public, like `scroll`, and returns `false` when there is no hover
+to resize — which today includes a *position* preview, whose content came from another
+plugin and cannot be asked again at a larger size.
 
 ## Configuration
 
@@ -615,10 +628,10 @@ require("hover").setup({
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | |
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | |
-| `zoom_keys.larger` | `{ "+" }` | Bound only for a hover with a picture in it — see [Zooming a picture](#zooming-a-picture). |
-| `zoom_keys.smaller` | `{ "-" }` | |
-| `zoom_keys.wheel_larger` | `{ "<M-ScrollWheelUp>" }` | The wheel acts on what it points at: these fire only while the pointer is over the float, its border included. Needs `'mouse'` set |
-| `zoom_keys.wheel_smaller` | `{ "<M-ScrollWheelDown>" }` | |
+| `resize_keys.larger` | `{ "+" }` | Bound only for a hover with a picture in it — see [Resizing the hover](#resizing-the-hover). |
+| `resize_keys.smaller` | `{ "-" }` | |
+| `resize_keys.wheel_larger` | `{ "<M-ScrollWheelUp>" }` | Bound for **any** hover. The wheel acts on what it points at: these fire only while the pointer is over the float, its border included. Needs `'mouse'` set |
+| `resize_keys.wheel_smaller` | `{ "<M-ScrollWheelDown>" }` | |
 | `open_keys` | `{ "gf" }` | Open what the float is showing — through [open.nvim](https://github.com/StefanBartl/open.nvim) when installed, else `vim.ui.open`. Borrowed and restored like the others; `{}` binds nothing. |
 | `dismiss_keys` | `{ "q", "<Esc>" }` | |
 | `keymaps.show` | `false` | A key for `:Hover show`. No key is claimed unless asked for. |
@@ -890,7 +903,7 @@ When a hover fails to appear for one specific thing rather than for everything,
   entry point, which features are missing, which of the things this plugin already does
   it does worse than it could — and what was considered and rejected.
 - [Manual evidence](docs/MANUAL-EVIDENCE.md) — the six things no CI can check
-  (a drawn image, a zoomed one, a rasterized PDF page, a converted office document, and
+  (a drawn image, a resized one, a rasterized PDF page, a converted office document, and
   a contribution asked only on request), when each was last checked by hand, and on what.
 - `:help hover` — the vimdoc: the same ground, offline.
 

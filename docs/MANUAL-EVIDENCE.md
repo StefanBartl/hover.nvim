@@ -33,14 +33,14 @@ one thing work once, on one machine.
 | **How** | Rest the cursor on a `./assets/*.png` path. The picture appears inside the float, fitted, not beside it. |
 | **Watch for** | The picture landing beside its own frame — that is the placement bug written up in [the README](../README.md#two-things-that-must-not-be-changed-casually), and it only shows with a sidebar open. Reproduce with a real image; a generated test card cannot reveal an aspect-ratio problem. |
 
-### A picture zoomed
+### A hover resized
 
 | | |
 | --- | --- |
 | **Checked** | *never* |
 | **On** | — |
-| **How** | Hover an image, then press `+` a few times and `-` back. The float grows and shrinks with it, and the picture fills it edge to edge at every size. |
-| **Watch for** | The **frame** growing while the picture inside it does not — that is the one failure a spec cannot see. `TESTS/zoom_spec.lua` pins the geometry all the way to `nvim_win_get_config`, but the cell area is only a *request* to the terminal, and whether the drawing actually followed it is visible and nothing else. Also: letterboxing that drifts as the box grows (the picture no longer centred, or gaining a margin on one side only), which would mean the inset is being added at the wrong end of the scaling. |
+| **How** | Hover an image, then press `+` a few times and `-` back. The float grows and shrinks with it, and the picture fills it edge to edge at every size. Then hover a *text* file and run `:Hover resize` a few times: the float grows and more lines appear in it — `+` is deliberately not bound there. |
+| **Watch for** | The **frame** growing while the picture inside it does not — that is the one failure a spec cannot see. `TESTS/resize_spec.lua` pins the geometry all the way to `nvim_win_get_config`, but the cell area is only a *request* to the terminal, and whether the drawing actually followed it is visible and nothing else. Also: letterboxing that drifts as the box grows (the picture no longer centred, or gaining a margin on one side only), which would mean the inset is being added at the wrong end of the scaling. |
 
 Measured, not seen, on 2026-09-02: a 1200×675 image at the default `80×20`
 grows through five steps on a 210×55 terminal (71×20 cells of picture up to
@@ -48,14 +48,14 @@ grows through five steps on a 210×55 terminal (71×20 cells of picture up to
 `lines - 4`. Those are float geometries read back from Neovim — they say the
 frame is the right size, not that a picture arrived in it.
 
-### The zoom wheel, where it points
+### The resize wheel, where it points
 
 | | |
 | --- | --- |
 | **Checked** | *never* |
 | **On** | — |
 | **How** | Hover an image. With the pointer **on** the float, `<M-ScrollWheelUp>` a few times: it grows. Move the pointer well off the float and press it again: nothing happens. `<M-ScrollWheelDown>` on the float shrinks it back. |
-| **Watch for** | Nothing happening *anywhere*, which is the interesting failure and has two causes that look identical: `'mouse'` not covering the mode (`:checkhealth hover` warns about exactly this), or the terminal not sending Alt+wheel as a distinct chord. `<M-ScrollWheelUp>` mapped to `:echo` tells the two apart in one press. Also worth watching: zooming while the pointer is *beside* the float rather than on it — the gate is a rectangle test, and a wrong one would show up as a float that zooms from anywhere. |
+| **Watch for** | Nothing happening *anywhere*, which is the interesting failure and has two causes that look identical: `'mouse'` not covering the mode (`:checkhealth hover` warns about exactly this), or the terminal not sending Alt+wheel as a distinct chord. `<M-ScrollWheelUp>` mapped to `:echo` tells the two apart in one press. Also worth watching: a step landing while the pointer is *beside* the float rather than on it — the gate is a rectangle test, and a wrong one would show up as a float that resizes from anywhere. |
 
 **Why this cannot be a spec.** Mouse input needs a UI attached: measured on
 2026-09-02, `nvim_input_mouse` fired **zero** mappings with

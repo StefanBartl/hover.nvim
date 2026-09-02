@@ -159,6 +159,43 @@ local function measure(lines, opts)
   return width, math.max(height, 1)
 end
 
+--- The size a float would have for this content: the size *after* the clamp
+--- against the screen, which is the only one worth comparing.
+---
+--- Public because `hover.resize` has to ask it before presenting. A step that
+--- the screen refuses has to be stepped back off, and "refused" is not
+--- visible in the content -- twenty-five lines asked for and twenty shown is
+--- a clamp, and a resize that did not notice would let a held key run the
+--- level away somewhere it has to be pressed back from.
+---@param lines string[]|nil
+---@param opts table `canvas`, `max_width`, `max_height`
+---@return integer width
+---@return integer height
+function M.size_for(lines, opts)
+  opts = opts or {}
+  local canvas = opts.canvas
+  if canvas then
+    return math.max(1, math.min(canvas.cols, math.max(20, vim.o.columns - 4))),
+      math.max(1, math.min(canvas.rows, math.max(3, vim.o.lines - 4)))
+  end
+  return measure(lines or {}, opts)
+end
+
+--- The open float's own width and height, or nil when none is open.
+---@return integer|nil width
+---@return integer|nil height
+function M.size()
+  local win = M.win()
+  if not win then
+    return nil
+  end
+  local ok, cfg = pcall(api.nvim_win_get_config, win)
+  if not ok then
+    return nil
+  end
+  return cfg.width, cfg.height
+end
+
 --- Open (or replace) the hover window showing `lines`.
 ---@param lines string[]
 ---@param opts Hover.FloatOpts
@@ -237,13 +274,7 @@ function M.open(lines, opts)
     end)
   end
 
-  local width, height
-  if canvas then
-    width = math.max(1, math.min(canvas.cols, math.max(20, vim.o.columns - 4)))
-    height = math.max(1, math.min(canvas.rows, math.max(3, vim.o.lines - 4)))
-  else
-    width, height = measure(lines, opts)
-  end
+  local width, height = M.size_for(lines, opts)
 
   -- Positioned against the editor grid, not the cursor — even though "one
   -- line below the cursor" is exactly what is wanted here.

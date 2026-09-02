@@ -2,8 +2,8 @@
 -- The test body is the guard; see the note in TESTS/bare_path_spec.lua
 -- (`LLS-42`).
 
--- TESTS/zoom_spec.lua -- making the picture bigger, and the two things about
--- it that are not obvious.
+-- TESTS/resize_spec.lua -- making the hover on screen bigger, and the three
+-- things about it that are not obvious.
 --
 --   1. **The ceiling belongs to the terminal, not to this plugin.** Measured
 --      against a real Neovim on 2026-09-02, a 1200x675 image at the default
@@ -17,13 +17,20 @@
 --
 --   2. **The borrow condition is `canvas`, not `scroll`.** An image declares
 --      no `scroll` -- `canvas_for` returns `lines`, `canvas` and
---      `image_path`, nothing else -- so hanging zoom off the one condition
+--      `image_path`, nothing else -- so hanging this off the one condition
 --      `keys.borrow` already had would have bound it for every case except
 --      the one it is for.
 --
--- Zoom is not a second drawing path: it scales the box `canvas_cells` fits
--- the picture into and nothing else. What is pinned here is that scaling and
--- its edges, not the drawing, which needs a terminal and is evidenced by hand
+--   3. **`+` / `-` and the wheel are bound on *different* conditions.** The
+--      keys are real motions in normal mode: worth displacing over a picture,
+--      not over every float that happens to be up. The wheel costs nobody
+--      anything, so it is bound for any hover -- including text, where a step
+--      shows more lines rather than larger ones.
+--
+-- A resize is not a second drawing path and carries no factor of its own: it
+-- raises `max_width` and `max_lines` for one preview, and every previewer
+-- answers that in its own way. What is pinned here is that scaling and its
+-- edges, not the drawing, which needs a terminal and is evidenced by hand
 -- (`docs/MANUAL-EVIDENCE.md`).
 
 local config = require("hover.config")
@@ -56,7 +63,7 @@ local function fake_png(path, w, h)
   f:close()
 end
 
-describe("the canvas a zoom factor asks for", function()
+describe("the canvas a resized box asks for", function()
   local root, png
 
   before_each(function()
@@ -72,21 +79,23 @@ describe("the canvas a zoom factor asks for", function()
     config.reset()
   end)
 
-  ---@param zoom number|nil
+  --- The canvas for a box scaled by `factor` -- which is all a resize step
+  --- is. There is no `zoom` field any more: the step reaches `canvas_cells`
+  --- as a larger `max_width` / `max_lines` and nothing else, which is exactly
+  --- why the same step works for a text preview.
+  ---@param factor number|nil
   ---@return Hover.Canvas
-  local function canvas(zoom)
+  local function canvas(factor)
     local opts = config.preview_opts()
-    opts.zoom = zoom
+    if factor then
+      opts.max_width = math.max(1, math.floor(opts.max_width * factor + 0.5))
+      opts.max_lines = math.max(1, math.floor(opts.max_lines * factor + 0.5))
+    end
     return media.canvas_for(png, opts).canvas
   end
 
-  it("is the same with no zoom as with a factor of one", function()
+  it("is the same unscaled as with a factor of one", function()
     assert.same(canvas(nil), canvas(1))
-    -- A factor that is not a positive number is not a factor. `0` would
-    -- collapse the box, and a negative one is the *level* being passed where
-    -- the multiplier belongs.
-    assert.same(canvas(1), canvas(0))
-    assert.same(canvas(1), canvas(-2))
   end)
 
   it("grows with the factor, while there is screen left", function()
@@ -110,8 +119,8 @@ describe("the canvas a zoom factor asks for", function()
   end)
 
   it("shrinks to a floor rather than to nothing", function()
-    -- The floors are `canvas_cells`' own, and they are what makes zooming out
-    -- safe to hold down: the box stops being a box before it stops existing.
+    -- The floors are `canvas_cells`' own, and they are what makes holding the
+    -- shrink key safe: the box stops being a box before it stops existing.
     local tiny = canvas(0.001)
     assert.is_true(tiny.cols >= 1 and tiny.rows >= 1)
     assert.is_true(tiny.cols < canvas(1).cols or tiny.rows < canvas(1).rows)
@@ -142,7 +151,7 @@ describe("the keys a drawn hover borrows", function()
     return vim.fn.maparg(lhs, "n") ~= ""
   end
 
-  it("takes the zoom keys for a picture", function()
+  it("takes the resize keys for a picture", function()
     keys.borrow(
       { lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" },
       function() end,
@@ -155,9 +164,11 @@ describe("the keys a drawn hover borrows", function()
     assert.is_true(mapped("<M-ScrollWheelDown>"))
   end)
 
-  it("takes no zoom key for text, which has nothing to zoom", function()
-    -- Scrollable, and deliberately so: this is the content that *does* get
-    -- the other borrowed pair, and it must still not get this one.
+  it("takes the wheel for text but not `+` and `-`, which are motions", function()
+    -- The split that the rename made possible. A text hover *can* be resized
+    -- -- a bigger box shows more lines -- so the wheel is bound for it. `+`
+    -- and `-` are not: they are real motions, and displacing them over every
+    -- float that happens to be up is a worse trade than the feature is worth.
     keys.borrow(
       { lines = { "a", "b" }, scroll = { offset = 0, step = 20, more = true } },
       function() end,
@@ -165,11 +176,11 @@ describe("the keys a drawn hover borrows", function()
     )
     assert.is_false(mapped("+"))
     assert.is_false(mapped("-"))
-    assert.is_false(mapped("<M-ScrollWheelUp>"))
-    assert.is_false(mapped("<M-ScrollWheelDown>"))
+    assert.is_true(mapped("<M-ScrollWheelUp>"))
+    assert.is_true(mapped("<M-ScrollWheelDown>"))
   end)
 
-  it("takes none when no zoom handler was handed over", function()
+  it("takes none when no resize handler was handed over", function()
     -- `borrow` is public; a caller that does not implement zoom must not end
     -- up with keys bound to nothing.
     keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, function() end)
@@ -179,20 +190,20 @@ describe("the keys a drawn hover borrows", function()
   it("gives back what it displaced, rather than deleting it", function()
     vim.keymap.set("n", "+", "<Nop>", { desc = "the user's own +" })
     keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, function() end, function() end)
-    assert.equals("hover: zoom the picture in", vim.fn.maparg("+", "n", false, true).desc)
+    assert.equals("hover: make the picture bigger", vim.fn.maparg("+", "n", false, true).desc)
     keys.release()
     assert.equals("the user's own +", vim.fn.maparg("+", "n", false, true).desc)
   end)
 
   it("binds nothing when the key list is emptied", function()
-    config.setup({ zoom_keys = { larger = {}, smaller = {} } })
+    config.setup({ resize_keys = { larger = {}, smaller = {} } })
     keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, function() end, function() end)
     assert.is_false(mapped("+"))
     assert.is_false(mapped("-"))
   end)
 end)
 
-describe("hover.zoom", function()
+describe("hover.resize", function()
   local root, win, prev_buf, prev_isfname, prev_cols, prev_lines, buf
 
   before_each(function()
@@ -273,11 +284,11 @@ describe("hover.zoom", function()
     assert.is_true(show_at("see ./pic.png here", 5))
     local w0, h0 = geometry()
 
-    assert.is_true(hover.zoom(1))
+    assert.is_true(hover.resize(1))
     local w1, h1 = geometry()
     assert.is_true(w1 > w0 and h1 > h0, ("%dx%d is not bigger than %dx%d"):format(w1, h1, w0, h0))
 
-    assert.is_true(hover.zoom(-1))
+    assert.is_true(hover.resize(-1))
     assert.same({ w0, h0 }, { geometry() })
   end)
 
@@ -287,11 +298,11 @@ describe("hover.zoom", function()
     -- it, and the first few would look like the key had stopped working.
     assert.is_true(show_at("see ./pic.png here", 5))
     for _ = 1, 12 do
-      hover.zoom(1)
+      hover.resize(1)
     end
     local wmax, hmax = geometry()
 
-    hover.zoom(-1)
+    hover.resize(-1)
     local w, h = geometry()
     assert.is_true(
       w < wmax and h < hmax,
@@ -299,19 +310,55 @@ describe("hover.zoom", function()
     )
   end)
 
-  it("declines for a hover with nothing drawn in it", function()
-    assert.is_true(show_at("see ./long.txt here", 5))
-    assert.is_false(hover.zoom(1))
+  it("resizes a text hover too, which is the whole point of the rename", function()
+    -- A file preview is capped by `max_lines`, so a bigger box means more
+    -- lines -- *more*, not larger, and that is the honest answer for text.
+    -- Until the rename this was refused on purpose, and `present` clamped it
+    -- back to the configured `max_lines` even if it had not been.
+    local long = {}
+    for i = 1, 200 do
+      long[i] = ("line %d"):format(i)
+    end
+    vim.fn.writefile(long, root .. "/many.txt")
+
+    assert.is_true(show_at("see ./many.txt here", 5))
+    local _, h0 = geometry()
+    assert.is_true(hover.resize(1))
+    local _, h1 = geometry()
+    assert.is_true(h1 > h0, ("%d lines did not grow past %d"):format(h1, h0))
+
+    assert.is_true(hover.resize(-1))
+    assert.same(h0, select(2, geometry()))
+  end)
+
+  it("declines for a position preview, which has no target to re-ask", function()
+    -- The one float this cannot resize. A position preview is finished
+    -- content from another plugin and `_open` holds an id rather than a
+    -- target, so there is nothing to ask again at a larger size. Declining is
+    -- the honest answer; putting the question back to the registry is a
+    -- different change.
+    registry.register("a-position", {
+      positions = {
+        function()
+          return { lines = { "something about this line" } }
+        end,
+      },
+    })
+
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "nothing resolvable here" })
+    vim.api.nvim_win_set_cursor(win, { 1, 3 })
+    assert.is_true(hover.show({ force = true }))
+    assert.is_false(hover.resize(1))
   end)
 
   it("declines when no float is open, and hands the keys back doing it", function()
     assert.is_true(show_at("see ./pic.png here", 5))
     hover.hide()
-    assert.is_false(hover.zoom(1))
+    assert.is_false(hover.resize(1))
     assert.is_false(keys.is_borrowing())
   end)
 
-  it("keeps the page it is on while zooming", function()
+  it("keeps the page it is on while resizing", function()
     -- A PDF is the one target with both, and the trap is that
     -- `config.preview_opts()` is built fresh from the configuration: it knows
     -- nothing about where this hover already is, so page and offset have to
@@ -321,11 +368,13 @@ describe("hover.zoom", function()
     registry.register("fake-pdf", {
       previews = {
         pdf = function(_, opts)
-          seen[#seen + 1] = { page = opts.page, zoom = opts.zoom }
-          local factor = opts.zoom or 1
+          seen[#seen + 1] = { page = opts.page, width = opts.max_width }
           return {
             lines = {},
-            canvas = { cols = math.floor(40 * factor), rows = math.floor(10 * factor) },
+            canvas = {
+              cols = math.floor(opts.max_width / 2),
+              rows = math.floor(opts.max_lines / 2),
+            },
             image_path = root .. "/pic.png",
             scroll = { page = opts.page or 1, step = 1, more = true },
           }
@@ -337,9 +386,10 @@ describe("hover.zoom", function()
     assert.is_true(hover.scroll(1))
     assert.equals(2, seen[#seen].page)
 
-    assert.is_true(hover.zoom(1))
-    assert.equals(2, seen[#seen].page, "zooming lost the page the hover was on")
-    assert.is_true((seen[#seen].zoom or 1) > 1, "the zoom factor never reached the previewer")
+    local before = seen[#seen].width
+    assert.is_true(hover.resize(1))
+    assert.equals(2, seen[#seen].page, "resizing lost the page the hover was on")
+    assert.is_true(seen[#seen].width > before, "the larger box never reached the previewer")
   end)
 
   -- The wheel. Two things are asserted and a third deliberately is not.
@@ -381,7 +431,7 @@ describe("hover.zoom", function()
     assert.is_false(float.contains(nil, nil), "a missing position is inside")
   end)
 
-  it("zooms from the wheel only where the pointer is", function()
+  it("steps from the wheel only where the pointer is", function()
     local at = { screenrow = 1, screencol = 1 }
     vim.fn.getmousepos = function()
       return at
@@ -423,8 +473,8 @@ describe("hover.zoom", function()
     assert.is_true(ok, tostring(err))
   end)
 
-  -- `:Hover zoom` -- the same step, reached the way the rest of this plugin
-  -- is reached.
+  -- `:Hover resize` -- the same step, reached the way the rest of this plugin
+  -- is reached, and the only keyboard way in for a text hover.
   --
   -- The keys are primary, and they are a *borrow*: bound only while a drawn
   -- hover is on screen. A reader who has never seen one has no way to find
@@ -441,21 +491,21 @@ describe("hover.zoom", function()
     assert.is_true(show_at("see ./pic.png here", 5))
     local w0, h0 = geometry()
 
-    vim.cmd("Hover zoom in")
+    vim.cmd("Hover resize bigger")
     local w1, h1 = geometry()
     assert.is_true(w1 > w0 and h1 > h0, "the command did not grow the float")
 
-    vim.cmd("Hover zoom out")
+    vim.cmd("Hover resize smaller")
     assert.same({ w0, h0 }, { geometry() })
   end)
 
-  it("zooms in on a bare `:Hover zoom`, and the float survives the command", function()
+  it("grows on a bare `:Hover resize`, and the float survives the command", function()
     require("hover.bindings.usrcmds").setup()
     assert.is_true(show_at("see ./pic.png here", 5))
     local w0 = (geometry())
 
-    vim.cmd("Hover zoom")
+    vim.cmd("Hover resize")
     assert.is_truthy(float.win(), "the float did not survive a command line")
-    assert.is_true((geometry()) > w0, "a bare zoom did not zoom in")
+    assert.is_true((geometry()) > w0, "a bare resize did not make it bigger")
   end)
 end)

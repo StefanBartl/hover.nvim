@@ -55,6 +55,20 @@ local function normalize(opts)
     opts.bare_paths = nil
   end
 
+  -- `zoom_keys` was the name while the feature only applied to pictures,
+  -- where "make the box bigger" and "zoom" happen to coincide. They stop
+  -- coinciding for text -- a bigger float shows *more*, not anything larger --
+  -- so the feature was renamed when it grew to cover every hover.
+  if type(opts.zoom_keys) == "table" then
+    opts.resize_keys = type(opts.resize_keys) == "table" and opts.resize_keys or {}
+    for key, value in pairs(opts.zoom_keys) do
+      if opts.resize_keys[key] == nil then
+        opts.resize_keys[key] = value
+      end
+    end
+  end
+  opts.zoom_keys = nil
+
   -- `url = { hover, fetch, timeout_ms }` covered only http(s). It is the web
   -- half of `links`, and the half that was already switchable.
   if type(opts.url) == "table" then
@@ -90,7 +104,7 @@ end
 local function replace_key_lists(opts)
   -- Tables of key lists: whatever direction the user named is replaced, and
   -- the ones they did not name keep their default.
-  for _, name in ipairs({ "scroll_keys", "zoom_keys", "keymaps" }) do
+  for _, name in ipairs({ "scroll_keys", "resize_keys", "keymaps" }) do
     if type(opts[name]) == "table" and type(_options[name]) == "table" then
       for key, value in pairs(opts[name]) do
         _options[name][key] = vim.deepcopy(value)

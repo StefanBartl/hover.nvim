@@ -136,10 +136,17 @@ end
 ---@return table<string, true>
 local function documented_routes(text, vimdoc)
   -- Argument values, not just switch states: `mode` contributes auto and
-  -- manual, `zoom` contributes in and out. A document writing the concrete
-  -- `:Hover zoom in` still means the `zoom` route.
-  local STATES =
-    { on = true, off = true, toggle = true, auto = true, manual = true, ["in"] = true, out = true }
+  -- manual, `resize` contributes bigger and smaller. A document writing the
+  -- concrete `:Hover resize bigger` still means the `resize` route.
+  local STATES = {
+    on = true,
+    off = true,
+    toggle = true,
+    auto = true,
+    manual = true,
+    bigger = true,
+    smaller = true,
+  }
   local mentions = {}
 
   for mention in text:gmatch("`:Hover([^`]*)`") do

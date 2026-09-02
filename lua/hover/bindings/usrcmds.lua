@@ -246,33 +246,35 @@ function M.routes()
       end,
     },
     {
-      path = { "zoom" },
+      path = { "resize" },
       -- The keys are the primary way in (`+` / `-`, borrowed while a picture
-      -- is on screen). This route exists because those are a *borrow*: they
-      -- are bound only while a drawn hover is open, so a reader who has not
-      -- seen them has no way to discover the feature, and `:Hover` completion
-      -- is where the rest of this plugin is discovered.
+      -- is on screen). This route exists for two reasons: those keys are a
+      -- *borrow* and are bound only while a drawn hover is open, so a reader
+      -- who has not seen them cannot discover the feature -- and they are
+      -- deliberately not bound for a text hover, where this route is the
+      -- keyboard way in.
       --
       -- Reachable in practice because entering the command line moves no
       -- cursor: the float's dismissal hangs on CursorMoved, InsertEnter,
       -- BufLeave and WinScrolled, and typing `:` fires none of them.
-      desc = "Make the picture in the open hover bigger or smaller",
+      desc = "Make the hover on screen bigger or smaller",
       args = {
         {
           name = "direction",
-          enum = { "in", "out" },
+          enum = { "bigger", "smaller" },
           optional = true,
-          -- Bare `:Hover zoom` zooms in. There is no "toggle" reading for a
-          -- step, and the common direction is the useful default -- one that
-          -- `out` undoes, so guessing wrong costs one keypress.
-          default = "in",
+          -- Bare `:Hover resize` makes it bigger. There is no "toggle"
+          -- reading for a step, and the common direction is the useful
+          -- default -- one that `smaller` undoes, so guessing wrong costs one
+          -- keypress.
+          default = "bigger",
         },
       },
       ---@param ctx table
       run = function(ctx)
-        local direction = (ctx and ctx.args and ctx.args.direction) or "in"
-        if not hover().zoom(direction == "out" and -1 or 1) then
-          require("hover.notify").info("no picture to zoom")
+        local direction = (ctx and ctx.args and ctx.args.direction) or "bigger"
+        if not hover().resize(direction == "smaller" and -1 or 1) then
+          require("hover.notify").info("no hover to resize")
         end
       end,
     },

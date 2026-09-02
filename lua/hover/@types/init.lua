@@ -43,7 +43,7 @@
 ---@field paths? Hover.PathsConfig
 ---@field office? Hover.OfficeConfig
 ---@field scroll_keys? Hover.ScrollKeys
----@field zoom_keys? Hover.ZoomKeys
+---@field resize_keys? Hover.ResizeKeys
 ---@field dismiss_keys? string|string[] # Keys that wave the hover on screen away. Default `{ "q", "<Esc>" }`; a configured list replaces the default, and an empty one binds nothing.
 ---@field open_keys? string|string[] # Keys that open what the float is showing, through open.nvim or `vim.ui.open`. Default `{ "gf" }`; an empty list binds nothing.
 ---@field keymaps? Hover.Keymaps
@@ -51,6 +51,7 @@
 ---@field enabled? boolean # Legacy. `false` is read as `mode = "off"` and then dropped.
 ---@field bare_paths? boolean # Legacy. Read as `paths.enabled` and then dropped.
 ---@field url? Hover.LegacyUrlConfig # Legacy. Folded into `links` and then dropped.
+---@field zoom_keys? Hover.ResizeKeys # Legacy. Folded into `resize_keys` and then dropped.
 
 --- Targets written with link syntax, found by a registered source.
 ---@class Hover.LinksConfig
@@ -97,11 +98,12 @@
 ---@field down? string|string[] # Default `{ "<M-PageDown>", "<C-Down>" }` -- the second pair for keyboards with no PageUp/PageDown.
 ---@field up? string|string[] # Default `{ "<M-PageUp>", "<C-Up>" }`.
 
---- Keys borrowed while a *drawn* hover is on screen -- an image, or a PDF
---- page -- to make its box larger or smaller. Bound on `content.canvas`, so
---- a text preview never sees them: zoom for text would mean a bigger float,
---- which is `max_lines` and a different feature.
----@class Hover.ZoomKeys
+--- Keys that make the hover on screen larger or smaller.
+---
+--- `larger` / `smaller` are bound only for a *drawn* hover -- they displace
+--- real motions, which is worth it over a picture and not over every float.
+--- The wheel and `:Hover resize` apply to any hover.
+---@class Hover.ResizeKeys
 ---@field larger? string|string[] # Default `{ "+" }`.
 ---@field smaller? string|string[] # Default `{ "-" }`.
 ---@field wheel_larger? string|string[] # Default `{ "<M-ScrollWheelUp>" }`. Fires only while the pointer is over the float; needs `'mouse'` set.
@@ -135,8 +137,8 @@
 ---@field row? integer # Cursor row a position preview answered for.
 ---@field offset? integer # Lines skipped, for a text preview.
 ---@field page? integer # 1-based page, for a PDF preview.
----@field zoom? integer # Zoom steps applied to a drawn preview; the factor is `1.25^zoom`. Set by `hover.zoom`.
----@field canvas? Hover.Canvas # Size of the picture currently on screen, so `hover.zoom` can tell a step that took effect from one the terminal refused.
+---@field resize? integer # Resize steps applied to this hover; the factor is `1.25^resize`. Set by `hover.resize`.
+---@field canvas? Hover.Canvas # Size of the picture currently on screen, so `hover.resize` can tell a step that took effect from one the terminal refused.
 ---@field pinned? boolean # Taken out of the cursor's hands: the trigger neither replaces nor closes it.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
 
@@ -227,7 +229,6 @@
 ---@field line_end? integer # Text previews: last line of a named range (`init.lua:10-20`); shown exactly, without lead-in.
 ---@field offset? integer # Text previews: lines to skip. Set by `hover.scroll`.
 ---@field page? integer # PDF previews: 1-based page to render. Set by `hover.scroll`. Office documents page through their converted PDF the same way.
----@field zoom? number # Drawn previews: multiplier on the box the picture is fitted into. Set by `hover.zoom`; absent means 1.
 
 ---@class Hover.Content
 ---@field lines string[]

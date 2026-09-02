@@ -211,14 +211,20 @@ return {
     up = { "<M-PageUp>", "<C-Up>" },
   },
 
-  --- The picture's box, larger or smaller. Borrowed only while a *drawn*
-  --- hover is on screen -- an image, or a PDF/office page, which is a PNG by
-  --- the time anything is visible.
+  --- The hover on screen, larger or smaller. One step multiplies the box the
+  --- previewer is given -- `max_width` and `max_lines` -- by 1.25.
   ---
-  --- Zoom means nothing for text: the font size belongs to the terminal
-  --- emulator and Neovim cannot change it, so "zoom" there could only mean a
-  --- bigger float -- *more*, not *bigger*. That is `max_lines`, and it is a
-  --- different feature that should keep its own name.
+  --- **Two honest answers to one operation.** A picture is drawn larger; a
+  --- text preview shows *more lines*, because the font size belongs to the
+  --- terminal emulator and Neovim cannot change it. That is why this is
+  --- `resize` and not `zoom`: only one of the two is magnification, and a
+  --- real zoom -- a cropped detail that can be panned -- is a different
+  --- feature (`docs/ROADMAP.md`).
+  ---
+  --- **`larger` / `smaller` are bound only for a *drawn* hover.** They are
+  --- real motions in normal mode, and displacing them is worth it over a
+  --- picture and not over every float that happens to be up. The wheel below
+  --- and `:Hover resize` apply to any hover; neither costs anyone a key.
   ---
   --- One key per direction, not two. The scroll keys are doubled because a
   --- key that is not on the keyboard cannot be pressed -- laptop and 60%
@@ -227,6 +233,7 @@ return {
   --- is. `=` was considered as an unshifted stand-in for `+` on a US layout
   --- and left alone: it is the indent operator, and borrowing an operator
   --- buys convenience nobody asked for.
+  ---
   --- **The wheel is the other half, and it obeys a different rule.** `+`
   --- acts on the one float there is, wherever the pointer happens to be. A
   --- wheel *points*, so it acts on what it points at: these two fire only
@@ -240,7 +247,7 @@ return {
   --- Needs `'mouse'` to include the mode: with it empty no wheel event
   --- reaches Neovim at all, and the mapping is inert rather than broken.
   --- `:checkhealth hover` says so, because the two look identical.
-  zoom_keys = {
+  resize_keys = {
     ---@type string|string[]
     larger = { "+" },
     ---@type string|string[]

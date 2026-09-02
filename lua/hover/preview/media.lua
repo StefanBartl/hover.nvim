@@ -190,20 +190,20 @@ end
 --- redaction box all letterbox identically. The local fallback covers an
 --- images.nvim too old to have it.
 ---
---- `opts.zoom` scales the box and nothing else. There is no second drawing
---- path: the letterboxing, the inset and the screen clamp below all still
---- happen exactly where they did, so a zoomed picture is the same picture in
---- a bigger frame rather than a differently produced one. The clamp is also
---- what gives zoom its ceiling — see `hover.zoom`, which finds it by
---- stepping into it rather than by carrying a number.
+--- **A resize arrives here as nothing but a larger `max_width` /
+--- `max_lines`.** There is no second drawing path and no factor of its own:
+--- the letterboxing, the inset and the screen clamp below all happen exactly
+--- where they did, so a resized picture is the same picture in a bigger frame
+--- rather than a differently produced one. The clamp is also what gives
+--- `hover.resize` its ceiling, which it finds by stepping into it rather than
+--- by carrying a number.
 ---@param image_px Hover.Preview.Dims|nil
 ---@param opts Hover.PreviewOpts
 ---@return integer cols
 ---@return integer rows
 local function canvas_cells(image_px, opts)
-  local zoom = (type(opts.zoom) == "number" and opts.zoom > 0) and opts.zoom or 1
-  local want_cols = math.floor((opts.max_width or 80) * zoom + 0.5)
-  local want_rows = math.floor((opts.max_lines or 20) * zoom + 0.5)
+  local want_cols = opts.max_width or 80
+  local want_rows = opts.max_lines or 20
 
   local max_cols = math.max(10, math.min(want_cols, math.max(10, vim.o.columns - 4)))
   local max_rows = math.max(3, math.min(want_rows, math.max(3, vim.o.lines - 4)))

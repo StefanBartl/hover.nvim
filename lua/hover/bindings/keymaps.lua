@@ -118,8 +118,8 @@ local function pointer_over_float()
 end
 
 --- Bind the keys the hover on screen borrows: the dismiss keys always, the
---- scroll keys only when there is something to scroll, the zoom keys only
---- when there is a picture.
+--- scroll keys only when there is something to scroll, `+` / `-` only when
+--- there is a picture, and the resize wheel for anything at all.
 ---
 --- The asymmetry is the point. Every hover can be waved away, so `q` and
 --- `<Esc>` are bound for all of them -- including a picture, which has
@@ -127,18 +127,17 @@ end
 --- float, is meaningless, so those keys are left alone entirely and keep
 --- whatever they mean elsewhere.
 ---
---- **Zoom needed its own condition, and that was the whole work of it.**
---- There was exactly one borrow condition here, `content.scroll`, and an
---- image does not declare one -- `canvas_for` returns `lines`, `canvas` and
---- `image_path`, nothing else. Hanging zoom off the existing condition would
---- have bound it for every case except the one it is for. The condition is
---- `content.canvas`: it is what a drawn hover has and a text one does not,
---- and it is exactly what zoom changes.
+--- **Resize is bound on two different conditions, and the split is about
+--- what a key costs.** `+` and `-` are real motions in normal mode; taking
+--- them over a picture is worth it, taking them over every float that happens
+--- to be up is not. So they stay on `content.canvas` -- what a drawn hover has
+--- and a text one does not. The wheel costs nobody anything and applies to any
+--- hover, and `:Hover resize` costs no key at all.
 ---@param content Hover.Content|nil
 ---@param rerender fun(delta: integer)
----@param rezoom? fun(delta: integer)
+---@param resize? fun(delta: integer)
 ---@return nil
-function M.borrow(content, rerender, rezoom)
+function M.borrow(content, rerender, resize)
   M.release()
 
   local cfg = require("hover.config").get()
@@ -178,39 +177,42 @@ function M.borrow(content, rerender, rezoom)
     end
   end
 
+  local rk = type(cfg.resize_keys) == "table" and cfg.resize_keys or {}
+
   -- After the scroll keys, so a key configured for both keeps the older
   -- meaning. A PDF page is the one content that has both, and paging is what
   -- its keys have always done.
-  if rezoom and content and content.canvas then
-    local zk = type(cfg.zoom_keys) == "table" and cfg.zoom_keys or {}
-    for _, lhs in ipairs(M.keylist(zk.larger)) do
+  if resize and content and content.canvas then
+    for _, lhs in ipairs(M.keylist(rk.larger)) do
       take(seen, lhs, function()
-        rezoom(1)
-      end, "hover: zoom the picture in")
+        resize(1)
+      end, "hover: make the picture bigger")
     end
-    for _, lhs in ipairs(M.keylist(zk.smaller)) do
+    for _, lhs in ipairs(M.keylist(rk.smaller)) do
       take(seen, lhs, function()
-        rezoom(-1)
-      end, "hover: zoom the picture out")
+        resize(-1)
+      end, "hover: make the picture smaller")
     end
+  end
 
-    -- The wheel, gated on where it points. Silence when it points elsewhere
-    -- is the correct answer rather than a missing one: the chord means
-    -- nothing else while this float is up, and zooming a picture the pointer
-    -- is nowhere near would be the surprising half.
-    for _, lhs in ipairs(M.keylist(zk.wheel_larger)) do
+  -- The wheel, for *any* hover, gated on where it points. Silence when it
+  -- points elsewhere is the correct answer rather than a missing one: the
+  -- chord means nothing else while a float is up, and resizing a float the
+  -- pointer is nowhere near would be the surprising half.
+  if resize and content then
+    for _, lhs in ipairs(M.keylist(rk.wheel_larger)) do
       take(seen, lhs, function()
         if pointer_over_float() then
-          rezoom(1)
+          resize(1)
         end
-      end, "hover: zoom in, where the pointer is")
+      end, "hover: bigger, where the pointer is")
     end
-    for _, lhs in ipairs(M.keylist(zk.wheel_smaller)) do
+    for _, lhs in ipairs(M.keylist(rk.wheel_smaller)) do
       take(seen, lhs, function()
         if pointer_over_float() then
-          rezoom(-1)
+          resize(-1)
         end
-      end, "hover: zoom out, where the pointer is")
+      end, "hover: smaller, where the pointer is")
     end
   end
 end

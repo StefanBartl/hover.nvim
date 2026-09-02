@@ -85,14 +85,30 @@ the same word.
 ASCII mock-up of the float, which explains the idea but not the feel — the
 thing worth showing is how little it interrupts reading, and a still cannot.
 
-### A sharp zoom for a PDF page
+### A real zoom — a cropped detail, panned
 
-Zooming a PDF page today draws the same PNG into a larger area, so it is free
-and it is unsharp. Sharp means a second rasterization: `pdfport.render_page`
-takes a `dpi` (default 216) and this plugin passes none. The obstacle is the
+`hover.resize` is not zoom and does not pretend to be: it changes the box and
+the whole picture is letterboxed into it, so the *framing* never changes. A
+zoom is the other operation — same box, more of the picture cut away, and keys
+to move the cut around.
+
+That is a different mechanism, not a bigger version of this one. images.nvim
+draws a *file* into a cell area, so a detail means writing a cropped temporary
+PNG per step (ImageMagick, or pdfport's producers) rather than asking for a
+different area. It also needs panning keys and a centre to zoom about — the
+pointer, for the wheel, where `float.contains` is already half the work.
+
+**For a PDF page it merges with the sharpness problem**, which is why the two
+belong in one entry. A page is rasterized once at pdfport's default DPI and
+resized unsharp from there. A sharp zoom is a second rasterization:
+`render_page` takes a `dpi` and this plugin passes none. The obstacle is the
 page cache, whose key is path, mtime and page number — two resolutions of one
 page would overwrite each other. One `dpi` in the key, one in the call, and a
 decision about how many resolutions are worth keeping.
+
+To settle first: whether a temporary file per zoom step is acceptable at all.
+If it is not, the answer for images is "resize is what you get", and only the
+PDF half is worth building.
 
 ---
 

@@ -43,10 +43,10 @@ require("hover").setup({ keymaps = { show = false } })
 | `open_keys` | `gf` | hovers with a target | open what the float is showing, then close it |
 | `scroll_keys.down` | `<M-PageDown>`, `<C-Down>` | scrollable hovers only | next screenful of lines, or next PDF page |
 | `scroll_keys.up` | `<M-PageUp>`, `<C-Up>` | scrollable hovers only | back |
-| `zoom_keys.larger` | `+` | hovers with a picture only | the picture, one step (×1.25) larger |
-| `zoom_keys.smaller` | `-` | hovers with a picture only | one step smaller |
-| `zoom_keys.wheel_larger` | `<M-ScrollWheelUp>` | hovers with a picture only, **and only while the pointer is over the float** | the picture one step larger |
-| `zoom_keys.wheel_smaller` | `<M-ScrollWheelDown>` | as above | one step smaller |
+| `resize_keys.larger` | `+` | hovers with a picture only | the float one step (×1.25) larger |
+| `resize_keys.smaller` | `-` | hovers with a picture only | one step smaller |
+| `resize_keys.wheel_larger` | `<M-ScrollWheelUp>` | **any** hover, and only while the pointer is over the float | one step larger |
+| `resize_keys.wheel_smaller` | `<M-ScrollWheelDown>` | as above | one step smaller |
 
 Three things follow from "borrowed", and each has been a bug at some point:
 
@@ -59,11 +59,17 @@ Three things follow from "borrowed", and each has been a bug at some point:
 - **Scroll keys are not bound when there is nothing to scroll.** An image, or
   a file that already fits in the float, leaves them alone entirely and they
   keep whatever they mean elsewhere.
-- **Zoom keys hang off a different condition, and had to.** The one above is
-  `content.scroll`, which an image deliberately does not declare — so zoom
-  reads `content.canvas` instead: what a drawn hover has and a text one does
-  not, and exactly what zoom changes. Hanging it off the existing condition
-  would have bound it for every case except the one it is for.
+- **`+` and `-` hang off a different condition, and had to.** The one above
+  is `content.scroll`, which an image deliberately does not declare — so they
+  read `content.canvas` instead: what a drawn hover has and a text one does
+  not. Hanging them off the existing condition would have bound them for
+  every case except the one they were built for.
+- **The wheel is bound for every hover, and gated on the pointer instead.**
+  `+` is a motion in normal mode, and displacing a motion for every text
+  float costs more than the feature is worth there; `<M-ScrollWheel>` costs
+  nobody anything. What replaces the content condition is a position one: the
+  step happens only while the pointer is over the float, border ring
+  included. `:Hover resize` is the third way in and takes no key at all.
 
 The cost of `q` being borrowed is that it records no macro for as long as one
 float is up, and none after it. That is the deliberate trade for a dismissal
@@ -95,7 +101,7 @@ omitted, which toggles.
 | `:Hover status` | the mode and every switch — a chooser where `<CR>` toggles the picked line, falling back to one message without lib.nvim`s UI kit |
 | `:Hover why` | why nothing hovered at the cursor -- which gate refused, and what to type about it |
 | `:Hover pin` | take this float out of the cursor's hands. While pinned the trigger opens nothing; `:Hover show` replaces it, `q`/`<Esc>` take it away |
-| `:Hover zoom [in\|out]` | make the picture in the open hover bigger or smaller -- an image, or a PDF/office page. Omitted, it zooms in. Only a *drawn* hover has anything to zoom |
+| `:Hover resize [bigger\|smaller]` | make the hover on screen bigger or smaller -- a picture is drawn larger, a text preview shows more lines. Omitted, bigger. Declines for a *position* preview, which cannot be asked again at another size |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |

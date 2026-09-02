@@ -66,12 +66,25 @@ local _open = nil
 ---@type string|nil Identity of a target dismissed by `M.dismiss`, until the cursor leaves it.
 local _suppressed = nil
 
----@type number What one zoom step multiplies the picture's box by.
+---@type number What one resize step multiplies the float's box by.
 --- 1.25 rather than 1.5: measured against a real Neovim on 2026-09-02, a
 --- 210x55 terminal has room for five steps at this size (71x20 cells of
 --- picture up to 181x51) and only two at 1.5. Five presses to fill the screen
 --- is a dial; two is a switch with an awkward middle.
-local ZOOM_STEP = 1.25
+local RESIZE_STEP = 1.25
+
+---@internal
+--- The multiplier the hover on screen is currently asking for.
+---
+--- Read in two places that must not disagree: `resize`, which asks a
+--- previewer for a bigger answer, and `present`, which tells the float how
+--- large it may be. Splitting them was the bug that kept this feature to
+--- pictures for a while -- `present` clamped every text float back to the
+--- configured `max_lines` no matter what had been asked for.
+---@return number
+local function resize_factor()
+  return RESIZE_STEP ^ ((_open and _open.resize) or 0)
+end
 
 -- ---------------------------------------------------------------------------
 -- Configuration
@@ -419,14 +432,20 @@ local function present(content)
     return
   end
   local c = config.get()
+  local factor = resize_factor()
+  ---@param n integer
+  ---@return integer
+  local function scaled(n)
+    return math.max(1, math.floor(n * factor + 0.5))
+  end
 
   float.open(content.lines, {
     title = content.title,
     filetype = content.filetype,
     canvas = content.canvas,
     highlight = content.highlight,
-    max_width = c.max_width or 80,
-    max_height = c.max_lines or 20,
+    max_width = scaled(c.max_width or 80),
+    max_height = scaled(c.max_lines or 20),
     border = c.border,
     -- The float dismisses itself on the next cursor move, through an autocmd
     -- this module never hears about. Without a hook there, the keys it
@@ -447,13 +466,7 @@ local function present(content)
     end
   end
 
-  -- What is on screen now, so `zoom` can tell "the box grew" from "the
-  -- terminal said no". Nothing else reads it.
-  if _open then
-    _open.canvas = content.canvas
-  end
-
-  keys.borrow(content, M.scroll, M.zoom)
+  keys.borrow(content, M.scroll, M.resize)
 end
 
 -- ---------------------------------------------------------------------------
@@ -946,20 +959,20 @@ function M.scroll(delta)
   return true
 end
 
---- Zoom the open hover's picture by `delta` steps.
+--- Make the hover on screen larger or smaller by `delta` steps.
 ---
---- Only a drawn hover has anything to zoom: an image, or a PDF/office page,
---- which is a PNG by the time it is on screen. That is also the borrow
---- condition -- `keys.borrow` binds these keys on `content.canvas` and on
---- nothing else.
+--- **What one step is.** The box the previewer is given -- `max_width` and
+--- `max_lines` -- multiplied by 1.25, and nothing else. Everything downstream
+--- happens where it always did: the letterboxing, the inset images.nvim keeps
+--- free on every side, the clamp against the terminal.
 ---
---- **Not a second drawing path.** A step multiplies the box `canvas_cells`
---- fits the picture into; the letterboxing, the inset images.nvim keeps free
---- on every side and the clamp against the terminal all still happen where
---- they always did. A PDF page is not re-rasterized either, so zooming one
---- costs nothing and is correspondingly unsharp -- a sharp version would
---- mean a second render at a higher DPI, and the page cache is keyed without
---- one.
+--- **Why that is `resize` and not `zoom`.** For a picture the two coincide:
+--- ask for a bigger box and the picture is drawn larger. For text they come
+--- apart -- a bigger box shows *more lines*, not larger ones, because the font
+--- size belongs to the terminal emulator and Neovim cannot change it. One
+--- operation, two honest answers, and only one of them is magnification. A
+--- real zoom would mean cropping the source and panning it; see
+--- `docs/ROADMAP.md`.
 ---
 --- **The ceiling is the terminal, and it is found rather than declared.**
 --- Measured against a real Neovim on 2026-09-02, 1200x675 image, defaults
@@ -969,12 +982,19 @@ end
 ---     terminal  80x24  ->  no step at all: 20 rows is already `lines - 4`
 ---
 --- Any fixed limit would be wrong on one of those two, so there is none. A
---- step that produces the same canvas is stepped back off -- the same way
+--- step that produces the same float is stepped back off -- the same way
 --- `scroll` steps back off the end of a PDF -- and the level then stops
---- exactly where the screen does.
----@param delta integer positive zooms in, negative out
----@return boolean asked `false` when there is no picture to zoom. `true` says the re-render was started, not that the box grew -- for a PDF the answer is asynchronous, and the terminal may refuse the step either way.
-function M.zoom(delta)
+--- exactly where the screen does. That comparison is on the *clamped* size
+--- (`float.size_for`), because a clamp is invisible in the content: twenty
+--- lines shown for twenty-five asked is a refusal, and a step that missed it
+--- would let a held key run the level away.
+---
+--- A PDF page is not re-rasterized either, so making one bigger costs nothing
+--- and is correspondingly unsharp -- a sharp version would mean a second
+--- render at a higher DPI, and the page cache is keyed without one.
+---@param delta integer positive makes it bigger, negative smaller
+---@return boolean asked `false` when there is no hover to resize. `true` says the re-render was started, not that the float grew -- for a PDF the answer is asynchronous, and the terminal may refuse the step either way.
+function M.resize(delta)
   -- The same safety net `scroll` carries: a mapping that outlived its float
   -- takes itself away rather than swallowing the key from then on.
   if not (_open and float.win()) then
@@ -983,21 +1003,23 @@ function M.zoom(delta)
     return false
   end
 
-  -- Nothing drawn, nothing to zoom. A text preview's size *is* its content,
-  -- and the setting for that is `max_lines`. Reachable only by calling this
-  -- directly: the keys are not bound for such a hover.
-  local before = _open.canvas
+  -- A position preview has no target to re-ask, only an id. Resizing one
+  -- would mean putting the question back to the registry, which is a
+  -- different change; it declines rather than pretending.
   local target = _open.target
-  if not before or not target then
+  if not target then
     return false
   end
 
-  local level = (_open.zoom or 0) + delta
-  _open.zoom = level
+  local before_w, before_h = float.size()
+  local level = (_open.resize or 0) + delta
+  _open.resize = level
 
   local preview_opts = config.preview_opts()
-  preview_opts.zoom = ZOOM_STEP ^ level
-  -- Where the hover already is. Zooming a PDF open on page 3 has to stay on
+  local factor = RESIZE_STEP ^ level
+  preview_opts.max_width = math.max(1, math.floor(preview_opts.max_width * factor + 0.5))
+  preview_opts.max_lines = math.max(1, math.floor(preview_opts.max_lines * factor + 0.5))
+  -- Where the hover already is. Resizing a PDF open on page 3 has to stay on
   -- page 3; `preview_opts` is built fresh from the configuration and knows
   -- nothing about either.
   preview_opts.page = _open.page
@@ -1012,18 +1034,30 @@ function M.zoom(delta)
     if generation ~= _generation or not content or content.pending then
       return
     end
-    local now = content.canvas
-    if now and now.cols == before.cols and now.rows == before.rows then
+    local w, h = float.size_for(content.lines, {
+      canvas = content.canvas,
+      max_width = preview_opts.max_width,
+      max_height = preview_opts.max_lines,
+    })
+    if w == before_w and h == before_h then
       -- The screen refused, not this function. Undo the step so holding the
       -- key does not run the level off somewhere it has to be pressed back
       -- from, and leave the float alone -- it already shows this.
-      _open.zoom = level - delta
+      _open.resize = level - delta
       return
     end
     present(content)
   end)
 
   return true
+end
+
+--- The pre-rename spelling of `resize`, kept because it was public.
+---@deprecated use `hover.resize`
+---@param delta integer
+---@return boolean
+function M.zoom(delta)
+  return M.resize(delta)
 end
 
 --- Close any open hover.

@@ -142,7 +142,7 @@ toggles. >
                                          toggles the line you pick
   :Hover pin                             keep this float while the cursor
                                          goes elsewhere; again releases it
-  :Hover zoom [in|out]                   the picture bigger or smaller;
+  :Hover resize [bigger|smaller]         the hover bigger or smaller;
                                          omitted, bigger
   :Hover why                             why nothing hovered here: which
                                          gate refused, and what to type
@@ -194,6 +194,8 @@ never hold a mapping of its own.
   <M-PageDown>, <C-Down>      next screenful of lines, or next PDF page
   <M-PageUp>, <C-Up>          back
   +, -                        the picture, larger or smaller
+  <M-ScrollWheelUp/Down>      any hover, larger or smaller -- but only
+                              where the pointer is
 <
 Both scroll pairs are bound, because a key that is not on the keyboard cannot
 be pressed: laptop and 60% layouts often reach PageUp/PageDown only through an
@@ -203,42 +205,48 @@ Fn chord. Ctrl rather than Alt on the arrows: <M-Up>/<M-Down> is a widespread
 Scroll keys are bound ONLY when there is something to scroll. An image, or a
 file that already fits, leaves them alone entirely.
 
-                                                                   *hover-zoom*
-Zoom keys are bound ONLY for a hover with a picture in it -- an image, or a
-PDF/office page, which is a PNG by the time it is on screen. A text preview
-never sees them: the font size belongs to the terminal emulator, so "zoom" for
-text could only mean a bigger float, which shows MORE rather than anything
-LARGER. That is `max_lines`, and a different feature.
+                                                                 *hover-resize*
+`+` and `-` are bound ONLY for a hover with a picture in it -- an image, or a
+PDF/office page, which is a PNG by the time it is on screen. In normal mode
+both are motions, and displacing a motion for every text float costs more than
+the feature is worth there. The wheel and the command carry no such price and
+work for EVERY hover.
 
 One key per direction, not two: `+` and `-` are on every keyboard, so the
-argument that doubles the scroll pairs does not apply.
+argument that doubles the scroll pairs does not apply here.
 
-The wheel is the other half and obeys a different rule.
-`<M-ScrollWheelUp>` / `<M-ScrollWheelDown>` zoom only while the POINTER is
-over the float, its border ring included -- a wheel acts on what it is aimed
-at, where `+` acts on the one float there is. The ring counts as inside on
-purpose: the float sits one row below the cursor, so its top border is on the
-cursor's own row, which is where the pointer already is under
-`trigger = { "mouse" }`.
+The wheel obeys a different rule. `<M-ScrollWheelUp>` / `<M-ScrollWheelDown>`
+resize only while the POINTER is over the float, its border ring included -- a
+wheel acts on what it is aimed at, where `+` acts on the one float there is.
+The ring counts as inside on purpose: the float sits one row below the cursor,
+so its top border is on the cursor's own row, which is where the pointer
+already is under `trigger = { "mouse" }`.
 
 Alt rather than Ctrl: `<C-ScrollWheel>` is the terminal emulator's own zoom
 nearly everywhere. The wheel also needs 'mouse' to include the mode -- with it
 empty no wheel event reaches Neovim and the mapping is inert rather than
 broken. `:checkhealth hover` reports that, because the two look the same from
-outside.
+the outside.
 
-`:Hover zoom [in|out]` does the same step without any key at all.
+`:Hover resize [bigger|smaller]` does the same step with no key at all, and is
+the keyboard way in for a text hover.
 
-A step scales the box the picture is fitted into by 1.25 and nothing else --
-the letterboxing and the clamp against the terminal still happen where they
-did, so the ceiling is the screen. It is found rather than declared: a step
-that changes nothing is stepped back off, which is why holding the key does
-not run the zoom off somewhere it has to be pressed back from. A 210x55
-terminal has room for five steps at the default 80x20; an 80x24 terminal has
-room for none, because 20 rows is already 'lines' minus four.
+RESIZE, NOT ZOOM. One step multiplies the box the previewer is given --
+`max_width` and `max_lines` -- by 1.25, and nothing else. For a picture that
+is magnification: the same picture drawn into a larger cell area. For text it
+is not, because the font size belongs to the terminal emulator: a bigger box
+shows MORE lines rather than larger ones. One operation, two honest answers,
+and only one of them is zoom. A real zoom -- a cropped detail that can be
+panned -- is a different feature and is on docs/ROADMAP.md.
 
-A PDF page is not re-rasterized, so zooming one is free and correspondingly
-unsharp.
+The ceiling is the terminal, and it is found rather than declared: a step that
+changes nothing is stepped back off, which is why holding a key does not run
+the level off somewhere it has to be pressed back from. A 210x55 terminal has
+room for five steps at the default 80x20; an 80x24 terminal has room for none,
+because 20 rows is already 'lines' minus four.
+
+A PDF page is not re-rasterized, so making one bigger is free and
+correspondingly unsharp.
 
 The dismissal is a suppression, not a close: under CursorHold the event fires
 again after any keystroke followed by 'updatetime' of quiet, so a key bound to
@@ -305,7 +313,7 @@ worth asserting.
       down = { "<M-PageDown>", "<C-Down>" },
       up = { "<M-PageUp>", "<C-Up>" },
     },
-    zoom_keys = {
+    resize_keys = {
       larger = { "+" },
       smaller = { "-" },
       -- Only while the pointer is over the float; needs 'mouse'.
@@ -349,14 +357,22 @@ hover.dismiss()                           Close it and keep it closed until
 hover.scroll({delta})                     Scroll the open hover. Positive is
                                           forward. Returns false when there is
                                           nothing to scroll.
+                                                               *hover.resize()*
+hover.resize({delta})                     Make the open hover bigger or
+                                          smaller by {delta} steps of 1.25.
+                                          Positive is bigger. A picture is
+                                          drawn larger; a text preview shows
+                                          more lines. Returns false when
+                                          there is no hover to resize; true
+                                          says the re-render started, not
+                                          that the float grew -- the terminal
+                                          may have no room left.
+                                          See |hover-resize|.
                                                                  *hover.zoom()*
-hover.zoom({delta})                       Zoom the open hover's picture by
-                                          {delta} steps of 1.25. Positive is
-                                          larger. Returns false when there is
-                                          no picture; true says the re-render
-                                          started, not that the box grew --
-                                          the terminal may have no room left.
-                                          See |hover-zoom|.
+hover.zoom({delta})                       Legacy spelling of
+                                          |hover.resize()|, kept because the
+                                          feature was called zoom while it
+                                          only applied to pictures.
                                                              *hover.set_mode()*
 hover.set_mode({mode})                    "auto" | "manual" | "off". Returns
                                           the mode, or nil plus a message.
