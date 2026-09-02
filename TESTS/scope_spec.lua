@@ -226,6 +226,48 @@ describe("hover.scope", function()
     end)
   end)
 
+  -- Capture families taught for one grammar. The gate already falls open on
+  -- anything it does not recognise, so this is only ever needed for a
+  -- language whose grammar names things unusually -- and only the code side
+  -- can do harm, which is why `:checkhealth` reports it.
+  describe("families taught by configuration", function()
+    local config = require("hover.config")
+
+    after_each(function()
+      config.reset()
+    end)
+
+    it("treats a configured prose family as prose", function()
+      config.setup({ paths = { scope = { prose = { "wittgenstein" } } } })
+      assert.is_true(decide({ { capture = "wittgenstein.ladder" } }))
+    end)
+
+    it("treats a configured code family as code", function()
+      config.setup({ paths = { scope = { code = { "wittgenstein" } } } })
+      assert.is_false(decide({ { capture = "wittgenstein.ladder" } }))
+    end)
+
+    it(
+      "lets prose win over code, so the setting cannot close the gate harder than the built-ins",
+      function()
+        config.setup({ paths = { scope = { prose = { "zeta" }, code = { "zeta" } } } })
+        assert.is_true(decide({ { capture = "zeta" } }))
+      end
+    )
+
+    it("ignores malformed entries instead of failing", function()
+      config.setup({ paths = { scope = { code = { 42, "", false, "zeta" } } } })
+      assert.is_false(decide({ { capture = "zeta" } }))
+      assert.is_true(decide({ { capture = "unrelated" } }))
+    end)
+
+    it("answers with both sets present even when nothing is configured", function()
+      local f = config.scope_families()
+      assert.is_table(f.prose)
+      assert.is_table(f.code)
+    end)
+  end)
+
   -- The memo in front of the decision. What it is entitled to assume is that
   -- the captures at a position cannot change while the buffer does not --
   -- true of every real buffer and false of a stub, which is why the rule

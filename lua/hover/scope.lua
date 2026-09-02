@@ -250,16 +250,21 @@ function M._decide(bufnr, row, col)
     return true
   end
 
+  local extra = require("hover.config").scope_families()
   local code = false
   for _, cap in ipairs(caps) do
     local name = type(cap) == "table" and cap.capture or nil
     if type(name) == "string" then
       local family = name:match("^[^.]+")
       if family then
-        if PROSE[family] then
+        -- Configured prose families are checked with the built-in ones and
+        -- *before* code, so adding a family to `prose` can only ever make the
+        -- gate more permissive. That asymmetry is deliberate: see the note on
+        -- `scope_families` in `hover.config`.
+        if PROSE[family] or extra.prose[family] then
           return true
         end
-        if CODE[family] then
+        if CODE[family] or extra.code[family] then
           code = true
         end
       end

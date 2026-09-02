@@ -153,3 +153,27 @@ describe("hover.config", function()
     end)
   end)
 end)
+
+-- The office conversion cache outlives the session now, which is only safe
+-- because something retires it. These pin the wiring of that policy; the
+-- sweep itself needs LibreOffice and a real cache directory, and is evidenced
+-- by hand (docs/MANUAL-EVIDENCE.md).
+describe("the office cache policy", function()
+  after_each(function()
+    config.reset()
+  end)
+
+  it("reaches the preview as an option, not as a constant", function()
+    assert.equals(7, config.preview_opts().office_cache_days)
+  end)
+
+  it("is configurable, including to zero", function()
+    config.setup({ office = { cache_days = 30 } })
+    assert.equals(30, config.preview_opts().office_cache_days)
+    config.setup({ office = { cache_days = 0 } })
+    -- Zero means "keep nothing between sessions", the pre-cache behaviour,
+    -- and must survive the `or DEFAULTS` fallback rather than being read as
+    -- unset.
+    assert.equals(0, config.preview_opts().office_cache_days)
+  end)
+end)

@@ -238,31 +238,6 @@ thing worth showing is how little it interrupts reading, and a still cannot.
 
 ## Optimizations
 
-### Drop less of the cache on a switch change
-
-Every switch change drops the whole preview cache, because a stale entry
-would answer with the old rendering and make the switch look broken. Correct,
-and blunt: toggling `paths code` throws away rasterized PDF pages that no
-switch can affect. Keying the drop by which classes a switch actually
-influences would keep them.
-
-To settle: **the mapping has to be derived, not written.** A hand-maintained
-"switch X invalidates classes Y" table is precisely the shape of the
-`route_path` bug (`ac50599`) — a second table that can fall behind the first
-one silently, with nothing failing when it does.
-
-### Let a grammar teach the position gate
-
-`hover.scope` classifies capture families from two hardcoded sets, and falls
-open on anything it does not recognise. That is the right default and it
-means an exotic grammar gets no gating at all. A config key adding families to
-either set would let someone fix that for their language without a patch.
-
-To settle: **it is a footgun pointed at the good failure mode.** Adding to the
-code set can silently disable the feature in a language, which is exactly what
-the fail-open design exists to prevent. If it happens, `:checkhealth` has to
-report the configured additions.
-
 ### `hover.scope` as a lib.nvim helper
 
 "Is the cursor in executable code?" is generic, and `REL-31` asks for reusable
@@ -273,29 +248,6 @@ are this plugin's trade-off, not a general one.
 
 Revisit when something else asks the same question — `open.nvim` deciding
 whether a token is routable would be the natural second.
-
-### Office conversions could survive the session
-
-Converted PDFs are cached under `stdpath("cache")/hover.nvim/office`, keyed by
-path *and* mtime, and deleted at `VimLeavePre`. The mtime key already makes
-them safe to keep; the deletion is a tidiness choice that costs a LibreOffice
-start — seconds — on the first document of every session.
-
-To settle: **an eviction policy**, which is the reason it was not kept. A
-cache that only grows is a bug with a slow fuse; this needs a size or age cap
-before it is allowed to outlive the session.
-
-### Evidence for what no CI covers
-
-The Windows and POSIX runners cover the specs, the formatter and the linter.
-They do not cover the previews that need a terminal: drawing an image,
-rasterizing a PDF page, converting an office document. Those are evidenced
-only by hand, on one machine, and nothing records *when* they were last
-exercised.
-
-A short `docs/MANUAL-EVIDENCE.md` — what was checked, on what, on which date —
-would at least make the gap legible instead of invisible. It is not a test,
-and should not pretend to be.
 
 ---
 

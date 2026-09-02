@@ -215,6 +215,36 @@ function M.paths_code_enabled()
   return M.paths_enabled() and type(paths) == "table" and paths.code == true
 end
 
+--- Capture families the user taught the position gate, as lookup sets.
+---
+--- Two sets rather than one list, because they are not symmetric: `prose`
+--- can only make `hover.scope` more permissive and `code` can only make it
+--- stricter, and only the second can silently disable the feature in a
+--- language. `hover.health` reports both for that reason.
+---
+--- Always answers with both keys present, so the caller never has to check --
+--- a gate on the hot path should not be doing shape checks on configuration.
+---@return { prose: table<string, true>, code: table<string, true> }
+function M.scope_families()
+  local paths = M.get().paths
+  local scope = type(paths) == "table" and paths.scope or nil
+  local out = { prose = {}, code = {} }
+  if type(scope) ~= "table" then
+    return out
+  end
+  for _, which in ipairs({ "prose", "code" }) do
+    local list = scope[which]
+    if type(list) == "table" then
+      for _, family in ipairs(list) do
+        if type(family) == "string" and family ~= "" then
+          out[which][family] = true
+        end
+      end
+    end
+  end
+  return out
+end
+
 --- Whether a registered position preview may open a float.
 ---@return boolean
 function M.positions_enabled()
@@ -271,6 +301,7 @@ function M.preview_opts()
     url_timeout_ms = links.timeout_ms or DEFAULTS.links.timeout_ms,
     office_convert = M.office_enabled(),
     office_timeout_ms = office.timeout_ms or DEFAULTS.office.timeout_ms,
+    office_cache_days = office.cache_days or DEFAULTS.office.cache_days,
   }
 end
 

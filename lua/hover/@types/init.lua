@@ -61,14 +61,24 @@
 ---@field enabled? boolean # Whether a path written in prose hovers. Default true.
 ---@field missing? boolean # Whether text that resolves to nothing may be marked broken. Default true, and gated behind `hover.bare_path.is_unambiguous_path`.
 ---@field code? boolean # Whether a path may be found in executable code, not just a source file's comments and strings. Default false; see `hover.scope`.
+---@field scope? Hover.ScopeFamilies # Capture families taught to the position gate for one grammar. Both lists empty by default.
 
 --- Office documents (`.docx`, `.xlsx`, `.pptx`, `.odt`, the legacy binary
 --- formats). Off means a badge saying what the file is; on means
 --- `pdfport.nvim` converts it to a PDF and the page is drawn like any other
 --- picture -- a LibreOffice start per document, which is why it is opt-in.
+--- Capture families added to `hover.scope`'s built-in sets. `prose` widens
+--- what counts as a place a path may be written; `code` narrows it. Only the
+--- second can turn the feature off in a language, which is why
+--- `:checkhealth hover` reports what is configured here.
+---@class Hover.ScopeFamilies
+---@field prose? string[] # Treated as prose, alongside `@comment`, `@string`, `@markup`.
+---@field code? string[] # Treated as executable code, alongside `@variable`, `@operator`.
+
 ---@class Hover.OfficeConfig
 ---@field convert? boolean # Default false. `:Hover office on`.
 ---@field timeout_ms? integer # How long the conversion may take. Default 60000 -- LibreOffice's first start is slow.
+---@field cache_days? integer # How long a converted PDF may survive between sessions. Default 7; 0 keeps nothing.
 
 --- The pre-`links` spelling of the web switches, still accepted on input.
 ---@class Hover.LegacyUrlConfig
@@ -177,6 +187,7 @@
 ---@field url_timeout_ms? integer
 ---@field office_convert? boolean # Convert an office document to a PDF for a real page preview, instead of showing a badge.
 ---@field office_timeout_ms? integer # Conversion timeout, passed to pdfport.
+---@field office_cache_days? integer # How long a converted PDF may survive between sessions.
 ---@field line? integer # Text previews: 1-based line the target named (`init.lua:42`); the first view starts near it.
 ---@field line_end? integer # Text previews: last line of a named range (`init.lua:10-20`); shown exactly, without lead-in.
 ---@field offset? integer # Text previews: lines to skip. Set by `hover.scroll`.

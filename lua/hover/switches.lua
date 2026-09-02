@@ -232,6 +232,13 @@ function M.set(name, on, opts)
     on = not effective(name)
   end
 
+  local config = require("hover.config")
+
+  -- Snapshotted before the write, and compared after: what decides whether
+  -- the cache is stale is whether this switch changes anything a *preview*
+  -- reads. See below.
+  local before = vim.inspect(config.preview_opts())
+
   write(spec.path, on)
   -- Upward only: switching a level on switches on everything it needs to
   -- mean anything. Switching off touches nothing else, so turning the parent
@@ -240,7 +247,30 @@ function M.set(name, on, opts)
     M.set(spec.implies, true, { silent = true })
   end
 
-  require("hover.cache").reset()
+  -- **Derived, not written down.** A hand-maintained "switch X invalidates
+  -- class Y" table would be a second table that can fall behind this one,
+  -- silently -- the exact shape of the `route_path` and `effective` bugs.
+  --
+  -- The question a table would have answered is answerable from the
+  -- configuration itself: a cached preview can only be stale if the inputs a
+  -- preview is given have changed, and those inputs *are*
+  -- `config.preview_opts()`. So compare it across the write.
+  --
+  -- That splits the switches along a real line rather than a listed one.
+  -- `images`, `office` and `fetch` appear in `preview_opts` -- they change how
+  -- a target is rendered, and every cached rendering is suspect. `links`,
+  -- `paths`, `missing`, `code` and `positions` do not: they decide what
+  -- *counts as a target*, and a preview built for a target that is still the
+  -- same target is still correct. Toggling `paths code` used to throw away
+  -- rasterized PDF pages it could not possibly affect.
+  --
+  -- Conservative in the safe direction on purpose: any difference at all
+  -- drops everything. Going finer -- dropping only the target types a given
+  -- option feeds -- would need to know which preview reads which option,
+  -- which is the table this avoids.
+  if vim.inspect(config.preview_opts()) ~= before then
+    require("hover.cache").reset()
+  end
 
   if not opts.silent then
     -- Announced, because "off" is otherwise invisible: nothing on screen

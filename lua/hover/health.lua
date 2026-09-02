@@ -135,6 +135,45 @@ local function check_config()
       "`:Hover status` lists them; `:Hover paths on` is the usual one to restore.",
     })
   end
+
+  -- Reported because it is otherwise invisible and can be load-bearing: a
+  -- family added to the code set switches the bare-path hover off in that
+  -- language, silently, everywhere that family appears. Anyone debugging
+  -- "paths stopped hovering in X" should find it here rather than by reading
+  -- their own config again.
+  local families = require("hover.config").scope_families()
+  local function listed(set)
+    local out = {}
+    for family in pairs(set) do
+      out[#out + 1] = family
+    end
+    table.sort(out)
+    return out
+  end
+  local prose, code = listed(families.prose), listed(families.code)
+  if #prose > 0 then
+    health.info(
+      ("scope: %d capture famil%s taught as prose -- %s"):format(
+        #prose,
+        #prose == 1 and "y" or "ies",
+        table.concat(prose, ", ")
+      )
+    )
+  end
+  if #code > 0 then
+    health.warn(
+      ("scope: %d capture famil%s taught as code -- %s"):format(
+        #code,
+        #code == 1 and "y" or "ies",
+        table.concat(code, ", ")
+      ),
+      {
+        "Bare paths will not hover at any position captured by these.",
+        "That is the one direction this setting can disable the feature in.",
+        "`:Hover paths code on` turns the position gate off entirely.",
+      }
+    )
+  end
 end
 
 --- `:checkhealth hover`.

@@ -22,11 +22,24 @@
 ---    which is seconds rather than milliseconds, so it is opt-in and not the
 ---    default. `:Hover office on` switches it on for the session.
 ---
---- **Converted PDFs are kept, keyed by file and mtime.** The expensive part
---- is LibreOffice starting, not the hover, and a reader who looks at a
---- document once will look at it again. They live in `stdpath("cache")` and
---- are deleted at exit, the same bargain `preview.media` makes with its
---- rasterized pages.
+--- **Converted PDFs are kept, keyed by file and mtime, and outlive the
+--- session.** The expensive part is LibreOffice starting, not the hover, and
+--- a reader who looks at a document once will look at it again -- tomorrow as
+--- well as in ten minutes. They live in `stdpath("cache")`.
+---
+--- They used to be deleted at `VimLeavePre`, which made the first document of
+--- every session pay a LibreOffice start for nothing. The mtime in the key
+--- already makes a kept file safe to serve: an edited document has a
+--- different key and converts again. What kept them from surviving was not
+--- correctness but the absence of an eviction policy, and a cache that only
+--- grows is a bug with a slow fuse.
+---
+--- So: **age, swept once per session.** Anything older than
+--- `office.cache_days` goes when the first conversion of a session runs.
+--- Age rather than size, because the size of one converted PDF is bounded by
+--- the document it came from -- the risk here is accumulation over months,
+--- which age addresses directly and a size cap only indirectly. Setting it to
+--- `0` restores the old behaviour of keeping nothing between sessions.
 
 local M = {}
 
@@ -36,8 +49,16 @@ local uv = vim.uv or vim.loop
 local _pdfs = {}
 ---@type table<string, boolean> Conversions in flight, keyed the same way.
 local _running = {}
----@type boolean
-local _cleanup_hooked = false
+---@type boolean Whether this session has already swept the cache directory.
+local _swept = false
+
+---@internal
+--- Where converted PDFs live. One place, so `sweep` and `output_path` cannot
+--- disagree about which directory this plugin owns.
+---@return string
+local function cache_dir()
+  return vim.fn.stdpath("cache") .. "/hover.nvim/office"
+end
 
 ---@internal
 --- Identity of a document for the conversion cache. The mtime is in it so an
@@ -62,7 +83,7 @@ end
 ---@param key string
 ---@return string
 local function output_path(path, key)
-  local dir = vim.fn.stdpath("cache") .. "/hover.nvim/office"
+  local dir = cache_dir()
   vim.fn.mkdir(dir, "p")
   local stem = vim.fn.fnamemodify(path, ":t:r"):gsub("[^%w%-_]", "_")
   local digest = vim.fn.sha256(key):sub(1, 16)
@@ -70,25 +91,46 @@ local function output_path(path, key)
 end
 
 ---@internal
---- Keep `pdf` for `key`, and make sure the cache directory is emptied at
---- exit. Per-close deletion would defeat the point: the next hover on the
---- same document would start LibreOffice again.
+--- Delete converted PDFs older than `days`, once per session.
+---
+--- Only ever touches `*.pdf` directly inside this plugin's own cache
+--- directory, and only files it could have written. A sweep that could reach
+--- further would be a bad trade for saving a LibreOffice start.
+---@param days integer
+---@return nil
+local function sweep(days)
+  if _swept then
+    return
+  end
+  _swept = true
+  if type(days) ~= "number" or days <= 0 then
+    return
+  end
+
+  local dir = cache_dir()
+  local ok, entries = pcall(vim.fn.readdir, dir)
+  if not ok or type(entries) ~= "table" then
+    return
+  end
+
+  local cutoff = os.time() - days * 24 * 60 * 60
+  for _, name in ipairs(entries) do
+    if type(name) == "string" and name:sub(-4) == ".pdf" then
+      local file = dir .. "/" .. name
+      local st = uv.fs_stat(file)
+      if st and st.mtime and st.mtime.sec < cutoff then
+        pcall(os.remove, file)
+      end
+    end
+  end
+end
+
+---@internal
+--- Keep `pdf` for `key`. Nothing is deleted at exit any more -- see the
+--- module header for why, and `sweep` for what takes its place.
 ---@param key string
 ---@param pdf string
 local function remember(key, pdf)
-  if not _cleanup_hooked then
-    _cleanup_hooked = true
-    require("lib.nvim.bindings.autocmd").create("VimLeavePre", function()
-      for _, file in pairs(_pdfs) do
-        pcall(os.remove, file)
-      end
-      _pdfs = {}
-    end, {
-      group = "HoverBufOffice",
-      desc = "[hover] delete PDFs converted from office documents",
-    })
-  end
-
   local previous = _pdfs[key]
   if previous and previous ~= pdf then
     pcall(os.remove, previous)
@@ -153,6 +195,18 @@ function M.preview(target, opts, on_result)
   -- previewer, which may itself answer at once (page already rasterized) or
   -- go away and render.
   local pdf = _pdfs[key]
+  -- Not in this session's table, but the file name is a pure function of the
+  -- key -- so a conversion from an *earlier* session is findable by looking
+  -- where it would be. This is what makes the cache outlive the session, and
+  -- it is safe for the same reason the in-session hit is: the key carries the
+  -- document's mtime, so an edited document asks for a different file.
+  if not pdf then
+    local candidate = output_path(target.path, key)
+    if uv.fs_stat(candidate) then
+      pdf = candidate
+      _pdfs[key] = candidate
+    end
+  end
   if pdf and uv.fs_stat(pdf) then
     return page_of(target, pdf, opts, on_result)
   end
@@ -160,6 +214,11 @@ function M.preview(target, opts, on_result)
     -- A temp sweeper took it. Not a cache entry any more, a dangling path.
     _pdfs[key] = nil
   end
+
+  -- Once per session, before the first conversion: retire what has gone
+  -- stale. Here rather than at startup, so a session that never hovers an
+  -- office document never reads the directory at all.
+  sweep(opts.office_cache_days)
 
   -- A conversion for this exact document is already running. Without this,
   -- every `CursorHold` while LibreOffice starts would start another one:

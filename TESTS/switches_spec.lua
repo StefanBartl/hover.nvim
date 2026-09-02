@@ -87,7 +87,7 @@ describe("hover.switches", function()
   end)
 
   describe("the preview cache", function()
-    it("is dropped on any change", function()
+    it("is dropped when a switch changes what a preview reads", function()
       local target = { type = "file", raw = "x", path = nil }
       local key = cache.key(target)
       cache.put(key, { lines = { "stale" } })
@@ -95,6 +95,44 @@ describe("hover.switches", function()
 
       switches.set("images", nil, { silent = true })
       assert.is_nil(cache.get(key))
+    end)
+
+    it("is kept when a switch changes only what counts as a target", function()
+      -- `paths code` decides where a path is looked for, not how anything is
+      -- rendered. A rasterized PDF page cached before the toggle is still
+      -- that page, and used to be thrown away with everything else.
+      local key = cache.key({ type = "pdf", raw = "doc.pdf", path = nil })
+      cache.put(key, { lines = { "page 1" } })
+      switches.set("code", nil, { silent = true })
+      assert.is_truthy(cache.get(key))
+    end)
+
+    it("keeps it for every finding switch, and drops it for every rendering one", function()
+      -- Written over the switch table rather than over a list, so a tenth
+      -- switch is classified the moment it is declared -- the same shape the
+      -- specs above use, for the same reason.
+      local config = require("hover.config")
+      for _, name in ipairs(switches.names()) do
+        config.reset()
+        vim.g.hover_disable = nil
+        local key = cache.key({ type = "pdf", raw = "doc.pdf", path = nil })
+        cache.put(key, { lines = { "page 1" } })
+
+        local before = vim.inspect(config.preview_opts())
+        switches.set(name, nil, { silent = true })
+        local changed = vim.inspect(config.preview_opts()) ~= before
+
+        if changed then
+          assert.is_nil(cache.get(key), ("%q changed preview_opts and kept the cache"):format(name))
+        else
+          assert.is_truthy(
+            cache.get(key),
+            ("%q changed nothing a preview reads and dropped the cache anyway"):format(name)
+          )
+        end
+      end
+      config.reset()
+      vim.g.hover_disable = nil
     end)
   end)
 

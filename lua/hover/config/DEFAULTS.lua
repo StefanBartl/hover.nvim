@@ -134,6 +134,20 @@ return {
     -- paragraphs are untouched. See `hover.scope`.
     ---@type boolean
     code = false,
+
+    -- Capture families this plugin has never heard of, taught to it for one
+    -- grammar. Empty, and almost always right to leave that way: the gate
+    -- already falls open on anything it does not recognise, so an exotic
+    -- language gets no gating rather than wrong gating.
+    --
+    -- `prose` widens what counts as a place a path may be written; `code`
+    -- narrows it. They are not symmetric in risk and the code side is the
+    -- footgun: adding a family there can silently switch the feature off in
+    -- a language, which is the exact failure the fail-open design exists to
+    -- prevent. `:checkhealth hover` reports whatever is configured here, so
+    -- it is at least findable.
+    ---@type { prose?: string[], code?: string[] }
+    scope = { prose = {}, code = {} },
   },
 
   --- Whether a registered *position* preview may open a float: a plugin
@@ -167,6 +181,14 @@ return {
     -- looks like a broken feature rather than a slow one.
     ---@type integer
     timeout_ms = 60000,
+
+    -- How many days a converted PDF may sit in the cache before the next
+    -- session sweeps it. Converted PDFs outlive the session -- the mtime in
+    -- their key makes that safe -- and this is what keeps that from being a
+    -- directory that only grows. `0` keeps nothing between sessions, which is
+    -- how this behaved before the cache was allowed to survive.
+    ---@type integer
+    cache_days = 7,
   },
 
   --- Keys borrowed globally while a hover is on screen, and handed back --
