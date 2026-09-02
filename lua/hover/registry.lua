@@ -46,13 +46,13 @@ local M = {}
 -- is global to LuaLS, and reopening a class to restate a field is a
 -- `duplicate-doc-field`, not an override (`LLS-23`).
 
----@type { name: string, fn: function }[]
+---@type { name: string, fn: function, on_request: boolean }[]
 local sources = {}
 
 ---@type table<string, { name: string, fn: function }>
 local previews = {}
 
----@type { name: string, fn: function }[]
+---@type { name: string, fn: function, on_request: boolean }[]
 local positions = {}
 
 ---@internal
