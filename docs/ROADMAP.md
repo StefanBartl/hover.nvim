@@ -218,17 +218,6 @@ and the async-result guard are all written for a single window; a second
 concurrent preview is not a flag, it is a lifecycle. Worth knowing before
 this is estimated as small.
 
-### A line range as a target
-
-`init.lua:42` resolves today and shows the file's head, not line 42.
-`file.lua:10-20` is a shape logs and reviews produce constantly. The preview
-would start at the line rather than at the top, which `preview.text` already
-supports — it has `skip` and a scroll offset.
-
-To settle: nothing structural. This is the smallest real feature on this
-page, and the reason it is not done is that `split_location` currently
-discards the line number rather than passing it to the preview.
-
 ### A git object under the cursor
 
 A 7-to-40 character hex string in a commit message, a log or a review is a
@@ -248,18 +237,6 @@ thing worth showing is how little it interrupts reading, and a still cannot.
 ---
 
 ## Optimizations
-
-### Cache the position gate per line
-
-`scope.allows_path` parses the line it is asked about, every time. Within one
-`CursorHold` that is once; moving along a line of code it is once per trigger
-on unchanged text. A cache keyed `(bufnr, changedtick, row)` would answer the
-second and later calls for free.
-
-To settle: **whether it is worth anything.** The gate runs on roughly 1 cursor
-position in 500 — the token gate rejects the rest — so this may be optimizing
-something that already almost never happens. Measure first, in a buffer of
-code rather than of prose.
 
 ### Drop less of the cache on a switch change
 

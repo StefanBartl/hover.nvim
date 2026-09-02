@@ -94,9 +94,18 @@ function M.file(target, opts)
   -- above it is harder to place than one with three. Only on the first view:
   -- once the reader scrolls, `opts.offset` is what they asked for and this
   -- must not drag them back.
+  -- A *range* is shown exactly, with no lead-in and no more lines than were
+  -- asked for: naming both ends is naming the lines, where naming one end is
+  -- naming a neighbourhood. `max_lines` still caps it -- a `:1-4000` out of a
+  -- log must not try to fill the screen.
   local LEAD = 3
-  if offset == 0 and type(opts.line) == "number" and opts.line > LEAD + 1 then
-    offset = opts.line - 1 - LEAD
+  if offset == 0 and type(opts.line) == "number" then
+    if type(opts.line_end) == "number" then
+      offset = opts.line - 1
+      limit = math.min(limit, opts.line_end - opts.line + 1)
+    elseif opts.line > LEAD + 1 then
+      offset = opts.line - 1 - LEAD
+    end
   end
 
   local lines, truncated, skipped = head(target.path, limit, offset)
@@ -124,7 +133,11 @@ function M.file(target, opts)
     -- The line asked for, not the offset: `:42` is what the reader typed or
     -- read, and the offset is an implementation detail three lines away
     -- from it.
-    title = ("%s:%d"):format(title, opts.line)
+    if type(opts.line_end) == "number" then
+      title = ("%s:%d-%d"):format(title, opts.line, opts.line_end)
+    else
+      title = ("%s:%d"):format(title, opts.line)
+    end
   elseif offset > 0 then
     title = ("%s  ↓%d"):format(title, offset)
   end

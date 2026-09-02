@@ -277,6 +277,33 @@ describe("bare_path, a target that names a line", function()
     assert.equals("line 6", scrolled.lines[1])
   end)
 
+  it("reads a range as both ends", function()
+    local src = source_for("at ./big.txt:10-20 it breaks", "./big.txt")
+    assert.equals(10, src.line)
+    assert.equals(20, src.line_end)
+  end)
+
+  it("ignores a backwards range, which is a typo and not an instruction", function()
+    local src = source_for("at ./big.txt:20-10 it breaks", "./big.txt")
+    assert.equals(20, src.line)
+    assert.is_nil(src.line_end)
+  end)
+
+  it("shows a range exactly, without lead-in", function()
+    local target = classify.classify(root .. "/big.txt", root .. "/notes.md")
+    local content = text.file(target, { max_lines = 20, line = 10, line_end = 14 })
+    assert.equals("line 10", content.lines[1])
+    assert.equals("line 14", content.lines[5])
+    assert.is_truthy(content.title:find(":10-14", 1, true))
+  end)
+
+  it("still caps a range at max_lines", function()
+    -- `:1-4000` out of a log must not try to fill the screen.
+    local target = classify.classify(root .. "/big.txt", root .. "/notes.md")
+    local content = text.file(target, { max_lines = 5, line = 1, line_end = 4000 })
+    assert.is_true(#content.lines <= 6) -- 5 plus the truncation marker
+  end)
+
   it("does not run off the top for a line near the start", function()
     local target = classify.classify(root .. "/big.txt", root .. "/notes.md")
     local content = text.file(target, { max_lines = 10, line = 2 })

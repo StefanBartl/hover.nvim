@@ -199,7 +199,13 @@ end
 ---@return string path
 ---@return string|nil location
 local function split_location(str)
-  local path, location = str:match("^(.-)(:%d+:?%d*)$")
+  -- A range first: `:10-20` would otherwise be read by the pattern below as
+  -- the line `10` with `-20` left stuck on the path.
+  local path, location = str:match("^(.-)(:%d+%-%d+)$")
+  if path and path ~= "" then
+    return path, location
+  end
+  path, location = str:match("^(.-)(:%d+:?%d*)$")
   if path and path ~= "" then
     return path, location
   end
@@ -279,6 +285,7 @@ end
 ---@param bufnr integer
 ---@return string|nil path raw target as written
 ---@return integer|nil line 1-based line the target named, if any
+---@return integer|nil line_end last line, when the target named a range
 local function via_cfile(bufnr)
   local cfile = vim.fn.expand("<cfile>")
   if type(cfile) ~= "string" or cfile == "" then
@@ -291,8 +298,16 @@ local function via_cfile(bufnr)
     return nil
   end
   -- `:42` and `:42:7` both yield 42; the column is not something a preview
-  -- of twenty lines can use.
-  local line = location and tonumber(location:match("^:(%d+)")) or nil
+  -- of twenty lines can use. `:10-20` yields both ends.
+  local line, line_end
+  if location then
+    line = tonumber(location:match("^:(%d+)"))
+    line_end = tonumber(location:match("^:%d+%-(%d+)"))
+    -- A backwards range is a typo, not an instruction to show nothing.
+    if line_end and line and line_end < line then
+      line_end = nil
+    end
+  end
 
   local uv = vim.uv or vim.loop
   local expanded = vim.fn.expand(path)
@@ -300,7 +315,7 @@ local function via_cfile(bufnr)
   -- Absolute already: hand it back untouched.
   if expanded:match("^/") or expanded:match("^%a:[\\/]") or expanded:match("^[\\/][\\/]") then
     if uv.fs_stat(expanded) then
-      return path, line
+      return path, line, line_end
     end
     return nil
   end
@@ -315,7 +330,7 @@ local function via_cfile(bufnr)
   for _, base in ipairs(bases) do
     if base and base ~= "" then
       if uv.fs_stat(base .. "/" .. expanded) then
-        return path, line
+        return path, line, line_end
       end
     end
   end
@@ -423,14 +438,14 @@ function M.under_cursor(bufnr, opts)
   -- the point of asking.
   -- `target_line`, not `line`: `line` is already the buffer line's *text*
   -- above, and this is a line *number* the target named.
-  local resolved, target_line
+  local resolved, target_line, target_line_end
   if opts.force then
     resolved, target_line = via_gopath()
     if not resolved then
-      resolved, target_line = via_cfile(bufnr)
+      resolved, target_line, target_line_end = via_cfile(bufnr)
     end
   else
-    resolved, target_line = via_cfile(bufnr)
+    resolved, target_line, target_line_end = via_cfile(bufnr)
     if not resolved and gopath_can_help(token) then
       resolved, target_line = via_gopath()
     end
@@ -466,6 +481,7 @@ function M.under_cursor(bufnr, opts)
     col_end = col,
     lnum = row,
     line = target_line,
+    line_end = target_line_end,
     kind = "bare_path",
   }
 end

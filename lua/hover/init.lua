@@ -481,6 +481,7 @@ function M.show(opts)
   -- file's first twenty lines, which are almost never the ones being asked
   -- about. Sources that name no line leave this nil and nothing changes.
   preview_opts.line = found.line
+  preview_opts.line_end = found.line_end
 
   local key = cache.key(target)
   local cached = cache.get(key)

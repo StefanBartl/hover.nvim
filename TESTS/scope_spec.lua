@@ -99,6 +99,12 @@ local function with_ts(stub, fn)
 end
 
 --- The gate's answer for a capture list no real grammar has to produce.
+---
+--- Through `_decide` rather than `allows_path`: the memo in front of that one
+--- keys on (buffer, changedtick, row, col), and these cases feed different
+--- captures to the *same* position -- something only a stub can do, and
+--- exactly what the memo is entitled to assume cannot happen. Testing the
+--- rule through the cache would test the cache.
 ---@param caps any
 ---@return boolean
 local function decide(caps)
@@ -108,7 +114,7 @@ local function decide(caps)
       return caps
     end,
   }, function()
-    answer = scope.allows_path(0, 1, 0)
+    answer = scope._decide(0, 1, 0)
   end)
   return answer
 end
@@ -186,7 +192,7 @@ describe("hover.scope", function()
       vim.treesitter.get_parser = function()
         error("no parser for this language")
       end
-      local ok, allowed = pcall(scope.allows_path, 0, 1, 0)
+      local ok, allowed = pcall(scope._decide, 0, 1, 0)
       vim.treesitter.get_parser = real
       assert.is_true(ok)
       assert.is_true(allowed)
@@ -199,7 +205,7 @@ describe("hover.scope", function()
           error("query failed to load")
         end,
       }, function()
-        allowed = scope.allows_path(0, 1, 0)
+        allowed = scope._decide(0, 1, 0)
       end)
       assert.is_true(allowed)
     end)
@@ -214,9 +220,67 @@ describe("hover.scope", function()
           return { { capture = "comment" } }
         end,
       }, function()
-        allowed = scope.allows_path(0, 1, 0)
+        allowed = scope._decide(0, 1, 0)
       end)
       assert.is_true(allowed)
+    end)
+  end)
+
+  -- The memo in front of the decision. What it is entitled to assume is that
+  -- the captures at a position cannot change while the buffer does not --
+  -- true of every real buffer and false of a stub, which is why the rule
+  -- specs above drive `_decide` directly.
+  describe("the one-slot memo", function()
+    it("answers the same position twice without asking again", function()
+      local asked = 0
+      local buf = parsed_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
+      assert.is_truthy(buf)
+      local real = vim.treesitter.get_captures_at_pos
+      vim.treesitter.get_captures_at_pos = function(...)
+        asked = asked + 1
+        return real(...)
+      end
+      scope.allows_path(buf, 1, 11)
+      scope.allows_path(buf, 1, 11)
+      scope.allows_path(buf, 1, 11)
+      vim.treesitter.get_captures_at_pos = real
+      assert.equals(1, asked)
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it("asks again for another column on the same line", function()
+      -- Captures are per column, so moving along a line is all misses --
+      -- which is why the memo is one slot and not a per-row table.
+      local asked = 0
+      local buf = parsed_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
+      assert.is_truthy(buf)
+      local real = vim.treesitter.get_captures_at_pos
+      vim.treesitter.get_captures_at_pos = function(...)
+        asked = asked + 1
+        return real(...)
+      end
+      scope.allows_path(buf, 1, 11)
+      scope.allows_path(buf, 1, 12)
+      vim.treesitter.get_captures_at_pos = real
+      assert.equals(2, asked)
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end)
+
+    it("asks again after the buffer changes", function()
+      local asked = 0
+      local buf = parsed_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
+      assert.is_truthy(buf)
+      local real = vim.treesitter.get_captures_at_pos
+      vim.treesitter.get_captures_at_pos = function(...)
+        asked = asked + 1
+        return real(...)
+      end
+      scope.allows_path(buf, 1, 11)
+      vim.api.nvim_buf_set_lines(buf, 0, -1, false, { "local x = ./docs/BINDINGS.md" })
+      scope.allows_path(buf, 1, 11)
+      vim.treesitter.get_captures_at_pos = real
+      assert.equals(2, asked)
+      vim.api.nvim_buf_delete(buf, { force = true })
     end)
   end)
 
