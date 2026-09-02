@@ -4,10 +4,11 @@ What is checked by hand, because no CI can check it — and **when it was last
 checked**, which is the part that decays.
 
 CI covers the specs, the formatter and the linter, on Ubuntu and on Windows.
-It does not cover anything that needs a terminal to draw into: an image, a
-rasterized PDF page, a converted office document. Those three are the most
-visible things this plugin does, and nothing automated has ever exercised
-them.
+It does not cover anything that needs a **terminal to draw into** — an image,
+a rasterized PDF page, a converted office document — and it does not cover
+anything that needs a **daemon to answer**, which is the container engine
+behind a contribution marked `on_request`. Those are the most visible things
+this plugin does, and nothing automated has ever exercised them.
 
 This file exists so that gap is *legible* rather than invisible. **It is not
 a test suite and must not be read as one.** A row here says one person saw
@@ -77,6 +78,46 @@ test. The two things worth confirming by hand:
   gone after the next conversion, and nothing outside that directory is
   touched.
 
+### A contribution asked only on request
+
+| | |
+| --- | --- |
+| **Checked** | 2026-09-02 |
+| **On** | Windows 11, Neovim 0.12.2, sandbox.nvim beside this repo, Docker Engine 29.5.3 holding four images and two stopped containers |
+| **How** | `nvim --clean --headless -l scripts/onrequest_probe.lua docker` from the repo root. Four references in one buffer — a pulled image with no container, a pulled image with one, an image that is not pulled, and `init.lua:42` — each asked twice: once on the automatic trigger, once forced. |
+| **Watch for** | Anything but `quiet` in the `auto` column. That column is the whole of what `on_request` buys, and losing it is silent: an engine start would then run after every keystroke followed by quiet, arriving as a stutter nobody would connect back to a container engine. Second: `(nothing shown)` on a row that should answer, which is the shape of `836a15a` — a preview correctly registered and reachable by no route at all. |
+
+**Why no CI can do this.** A contribution marked `on_request` is skipped by
+the automatic trigger and asked only for an explicit request; the only shipped
+one is sandbox.nvim's container-image preview, and answering costs a container
+engine. So the last step — a force-only contribution actually putting lines on
+the screen — has no automated witness. The probe reads the float's first line
+back rather than trusting the return value, because `836a15a` lived exactly in
+the gap between "the pipeline returned true" and "something arrived".
+
+Measured on the machine above, keypress to finished float:
+
+| Reference | Answer | Forced | Engine calls |
+| --- | --- | --- | --- |
+| `alpine:edge` | pulled, no container | 566 ms | 2 |
+| `lazyvim_starter:latest` | pulled, 1 container | 558 ms | 2 |
+| `nginx:1.27-alpine` | not pulled | 294 ms | 1 |
+| `init.lua:42` | declined | 0 ms | 0 |
+
+All four stayed quiet on the automatic trigger. The 294 ms row is the evidence
+for the second engine call happening only on a hit; the 0 ms row is evidence
+that the `name:tag` collision with a file-and-line reference is refused
+**before** any process starts.
+
+**The run with no argument is the one that found something.** Without an
+engine name the probe uses sandbox.nvim's own detection, and on this machine
+that picks `podman` — which is on PATH but whose VM is not running. Every row
+then declines after ~370 ms, silently and for a reason that has nothing to do
+with this plugin, while a working Docker engine sits beside it. That is a
+sandbox.nvim question, not a hover.nvim one, but it is worth knowing when a
+container hover answers nothing: **check which engine was chosen before
+suspecting the hover.**
+
 ## What is checked automatically, for contrast
 
 Not evidence of the above, and listed only so the boundary is clear: the spec
@@ -88,6 +129,6 @@ Windows, per push.
 ## Keeping this honest
 
 A row whose date is older than the code it describes is worse than no row,
-because it reads as a check that happened. When one of the three paths above
+because it reads as a check that happened. When one of the five paths above
 changes, either check it again and move the date, or set the date back to
 *never* and say why.

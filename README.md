@@ -860,9 +860,9 @@ When a hover fails to appear for one specific thing rather than for everything,
   be settled first: which sibling plugin could contribute a preview and through which
   entry point, which features are missing, which of the things this plugin already does
   it does worse than it could — and what was considered and rejected.
-- [Manual evidence](docs/MANUAL-EVIDENCE.md) — the three things no CI can check
-  (a drawn image, a rasterized PDF page, a converted office document), when each was
-  last checked by hand, and on what.
+- [Manual evidence](docs/MANUAL-EVIDENCE.md) — the five things no CI can check
+  (a drawn image, a zoomed one, a rasterized PDF page, a converted office document, and
+  a contribution asked only on request), when each was last checked by hand, and on what.
 - `:help hover` — the vimdoc: the same ground, offline.
 
 ### References

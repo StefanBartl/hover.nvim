@@ -31,6 +31,11 @@
 --      most recently: two augroups still carried markdown.nvim's name
 --      (`87a1017`), which is also why both tables counted two of four -- a
 --      search for `Hover` in the source could not find them.
+--   5. `docs/MANUAL-EVIDENCE.md` against its own two rules: every row carries
+--      the fields that file says a row has, and every spelled-out count of
+--      those rows -- in any document -- matches how many there are. That one
+--      had already drifted when it was written: the zoom row arrived with
+--      `204d083` and three sentences went on saying "three".
 --
 -- **What is deliberately not here: the integration tables.** They describe
 -- other plugins. A spec that checked them would have to load all six, and
@@ -176,22 +181,24 @@ local NUMBER = {
   twelve = 12,
 }
 
---- Every spelled-out count of switches a document claims, with the line it
+--- Every spelled-out count of `noun` a document claims, with the line it
 --- stands in so a failure names the sentence rather than a number.
 ---
 --- The adjective between the number and the noun varies ("Nine runtime
 --- switches", "all seven switches") and the number is the part that goes
 --- stale, so the window before the noun is searched rather than a fixed
---- phrase. Measured over the documents as they stand: two hits, no false
---- ones.
+--- phrase. `noun` is matched plainly, so a multi-word one ("paths above")
+--- works and needs no escaping. Measured over the documents as they stand:
+--- two hits for the switches, two for the evidence rows, no false ones.
 ---@param text string
+---@param noun string
 ---@return { count: integer, line: string }[]
-local function claimed_switch_counts(text)
+local function claimed_counts(text, noun)
   local out = {}
   for line in text:gmatch("[^\n]+") do
     local from = 1
     while true do
-      local start, stop = line:find("switches", from, true)
+      local start, stop = line:find(noun, from, true)
       if not start then
         break
       end
@@ -275,7 +282,7 @@ describe("what the documents count", function()
     local want = #switches.names()
     local wrong = {}
     for file in pairs(all_documents()) do
-      for _, claim in ipairs(claimed_switch_counts(read(file))) do
+      for _, claim in ipairs(claimed_counts(read(file), "switches")) do
         if claim.count ~= want then
           wrong[#wrong + 1] = ("%s says %d, there are %d: %s"):format(
             file,
@@ -540,5 +547,92 @@ describe("docs/BINDINGS.md against the groups the source installs", function()
     end
 
     assert.same(links, documented)
+  end)
+end)
+describe("docs/MANUAL-EVIDENCE.md against its own rules", function()
+  -- The one document with no source to be read against: it records what a
+  -- person saw on a machine, and nothing in `lua/` knows about that. What it
+  -- *does* have is two rules it states about itself, and those are checkable
+  -- -- which matters, because it had already broken one of them before this
+  -- block existed. `204d083` added the zoom row and three sentences went on
+  -- saying "three paths".
+
+  --- Every row under `## What no CI covers`, heading and body.
+  ---
+  --- Bounded by the next `## `, so the office paragraph and the two sections
+  --- that follow the rows are outside it.
+  ---@return { heading: string, body: string }[]
+  local function evidence_rows()
+    local section = read("docs/MANUAL-EVIDENCE.md"):match("\n## What no CI covers\n(.-)\n## ")
+    assert(section, "docs/MANUAL-EVIDENCE.md no longer has a `What no CI covers` section")
+    local starts = {}
+    for pos, heading in section:gmatch("()\n### ([^\n]+)") do
+      starts[#starts + 1] = { pos = pos, heading = heading }
+    end
+    local out = {}
+    for i, entry in ipairs(starts) do
+      local stop = starts[i + 1] and starts[i + 1].pos - 1 or #section
+      out[#out + 1] = { heading = entry.heading, body = section:sub(entry.pos, stop) }
+    end
+    return out
+  end
+
+  it("gives every row the fields it says a row has", function()
+    -- The field names are read from `## How to read a row` rather than
+    -- written out here: the file defines what evidence is, and a second copy
+    -- of that definition in a spec is the exact mistake this whole file is
+    -- against. A row missing one of them is not evidence by the document's
+    -- own account -- an undated row reads as a check that happened, and a row
+    -- with no `How` cannot be repeated.
+    local legend = read("docs/MANUAL-EVIDENCE.md"):match("\n## How to read a row\n(.-)\n## ")
+    assert.is_truthy(legend, "docs/MANUAL-EVIDENCE.md no longer explains how to read a row")
+
+    local fields = {}
+    for cell in legend:gmatch("\n|%s*([^|\n]-)%s*|") do
+      if cell ~= "" and cell ~= "Column" and not cell:match("^%-+$") then
+        fields[#fields + 1] = cell
+      end
+    end
+    assert.is_true(#fields > 0, "the legend table names no fields")
+
+    local rows = evidence_rows()
+    assert.is_true(#rows > 0, "no rows under `What no CI covers`")
+
+    local missing = {}
+    for _, row in ipairs(rows) do
+      for _, field in ipairs(fields) do
+        if not row.body:find("**" .. field .. "**", 1, true) then
+          missing[#missing + 1] = ("%s has no %s"):format(row.heading, field)
+        end
+      end
+    end
+    table.sort(missing)
+    assert.same({}, missing)
+  end)
+
+  it("counts its own rows, wherever a document spells that number out", function()
+    -- Two phrasings, in two files: "one of the five paths above" here, "the
+    -- five things no CI can check" in the README. Both are counted by hand
+    -- and neither has a consumer that would notice going stale -- which is
+    -- how they came to say three while there were four.
+    local want = #evidence_rows()
+    local wrong = {}
+    for file in pairs(all_documents()) do
+      local text = read(file)
+      for _, noun in ipairs({ "paths above", "things no CI can check" }) do
+        for _, claim in ipairs(claimed_counts(text, noun)) do
+          if claim.count ~= want then
+            wrong[#wrong + 1] = ("%s says %d, there are %d: %s"):format(
+              file,
+              claim.count,
+              want,
+              claim.line
+            )
+          end
+        end
+      end
+    end
+    table.sort(wrong)
+    assert.same({}, wrong)
   end)
 end)

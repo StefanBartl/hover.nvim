@@ -268,9 +268,12 @@ line — it is deprecated, this token occurs fourteen times, this module does X
 piece.
 
 sandbox.nvim was waiting on a second one. Its answer costs an engine start,
-measured at 286–754 ms, so it could not be built at all until a contribution
-could declare its own answer expensive — see
+measured at 277–754 ms across two runs, so it could not be built at all until
+a contribution could declare its own answer expensive — see
 [when your answer is expensive](../README.md#when-your-answer-is-expensive).
+It is also the one integration no CI can exercise, because answering needs a
+running container engine: the row, and the script that fills it, are in
+[manual evidence](MANUAL-EVIDENCE.md#a-contribution-asked-only-on-request).
 
 **Each answers only where it has something to say**, and each enforces that
 itself rather than relying on a switch here:
