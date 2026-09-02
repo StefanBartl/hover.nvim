@@ -391,6 +391,10 @@ describe("the borrowed keys against the defaults", function()
   ---@param path string
   ---@return string[]|nil
   local function default_keys(path)
+    -- `any`, because walking a dotted path leaves `Hover.Config` at the first
+    -- step and every step after that is a different type (`LLS-30`: a
+    -- narrowing declared once beats a cast per assignment).
+    ---@type any
     local node = DEFAULTS
     for key in path:gmatch("[^.]+") do
       if type(node) ~= "table" then
@@ -445,7 +449,11 @@ describe("the borrowed keys against the defaults", function()
     -- The direction that catches a *new* pair rather than a changed one.
     local expected = {}
     for name, value in pairs(DEFAULTS) do
-      if name:match("_keys$") then
+      -- Two shapes, and the `type` check is not only for the annotation: an
+      -- option ending in `_keys` that is neither is a shape this check does
+      -- not understand, and skipping it silently would be the same "it looked
+      -- covered" this whole file exists against.
+      if name:match("_keys$") and type(value) == "table" then
         if vim.islist(value) then
           expected[name] = true
         else
