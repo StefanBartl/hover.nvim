@@ -321,6 +321,7 @@ toggles.
 | `:Hover status` | the mode and every switch — as a chooser where picking a line toggles it, or as one message where lib.nvim has no UI kit |
 | `:Hover why` | why nothing hovered *here* — which of the gates refused, and what to type about it |
 | `:Hover pin` | keep this float on screen while the cursor goes elsewhere; again releases it |
+| `:Hover zoom [in\|out]` | make the picture in the open hover bigger or smaller. Omitted, it zooms in |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |

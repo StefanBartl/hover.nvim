@@ -336,4 +336,40 @@ describe("hover.zoom", function()
     assert.equals(2, seen[#seen].page, "zooming lost the page the hover was on")
     assert.is_true((seen[#seen].zoom or 1) > 1, "the zoom factor never reached the previewer")
   end)
+
+  -- `:Hover zoom` -- the same step, reached the way the rest of this plugin
+  -- is reached.
+  --
+  -- The keys are primary, and they are a *borrow*: bound only while a drawn
+  -- hover is on screen. A reader who has never seen one has no way to find
+  -- the feature, and `:Hover` completion is where everything else here is
+  -- found.
+  --
+  -- The route only works because the float survives being typed at: its
+  -- dismissal hangs on CursorMoved, InsertEnter, BufLeave and WinScrolled,
+  -- and entering the command line fires none of them. Asserted rather than
+  -- assumed -- if it were false the route would be a command that closes the
+  -- thing it acts on.
+  it("is reachable as a command, in both directions", function()
+    require("hover.bindings.usrcmds").setup()
+    assert.is_true(show_at("see ./pic.png here", 5))
+    local w0, h0 = geometry()
+
+    vim.cmd("Hover zoom in")
+    local w1, h1 = geometry()
+    assert.is_true(w1 > w0 and h1 > h0, "the command did not grow the float")
+
+    vim.cmd("Hover zoom out")
+    assert.same({ w0, h0 }, { geometry() })
+  end)
+
+  it("zooms in on a bare `:Hover zoom`, and the float survives the command", function()
+    require("hover.bindings.usrcmds").setup()
+    assert.is_true(show_at("see ./pic.png here", 5))
+    local w0 = (geometry())
+
+    vim.cmd("Hover zoom")
+    assert.is_truthy(float.win(), "the float did not survive a command line")
+    assert.is_true((geometry()) > w0, "a bare zoom did not zoom in")
+  end)
 end)

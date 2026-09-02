@@ -142,6 +142,8 @@ toggles. >
                                          toggles the line you pick
   :Hover pin                             keep this float while the cursor
                                          goes elsewhere; again releases it
+  :Hover zoom [in|out]                   the picture bigger or smaller;
+                                         omitted, bigger
   :Hover why                             why nothing hovered here: which
                                          gate refused, and what to type
   :Hover mode [auto|manual|off]          set the mode; omitted, report it

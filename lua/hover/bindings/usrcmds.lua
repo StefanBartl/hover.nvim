@@ -246,6 +246,37 @@ function M.routes()
       end,
     },
     {
+      path = { "zoom" },
+      -- The keys are the primary way in (`+` / `-`, borrowed while a picture
+      -- is on screen). This route exists because those are a *borrow*: they
+      -- are bound only while a drawn hover is open, so a reader who has not
+      -- seen them has no way to discover the feature, and `:Hover` completion
+      -- is where the rest of this plugin is discovered.
+      --
+      -- Reachable in practice because entering the command line moves no
+      -- cursor: the float's dismissal hangs on CursorMoved, InsertEnter,
+      -- BufLeave and WinScrolled, and typing `:` fires none of them.
+      desc = "Make the picture in the open hover bigger or smaller",
+      args = {
+        {
+          name = "direction",
+          enum = { "in", "out" },
+          optional = true,
+          -- Bare `:Hover zoom` zooms in. There is no "toggle" reading for a
+          -- step, and the common direction is the useful default -- one that
+          -- `out` undoes, so guessing wrong costs one keypress.
+          default = "in",
+        },
+      },
+      ---@param ctx table
+      run = function(ctx)
+        local direction = (ctx and ctx.args and ctx.args.direction) or "in"
+        if not hover().zoom(direction == "out" and -1 or 1) then
+          require("hover.notify").info("no picture to zoom")
+        end
+      end,
+    },
+    {
       path = { "why" },
       -- The counterpart to `status`: that one says what is configured, this
       -- one says what happened *here*. A hover that does not open is silent

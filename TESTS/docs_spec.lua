@@ -135,7 +135,11 @@ end
 ---@param vimdoc boolean Also read the indented command block.
 ---@return table<string, true>
 local function documented_routes(text, vimdoc)
-  local STATES = { on = true, off = true, toggle = true, auto = true, manual = true }
+  -- Argument values, not just switch states: `mode` contributes auto and
+  -- manual, `zoom` contributes in and out. A document writing the concrete
+  -- `:Hover zoom in` still means the `zoom` route.
+  local STATES =
+    { on = true, off = true, toggle = true, auto = true, manual = true, ["in"] = true, out = true }
   local mentions = {}
 
   for mention in text:gmatch("`:Hover([^`]*)`") do

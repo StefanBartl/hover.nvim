@@ -93,6 +93,7 @@ omitted, which toggles.
 | `:Hover status` | the mode and every switch — a chooser where `<CR>` toggles the picked line, falling back to one message without lib.nvim`s UI kit |
 | `:Hover why` | why nothing hovered at the cursor -- which gate refused, and what to type about it |
 | `:Hover pin` | take this float out of the cursor's hands. While pinned the trigger opens nothing; `:Hover show` replaces it, `q`/`<Esc>` take it away |
+| `:Hover zoom [in\|out]` | make the picture in the open hover bigger or smaller -- an image, or a PDF/office page. Omitted, it zooms in. Only a *drawn* hover has anything to zoom |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |
