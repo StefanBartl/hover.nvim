@@ -127,13 +127,18 @@ that the `name:tag` collision with a file-and-line reference is refused
 **before** any process starts.
 
 **The run with no argument is the one that found something.** Without an
-engine name the probe uses sandbox.nvim's own detection, and on this machine
-that picks `podman` — which is on PATH but whose VM is not running. Every row
-then declines after ~370 ms, silently and for a reason that has nothing to do
-with this plugin, while a working Docker engine sits beside it. That is a
-sandbox.nvim question, not a hover.nvim one, but it is worth knowing when a
-container hover answers nothing: **check which engine was chosen before
-suspecting the hover.**
+engine name the probe used sandbox.nvim's own detection, and on this machine
+that picked `podman` — on PATH, but with its VM not running. Every row then
+declined after ~370 ms, silently and for a reason that had nothing to do with
+this plugin, while a working Docker engine sat beside it.
+
+That was a sandbox.nvim bug and it is **fixed there** (sandbox.nvim `deb45bc`,
+2026-09-02): detection now takes the first installed engine that actually
+answers, and the same probe run picks `docker`. The row is kept because the
+*shape* is worth recognising and will recur — an integration can be registered,
+green in every spec, and silent on the machine, and the only thing that says so
+is a run on a real one. When a container hover answers nothing, **check which
+engine was chosen before suspecting the hover.**
 
 ## What is checked automatically, for contrast
 
