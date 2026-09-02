@@ -54,7 +54,7 @@ It is a flag on the *entry* rather than a fourth contribution kind because it
 applies to `sources` and `positions` identically. A `sources_on_request` list
 would have needed a `positions_on_request` beside it, and the pair would then
 have to be kept in step by hand — which is
-[the bug class this repository has been bitten by four times](QUIET.md#every-switch-comes-from-one-table).
+[the bug class this repository keeps meeting](QUIET.md#one-declaration-and-every-copy-of-it-that-fell-behind).
 
 **It also does not count as "something that could answer"** when the trigger
 decides whether to install itself for a buffer at all. A buffer whose only
