@@ -679,3 +679,144 @@ describe("a pinned hover", function()
     assert.is_false(hover.pinned())
   end)
 end)
+
+-- Opening what the float is showing. A preview that shows a target and cannot
+-- open it is half an answer, and `gf` is what that key already means in
+-- Neovim -- while a float is up, "open what is under the cursor" and "open
+-- what this float shows" are the same thing.
+--
+-- Two things are pinned here that are easy to get wrong in opposite
+-- directions: it must *route* rather than open directly (open.nvim knows a
+-- URL wants a browser and a path wants a file manager, and this must not
+-- re-decide that), and it must decline for the targets that have nothing to
+-- open rather than guessing.
+describe("opening what the hover shows", function()
+  local hover = require("hover")
+  local float = require("hover.float")
+  local api = vim.api
+  local root, win, prev_buf, prev_isfname, buf, calls, real_open
+
+  before_each(function()
+    registry.reset()
+    config.reset()
+    vim.g.hover_disable = nil
+
+    root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    vim.fn.writefile({ "# real" }, root .. "/real.md")
+
+    win = api.nvim_get_current_win()
+    prev_buf = api.nvim_win_get_buf(win)
+    prev_isfname = vim.o.isfname
+    vim.o.isfname = "@,48-57,/,.,-,_,+,,,#,$,%,~,=,:"
+
+    buf = api.nvim_create_buf(true, false)
+    api.nvim_buf_set_name(buf, root .. "/notes.md")
+    api.nvim_win_set_buf(win, buf)
+
+    calls = {}
+    real_open = package.loaded["open"]
+    package.loaded["open"] = {
+      open = function(target, scope)
+        calls[#calls + 1] = { target = target, scope = scope }
+      end,
+    }
+  end)
+
+  after_each(function()
+    package.loaded["open"] = real_open
+    hover.hide()
+    pcall(api.nvim_win_set_buf, win, prev_buf)
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    vim.o.isfname = prev_isfname
+    vim.fn.delete(root, "rf")
+    registry.reset()
+    config.reset()
+    vim.g.hover_disable = nil
+  end)
+
+  ---@param line string
+  ---@param marker string
+  local function hover_on(line, marker)
+    api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+    local at = line:find(marker, 1, true)
+    api.nvim_win_set_cursor(win, { 1, at - 1 })
+    return hover.show({ force = true })
+  end
+
+  it("does nothing when no hover is open", function()
+    assert.is_false(hover.open())
+  end)
+
+  it("routes a path through open.nvim as a path scope", function()
+    assert.is_true(hover_on("see ./real.md ok", "./real"))
+    assert.is_true(hover.open())
+    assert.equals(1, #calls)
+    -- `nil` handler: open.nvim picks by context. `path=` so a filename that
+    -- spells one of its scope keywords is still read as a path.
+    assert.is_nil(calls[1].target)
+    assert.is_truthy(calls[1].scope:find("^path="))
+    assert.is_truthy(calls[1].scope:find("real.md", 1, true))
+  end)
+
+  it("routes a URL as itself, not as a path", function()
+    config.setup({ links = { web = true } })
+    assert.is_true(hover_on("see https://example.com/x ok", "https://"))
+    assert.is_true(hover.open())
+    assert.equals(1, #calls)
+    assert.is_nil(calls[1].scope:find("^path="), "a URL must not be wrapped in path=")
+    assert.is_truthy(calls[1].scope:find("example.com", 1, true))
+  end)
+
+  it("closes the float once it has handed the target over", function()
+    hover_on("see ./real.md ok", "./real")
+    hover.open()
+    assert.is_false(float.is_open())
+  end)
+
+  it("declines a target that does not exist", function()
+    -- `missing` has nothing to open, and an opener asked to open nothing
+    -- reports an error the reader did not cause.
+    assert.is_true(hover_on("see ./gone.md ok", "./gone"))
+    assert.is_false(hover.open())
+    assert.equals(0, #calls)
+  end)
+
+  it("declines a position preview, which is about a place and not a thing", function()
+    registry.register("p", {
+      positions = {
+        function()
+          return { lines = { "something about this line" } }
+        end,
+      },
+    })
+    api.nvim_buf_set_lines(buf, 0, -1, false, { "ordinary prose here" })
+    api.nvim_win_set_cursor(win, { 1, 2 })
+    assert.is_true(hover.show())
+    assert.is_false(hover.open())
+    assert.equals(0, #calls)
+  end)
+
+  it("falls back to vim.ui.open when open.nvim is not installed", function()
+    package.loaded["open"] = nil
+    local preload = package.preload["open"]
+    package.preload["open"] = function()
+      error("module 'open' not found")
+    end
+    local seen
+    local real_ui = vim.ui.open
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.ui.open = function(what)
+      seen = what
+    end
+
+    hover_on("see ./real.md ok", "./real")
+    local opened = hover.open()
+
+    vim.ui.open = real_ui
+    package.preload["open"] = preload
+
+    assert.is_true(opened)
+    assert.is_truthy(seen and seen:find("real.md", 1, true))
+  end)
+end)

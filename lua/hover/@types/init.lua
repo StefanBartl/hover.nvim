@@ -44,6 +44,7 @@
 ---@field office? Hover.OfficeConfig
 ---@field scroll_keys? Hover.ScrollKeys
 ---@field dismiss_keys? string|string[] # Keys that wave the hover on screen away. Default `{ "q", "<Esc>" }`; a configured list replaces the default, and an empty one binds nothing.
+---@field open_keys? string|string[] # Keys that open what the float is showing, through open.nvim or `vim.ui.open`. Default `{ "gf" }`; an empty list binds nothing.
 ---@field keymaps? Hover.Keymaps
 ---@field enabled? boolean # Legacy. `false` is read as `mode = "off"` and then dropped.
 ---@field bare_paths? boolean # Legacy. Read as `paths.enabled` and then dropped.

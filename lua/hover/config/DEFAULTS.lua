@@ -217,6 +217,20 @@ return {
   ---@type string|string[]
   dismiss_keys = { "q", "<Esc>" },
 
+  -- Open what the float is showing -- through open.nvim when it is
+  -- installed, else `vim.ui.open`.
+  --
+  -- `gf` because it already means "open what is under the cursor" in
+  -- Neovim's own vocabulary, and while a preview float is up that reading is
+  -- exact rather than approximate. Borrowed like every other key here: bound
+  -- only while a float is on screen, and the mapping it displaced is
+  -- restored rather than deleted, so `gf` means what it always meant the
+  -- moment the float closes.
+  --
+  -- `{}` binds nothing, for anyone who wants the API without the key.
+  ---@type string|string[]
+  open_keys = { "gf" },
+
   --- Keymaps this plugin sets in the user's namespace. Every entry is a
   --- single key, a list of keys, or `false` for "bind nothing".
   ---

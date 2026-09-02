@@ -265,6 +265,7 @@ worth asserting.
       up = { "<M-PageUp>", "<C-Up>" },
     },
     dismiss_keys = { "q", "<Esc>" },
+    open_keys = { "gf" },
     keymaps = { show = false },
   })
 <

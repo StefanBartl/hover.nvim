@@ -748,6 +748,75 @@ function M.hide_unless_pinned()
   M.hide()
 end
 
+--- Open what the float is showing.
+---
+--- **A preview that shows a target and cannot open it is half an answer.**
+--- The cursor is on a path, the float says what is there, and the next thing
+--- a reader wants is to go there -- with `gf`, which is what that key already
+--- means in Neovim. While a preview float is up, "open what is under the
+--- cursor" and "open what this float is showing" are the same thing, so the
+--- key needs no new vocabulary and is borrowed and restored like every other.
+---
+--- **Through open.nvim when it is installed**, which is the whole point of
+--- routing rather than opening directly: it knows the difference between a
+--- path that wants a file manager, a URL that wants a browser, and the
+--- handler the user configured for either. Without it, `vim.ui.open` is the
+--- honest fallback -- the OS decides, which is right for a URL and adequate
+--- for a file.
+---
+--- **Not for every target.** A `missing` target has nothing to open, and a
+--- position preview has no target at all -- it is a fact about a line. Both
+--- decline rather than guessing.
+---@return boolean opened
+function M.open()
+  if not (_open and float.win()) then
+    return false
+  end
+  local target = _open.target
+  if not target then
+    -- A position preview: content about a place, not about a thing.
+    return false
+  end
+
+  local what
+  if target.type == "url" then
+    what = target.url or target.raw
+  elseif target.type == "missing" or target.type == "git" then
+    -- Nothing on disk, or an object id no opener understands.
+    return false
+  else
+    what = target.path or target.raw
+  end
+  if type(what) ~= "string" or what == "" then
+    return false
+  end
+
+  local ok_open, open = pcall(require, "open")
+  if ok_open and type(open.open) == "function" then
+    -- `nil` as the handler is open.nvim's context-aware pick: a browser for a
+    -- URL, the configured file manager for a path. `path=` for a path so a
+    -- filename that happens to spell one of its scope keywords ("cwd",
+    -- "git") is still read as a path.
+    local scope = target.type == "url" and what or ("path=" .. what)
+    local ok_call = pcall(open.open, nil, scope)
+    if ok_call then
+      M.hide()
+      return true
+    end
+  end
+
+  if type(vim.ui.open) == "function" then
+    local ok_ui = pcall(vim.ui.open, what)
+    if ok_ui then
+      M.hide()
+      return true
+    end
+  end
+
+  require("hover.notify").warn("nothing here can open " .. what)
+  return false
+end
+
 --- Scroll the open hover's content by `delta` steps.
 ---
 --- A page for a PDF (and for an office document, which has become one by the

@@ -40,6 +40,7 @@ require("hover").setup({ keymaps = { show = false } })
 | Config key | Default | Bound for | Does |
 | --- | --- | --- | --- |
 | `dismiss_keys` | `q`, `<Esc>` | **every** hover | dismiss this hover until the cursor reaches another target |
+| `open_keys` | `gf` | hovers with a target | open what the float is showing, then close it |
 | `scroll_keys.down` | `<M-PageDown>`, `<C-Down>` | scrollable hovers only | next screenful of lines, or next PDF page |
 | `scroll_keys.up` | `<M-PageUp>`, `<C-Up>` | scrollable hovers only | back |
 

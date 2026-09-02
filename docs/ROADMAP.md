@@ -82,31 +82,6 @@ Second thing to settle once it is: **an image reference collides with
 `hover.bare_path` already splits on the colon. Registration order decides it,
 and that has to be chosen deliberately rather than discovered.
 
-### `open.nvim` — the same classification, twice
-
-The one entry here that is not "a plugin could contribute" but "two plugins
-overlap and one of them should stop". `open.context.default_target(signals)`,
-`candidate_targets(signals)`, `viewer.scan.is_url`, `is_anchor`, `resolve` —
-that is a classification layer answering nearly the question `hover.classify`
-answers, for the same text under the same cursor, to route it somewhere
-instead of to preview it.
-
-Neither knowing about the other is the current state and it is fine; the two
-are not wrong about anything. Worth settling before either grows:
-
-- **Which direction, if any.** hover could ask open "what is this?", open
-  could ask hover, or a third module could own it. The precedent in this
-  ecosystem is that shared classification with two consumers belongs in
-  lib.nvim — but see the note under `hover.scope` in
-  [Optimizations](#optimizations): two consumers is the bar, and this would
-  be exactly two.
-- **The float could offer the action.** Independently of the above, a
-  preview that shows a target and cannot open it is half an answer.
-  `open.open(target, scope)` is one call. That wants a key on the float,
-  which the float cannot hold — it is `focusable = false` — so it would be
-  another borrowed key, and the borrowed-key budget is already `q`, `<Esc>`
-  and four scroll keys.
-
 ### Two that are collisions rather than contributions
 
 **`fileops.nvim` opens a float on the same event.** Its `on_hold` feature is
@@ -162,6 +137,42 @@ whether a token is routable would be the natural second.
 ---
 
 ## Considered and rejected
+
+### Merging hover.nvim's and open.nvim's classification
+
+The entry that stood here read: two plugins answer nearly the same question
+about the same text at the same cursor, one to route it and one to preview
+it, and one of them should stop. `open.context.default_target`,
+`candidate_targets`, `viewer.scan.is_url`, `is_anchor`, `resolve` against
+`hover.classify` and `hover.bare_url`.
+
+**Read at the level of function names it is a duplication. Read at the level
+of contracts it is not**, and the names are what mislead:
+
+- `open.context.default_target` picks a *handler key* -- browser or file
+  manager -- from a three-pattern URL check. It does not classify anything;
+  it routes. `hover.classify` maps a target onto nine types with an
+  extension table and one `fs_stat`, so a `.docx` gets an office preview and
+  a missing file gets a marker. Neither could stand in for the other.
+- `scan.is_url` is a predicate anchored at `^` on a whole target. hover's
+  four URL patterns *find* a URL anywhere in a line, require two leading
+  alpha characters, and cover `mailto:` and the `http:\\` typo. One asks
+  "is this string a URL", the other "where in this line is one".
+- `scan.resolve` returns URLs and anchors unchanged, splits and re-attaches a
+  `#fragment`, and takes a directory. `classify.resolve_path` always returns
+  a path, takes a source *file*, and never sees a fragment because `classify`
+  splits it first.
+
+Each is shaped by what its caller needs: open scans many lines for openable
+things and must not report prose; hover classifies one target it was handed
+and must tell missing from absent. A shared helper would either hand each
+caller more than it needs, or grow enough options to be a worse version of
+both. There is nothing here to extract.
+
+**The half that was real is shipped**: `open_keys` (`gf` by default) opens
+what the float is showing, routed through open.nvim when it is installed and
+`vim.ui.open` otherwise. A preview that shows a target and cannot open it was
+half an answer, and that was the actual complaint underneath the entry.
 
 ### A `hover.nvim` health check that runs the test suite
 

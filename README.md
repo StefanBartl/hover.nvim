@@ -508,6 +508,7 @@ require("hover").setup({
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | |
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | |
+| `open_keys` | `{ "gf" }` | Open what the float is showing — through [open.nvim](https://github.com/StefanBartl/open.nvim) when installed, else `vim.ui.open`. Borrowed and restored like the others; `{}` binds nothing. |
 | `dismiss_keys` | `{ "q", "<Esc>" }` | |
 | `keymaps.show` | `false` | A key for `:Hover show`. No key is claimed unless asked for. |
 

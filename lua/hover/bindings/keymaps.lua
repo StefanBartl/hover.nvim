@@ -122,6 +122,15 @@ function M.borrow(content, rerender)
     end, "hover: dismiss this hover")
   end
 
+  -- Before the scroll keys, so a key configured for both opens rather than
+  -- scrolls: opening is the action a reader means by pressing something, and
+  -- scrolling has two keys of its own either way.
+  for _, lhs in ipairs(M.keylist(cfg.open_keys)) do
+    take(seen, lhs, function()
+      hover().open()
+    end, "hover: open what this hover is showing")
+  end
+
   local s = content and content.scroll
   -- Nothing below and nothing above: not scrollable in either direction.
   local at_start = s and (s.offset or 0) == 0 and (s.page or 1) == 1
