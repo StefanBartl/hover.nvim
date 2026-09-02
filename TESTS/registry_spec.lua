@@ -946,3 +946,93 @@ describe("a contribution that answers only on request", function()
     assert.is_nil(registry.source_at(0, 1, 0, { force = true }))
   end)
 end)
+
+-- The gap that let a real bug ship, and the reason this block exists at all.
+--
+-- `has_positions` deliberately does not count an `on_request` contribution:
+-- it answers "should a CursorHold be installed for this buffer", and one
+-- that woke, asked nobody and slept again would be pure cost. But
+-- `show_position` used the same function as a pre-guard, ahead of the force
+-- check -- so a buffer whose only contribution was force-only could not be
+-- reached by any route. A registered preview that nothing could ever ask.
+--
+-- The specs above missed it because they call `position_at` directly, which
+-- is downstream of the guard. Only the whole path through `hover.show`
+-- crosses it, so that is what these assert. The third case is the property
+-- the fix must not trade away.
+describe("a force-only contribution, reached through hover.show", function()
+  local hover = require("hover")
+  local float = require("hover.float")
+  local api = vim.api
+  local win, prev_buf, buf
+
+  --- The only contribution in the registry, and it answers on request only.
+  ---@return table asked call count, by route
+  local function only_on_request()
+    local asked = { n = 0 }
+    registry.register("expensive", {
+      positions = {
+        {
+          on_request = true,
+          fn = function()
+            asked.n = asked.n + 1
+            return { lines = { "cost me a process start" }, title = "expensive" }
+          end,
+        },
+      },
+    })
+    return asked
+  end
+
+  before_each(function()
+    registry.reset()
+    config.reset()
+    win = api.nvim_get_current_win()
+    prev_buf = api.nvim_win_get_buf(win)
+    buf = api.nvim_create_buf(false, true)
+    api.nvim_win_set_buf(win, buf)
+    api.nvim_buf_set_lines(buf, 0, -1, false, { "ordinary prose with no target" })
+    api.nvim_win_set_cursor(win, { 1, 3 })
+  end)
+
+  after_each(function()
+    hover.hide()
+    pcall(api.nvim_win_set_buf, win, prev_buf)
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    registry.reset()
+    config.reset()
+  end)
+
+  it("answers an explicit request", function()
+    local asked = only_on_request()
+    assert.is_true(hover.show({ force = true }), "a force-only preview must be reachable")
+    assert.is_true(float.is_open())
+    assert.equals(1, asked.n)
+  end)
+
+  it("stays quiet on the automatic trigger", function()
+    local asked = only_on_request()
+    assert.is_false(hover.show())
+    assert.is_false(float.is_open())
+    assert.equals(0, asked.n, "the whole point is that this is never asked automatically")
+  end)
+
+  it("still does not earn the buffer a CursorHold", function()
+    -- The fix must not buy reachability by installing a trigger that can
+    -- only ever wake, ask nobody, and sleep again.
+    config.setup({ paths = { enabled = false } })
+    only_on_request()
+    assert.is_false(registry.has_positions())
+    assert.is_false(autocmds.anything_to_show())
+  end)
+
+  it("is still silenced by an explicit :Hover positions off on the automatic path", function()
+    local asked = only_on_request()
+    config.setup({ positions = false })
+    assert.is_false(hover.show())
+    assert.equals(0, asked.n)
+    -- ...and force still opens every volume gate, including that one.
+    assert.is_true(hover.show({ force = true }))
+    assert.equals(1, asked.n)
+  end)
+end)

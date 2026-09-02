@@ -555,7 +555,14 @@ end
 ---@param opts { force?: boolean }
 ---@return boolean shown
 function M.show_position(bufnr, opts)
-  if not require("hover.registry").has_positions() then
+  -- `has_positions` answers about the *automatic* trigger: it deliberately
+  -- does not count an `on_request` contribution, so a buffer whose only one
+  -- is force-only gets no CursorHold. Using it as a guard here too would make
+  -- such a contribution unreachable by any route -- which it was, until a
+  -- live test of sandbox.nvim showed a registered preview that could never be
+  -- asked. Under `force`, whether anything answers is `position_at`'s to
+  -- decide, not this guard's.
+  if not opts.force and not require("hover.registry").has_positions() then
     return false
   end
   if not opts.force and not config.positions_enabled() then
