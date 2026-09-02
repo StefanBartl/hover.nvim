@@ -61,22 +61,39 @@ frame is the right size, not that a picture arrived in it.
 
 | | |
 | --- | --- |
-| **Checked** | *never — see below* |
-| **On** | — |
-| **How** | `:Hover office on`, then hover a `.docx`. The first one costs a LibreOffice start, which is seconds. |
-| **Watch for** | The badge saying LibreOffice is missing rather than a failed conversion — `can_create("office")` is asked first, precisely so the answer is a sentence and not a hang. |
+| **Checked** | 2026-09-02 — **the cache half. The sweep is still unchecked**, see below. |
+| **On** | Windows 11, WezTerm, Neovim 0.12.2, pdfport.nvim + LibreOffice 25.x |
+| **How** | `:Hover office on`, then hover a `.docx`. The first one costs a LibreOffice start, which is seconds. Then `:qa`, restart, `:Hover office on`, and hover the same document again. |
+| **Watch for** | The badge saying LibreOffice is missing rather than a failed conversion — `can_create("office")` is asked first, precisely so the answer is a sentence and not a hang. On Windows that badge is the *expected* first result even with LibreOffice installed, because its installer does not extend `PATH`; the fix is in [installation.md](installation.md#soffice-on-windows-installing-libreoffice-is-not-enough) and it is not a bug in this path. |
 
-**The office path has not been checked since the conversion cache was allowed
-to outlive the session.** That change (age-based sweep, `office.cache_days`,
-default 7) is covered by specs only where it is wiring; the sweep itself
-touches a real cache directory and a real LibreOffice, and neither is in any
-test. The two things worth confirming by hand:
+**What was seen**, in order: with office rendering off, the badge
+`no text preview  ·  :Hover office on`. With it on, `converting to PDF…`,
+then the rendered first page inside the float. After `:qa` and a restart, the
+same document showed a badge for roughly a third of a second and then the
+page — **no LibreOffice start**, which is the whole point of letting the cache
+outlive the session. The flash is the PDF being rasterized again, not the
+document being converted again; those are two different caches, and only the
+outer one is this plugin's.
 
-- a second session hovering the same document does **not** start LibreOffice
-  again — that is the whole point of letting the cache survive;
-- a file in `stdpath("cache")/hover.nvim/office` older than `cache_days` is
-  gone after the next conversion, and nothing outside that directory is
-  touched.
+The cache directory afterwards held exactly one file:
+
+```
+<stdpath("cache")>/hover.nvim/office/Bewerbung_…-a62f1bc27aecd87f.pdf
+```
+
+To list it yourself — `nvim --headless -c 'echo …'` mixes the startup message
+into its own output, so the path has to be written rather than echoed:
+
+```powershell
+ls "$(nvim -u NONE --headless -c 'lua io.write(vim.fn.stdpath("cache"))' -c 'q')/hover.nvim/office"
+```
+
+**Still unchecked: the age-based sweep.** `office.cache_days` (default 7) is
+covered by specs only where it is wiring; the sweep itself touches a real
+cache directory, and that is in no test. What is left to confirm by hand:
+a file in that directory older than `cache_days` is gone after the next
+conversion, and nothing outside the directory is touched. Backdating one file
+there and hovering any office document is the whole check.
 
 ### A contribution asked only on request
 

@@ -276,8 +276,15 @@ function M.check()
     if vim.fn.executable("soffice") == 1 then
       health.ok("soffice: on PATH")
     else
+      -- The second line is not padding: on Windows the installer does not put
+      -- `soffice.exe` on PATH, so this warning fires on a machine where
+      -- LibreOffice is plainly installed and "install LibreOffice" is advice
+      -- the reader has already followed. Reported 2026-09-02.
       health.warn("soffice: not on PATH -- office documents cannot be converted", {
         "Install LibreOffice, or `:Hover office off` to stop asking for it.",
+        "Already installed? On Windows the installer does not extend PATH: add "
+          .. "the LibreOffice `program` directory to it and restart the terminal. "
+          .. "The one-liner is in docs/installation.md.",
       })
     end
   else

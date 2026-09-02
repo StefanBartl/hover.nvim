@@ -161,6 +161,24 @@ other — `mode = "manual"` with no key bound to `show`, for instance, because f
 outside that is indistinguishable from a broken plugin. The tools section looks for
 `pdftoppm` and — only when office rendering is on — `soffice`.
 
+### `soffice` on Windows: installing LibreOffice is not enough
+
+The Windows installer does **not** put `soffice.exe` on `PATH`, so
+`:checkhealth hover` reports it missing on a machine where LibreOffice is
+plainly installed, and a `.docx` hover shows
+`(LibreOffice not on PATH — no page preview)`. That badge is correct and the
+fix is one line — add the `program` directory to the user `PATH`, then restart
+the terminal so the new value is inherited:
+
+```powershell
+[Environment]::SetEnvironmentVariable(
+  "Path", $env:Path + ";C:\Program Files\LibreOffice\program", "User")
+```
+
+Reported on Windows 11 on 2026-09-02, after a normal LibreOffice install.
+Nothing here is Windows-specific in the code — the Linux and macOS packages
+put `soffice` on `PATH` themselves, which is why this only bites on Windows.
+
 The contributors section also reads the registry back — every name that registered, with
 a count per kind — so a hover you wrote yourself and handed to `setup` as `contribute`
 appears there as `registry: user`. That line is what separates "it never registered" from
