@@ -1036,3 +1036,159 @@ describe("a force-only contribution, reached through hover.show", function()
     assert.equals(1, asked.n)
   end)
 end)
+
+-- A hover of one's own, written in a user's config rather than in a plugin.
+--
+-- The mechanism was always public -- `registry.register` is a module like any
+-- other, and works the same from an `init.lua` -- but it was only ever
+-- *described* to plugin authors, and `setup` took nothing but settings. So
+-- the honest answer to "can I add one hover myself" was "write a plugin",
+-- which is a far larger sentence than the work.
+--
+-- `contribute` is the same door entered from the setup table. Three things
+-- are asserted here, and two of them are about what it must *not* do:
+--
+--   1. It reaches the registry -- otherwise it is decoration.
+--   2. It does not reach the options. Functions are not configuration, and
+--      `config.setup` merges lists by index, so two successive `contribute`
+--      lists would interleave rather than replace.
+--   3. It does not mutate the table it was handed. A host passes its own
+--      live config through `enable`, and this is the one field taken out of
+--      that table on the way in.
+describe("a contribution written in the user's own setup table", function()
+  local hover = require("hover")
+
+  before_each(function()
+    registry.reset()
+    config.reset()
+  end)
+
+  after_each(function()
+    registry.reset()
+    config.reset()
+  end)
+
+  it("registers a position preview, the same as a plugin would", function()
+    hover.setup({
+      contribute = {
+        positions = {
+          function(_, row)
+            return { lines = { ("line %d"):format(row) } }
+          end,
+        },
+      },
+    })
+
+    assert.is_true(registry.has_positions())
+    local content = registry.position_at(0, 7, 0)
+    assert.same({ "line 7" }, content.lines)
+  end)
+
+  it("registers sources and previews through the same field", function()
+    hover.setup({
+      contribute = {
+        sources = {
+          function()
+            return "./from-the-user"
+          end,
+        },
+        previews = {
+          file = function()
+            return { lines = { "user preview" } }
+          end,
+        },
+      },
+    })
+
+    assert.equals("./from-the-user", registry.source_at(0, 1, 0))
+    local preview = registry.preview_for("file")
+    assert.is_not_nil(preview)
+    assert.same({ "user preview" }, preview({}, {}, 0).lines)
+  end)
+
+  it("honours on_request, because it is the table register already takes", function()
+    local asked = 0
+    hover.setup({
+      contribute = {
+        positions = {
+          {
+            fn = function()
+              asked = asked + 1
+              return { lines = { "expensive" } }
+            end,
+            on_request = true,
+          },
+        },
+      },
+    })
+
+    -- Force-only, so it must not make a buffer worth waking for either.
+    assert.is_false(registry.has_positions())
+    assert.is_nil(registry.position_at(0, 1, 0))
+    assert.equals(0, asked)
+
+    assert.same({ "expensive" }, registry.position_at(0, 1, 0, { force = true }).lines)
+    assert.equals(1, asked)
+  end)
+
+  it("keeps the functions out of the options table", function()
+    hover.setup({
+      max_width = 42,
+      contribute = {
+        positions = {
+          function()
+            return nil
+          end,
+        },
+      },
+    })
+
+    assert.is_nil(config.raw().contribute)
+    assert.equals(42, config.raw().max_width, "the rest of the same table still merges")
+  end)
+
+  it("does not mutate the table it was handed", function()
+    local user_config = {
+      mode = "manual",
+      contribute = {
+        positions = {
+          function()
+            return nil
+          end,
+        },
+      },
+    }
+    hover.setup(user_config)
+
+    assert.is_table(user_config.contribute, "a host's own live config is not edited")
+    assert.equals("manual", config.mode())
+  end)
+
+  it("replaces on a second call rather than stacking", function()
+    local asked = { first = 0, second = 0 }
+    hover.setup({
+      contribute = {
+        positions = {
+          function()
+            asked.first = asked.first + 1
+            return nil
+          end,
+        },
+      },
+    })
+    hover.setup({
+      contribute = {
+        positions = {
+          function()
+            asked.second = asked.second + 1
+            return nil
+          end,
+        },
+      },
+    })
+
+    registry.position_at(0, 1, 0)
+    assert.equals(0, asked.first, "the first registration is gone, not merely outranked")
+    assert.equals(1, asked.second)
+  end)
+end)

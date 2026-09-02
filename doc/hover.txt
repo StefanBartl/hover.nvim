@@ -278,6 +278,11 @@ The pre-1.0 spelling of three options is still accepted and normalized:
 `enabled = false` reads as `mode = "off"`, `bare_paths` as `paths.enabled`,
 and `url = { hover, fetch, timeout_ms }` as the `links` fields.
 
+`contribute` is the one field that is not a setting: your own sources,
+previews and position previews, registered under the name "user". It is
+handed to the registry and never stored in the options. See
+|hover-contribute|.
+
 ==============================================================================
 10. API                                                             *hover-api*
 
@@ -343,6 +348,29 @@ source that throws is skipped and the next one still runs.
 Target types a preview can claim: image, pdf, office, markdown, file,
 directory, url, anchor, missing. Returning nil declines, and the built-in
 preview runs instead.
+
+                                                             *hover-contribute*
+The same table can be handed to |hover.setup()| as `contribute`, which
+registers it under the name "user". That is the door for a hover of your own,
+with no plugin around it:
+>lua
+  require("hover").enable({
+    contribute = {
+      positions = {
+        function(bufnr, row, col)
+          return something_about(bufnr, row)  -- or nil to stay silent
+        end,
+      },
+    },
+  })
+<
+A `sources` or `positions` entry may be a table rather than a function --
+{ fn = ..., on_request = true } -- and is then asked only for an explicit
+`:Hover show`. That is for an answer costing a process start.
+
+A plugin should call register() under its own name instead of using this
+field: everything registered through `contribute` shares the single name
+"user", so two callers would silently delete each other.
 
 ==============================================================================
 12. HEALTH                                                       *hover-health*

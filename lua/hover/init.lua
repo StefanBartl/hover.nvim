@@ -75,9 +75,33 @@ local _suppressed = nil
 ---
 --- The pre-move option names (`enabled`, `bare_paths`, `url = { ... }`) are
 --- still accepted and normalized -- see `hover.config`.
+---
+--- **`contribute` is the one field that is not a setting.** It takes exactly
+--- the table `hover.registry.register` takes, so "can I add a hover of my own
+--- without writing a plugin" is answered by a function in this table rather
+--- than by a second mechanism. Registering was always public; what was
+--- missing was saying so where a reader configures the plugin.
+---
+--- It is registered under the name `"user"` and never reaches the options.
+--- Both halves of that matter: functions are not configuration, and the name
+--- makes a second `setup()` replace that registration rather than stack a
+--- duplicate on it -- a reloaded config must not fire the same function
+--- twice. A *plugin* should call `register` under its own name instead; two
+--- callers sharing the `"user"` slot would silently delete each other.
 ---@param opts? Hover.Config
 ---@return Hover.Config
 function M.setup(opts)
+  if type(opts) == "table" and type(opts.contribute) == "table" then
+    require("hover.registry").register("user", opts.contribute)
+
+    -- Removed from a shallow copy rather than from the caller's table: what
+    -- arrives here may be a host's own live configuration (markdown.nvim
+    -- hands one over), and clearing a field in it would be a side effect on
+    -- that plugin's state.
+    local settings = vim.tbl_extend("force", {}, opts)
+    settings.contribute = nil
+    return config.setup(settings)
+  end
   return config.setup(opts)
 end
 
@@ -91,7 +115,7 @@ end
 ---@return nil
 function M.enable(opts)
   if type(opts) == "table" then
-    config.setup(opts)
+    M.setup(opts)
   end
   require("hover.bindings.usrcmds").setup()
   if not config.is_enabled() then

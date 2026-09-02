@@ -8,7 +8,7 @@ installed.
 
 This file is the map: **who reaches whom, through which door, and what
 degrades when a plugin is absent.** It exists because "the hover is broken" is
-almost never a statement about the hover — it is a statement about one of five
+almost never a statement about the hover — it is a statement about one of the
 plugins, and the first useful question is which one.
 
 ## The two doors
@@ -19,7 +19,7 @@ are not interchangeable.
 **Door 1 — the registry (inbound).** The plugin calls
 `hover.registry.register(name, contribution)` and hands over a
 *source* ("what is under the cursor?") or a *preview* ("how do I render a
-target of this type?"). hover.nvim never says the plugin's name. Adding a sixth
+target of this type?"). hover.nvim never says the plugin's name. Adding another
 contributor requires no change here at all.
 
 **Door 2 — a named soft dependency (outbound).** hover.nvim itself calls
@@ -48,6 +48,36 @@ at.** Door 2 plugins are named inside hover.nvim's own source, so their names
 turn up in comments, module docs and stack traces belonging to code they never
 ran.
 
+## Door 1 is not only for plugins
+
+Nothing about the registry requires a plugin around it. `hover.registry.register`
+is a public module and behaves identically when it is called from an `init.lua`,
+and `setup` takes the same contribution table as a `contribute` field:
+
+```lua
+require("hover").enable({
+  contribute = {
+    positions = {
+      function(bufnr, row, col)
+        return something_about(bufnr, row) -- or nil to stay silent
+      end,
+    },
+  },
+})
+```
+
+The one difference that matters here is the **name**. A plugin passes its own,
+so it owns a slot and re-registering replaces only its own contribution;
+everything registered through `contribute` shares the single name `user`. That
+is the right trade for a configuration — there is one of it, and reloading it
+must replace rather than duplicate — and the wrong one for a plugin, which
+would be deleting a contribution that is not its own.
+
+So the table below lists who *ships* a contribution, not what is able to make
+one. See [contributing from your own
+config](../README.md#contributing-from-your-own-config) for the whole shape,
+including `on_request` for an answer that costs a process start.
+
 ## Who is wired to what
 
 | Plugin | Door | Contributes | Without it |
@@ -68,7 +98,7 @@ hover still gives file heads, directory listings, image and PDF metadata, a
 badge for files that hold no text, URL details once the web hover is switched
 on, and the "this target does not exist" answer.
 
-## markdown.nvim — the only registry contributor today
+## markdown.nvim — link scanning, and the section behind a `#heading`
 
 Registered from `markdown/hover/init.lua` under the name `"markdown.nvim"`:
 
@@ -192,12 +222,12 @@ Three things worth knowing when this misbehaves, all in
   a pending result, so without that guard every `CursorHold` during a
   conversion would start another one.
 
-## The four that arrive through the registry
+## What arrives through the registry
 
 Everything above is a *named soft dependency*: hover.nvim `pcall`s for it by
-name from inside its own preview code. The four below are the other door —
+name from inside its own preview code. The ones below are the other door —
 they call `hover.registry.register` and hover.nvim never says their names.
-Adding a fifth needs no change here at all, which is the point of the shape.
+Adding another needs no change here at all, which is the point of the shape.
 
 Each is documented on its own side, because that is where the code is:
 

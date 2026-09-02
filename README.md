@@ -56,6 +56,7 @@ See ./docs/architecture.md#modules for details.
 - [Waving one hover away](#waving-one-hover-away)
 - [Scrolling a preview](#scrolling-a-preview)
 - [Configuration](#configuration)
+- [Contributing from your own config](#contributing-from-your-own-config)
 - [Contributing from a plugin](#contributing-from-a-plugin)
 - [Two things that must not be changed casually](#two-things-that-must-not-be-changed-casually)
 - [Health](#health)
@@ -548,6 +549,47 @@ a host that learned them while this plugin lived inside `lib.nvim` keeps working
 `enabled = false` reads as `mode = "off"`, `bare_paths` as `paths.enabled`, and
 `url = { hover, fetch, timeout_ms }` as the `links` fields. Nothing downstream ever sees
 the old shape.
+
+## Contributing from your own config
+
+You do not need to write a plugin to add one hover. `setup` and `enable` take a
+`contribute` table — the same table a plugin hands to the registry — so a function in
+your own config is a contributor like any other:
+
+```lua
+require("hover").enable({
+  contribute = {
+    -- "is there anything to say about this place?" Return finished content, or nil
+    -- to stay silent, which is the common answer and has to stay the cheap one.
+    positions = {
+      function(bufnr, row, _col)
+        local line = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1] or ""
+        local ticket = line:match("PROJ%-%d+")
+        if not ticket then
+          return nil
+        end
+        return { lines = { ("%s — %s"):format(ticket, ticket_title(ticket)) }, title = "tracker" }
+      end,
+    },
+  },
+})
+```
+
+`sources` and `previews` work here too, and so does `{ fn = …, on_request = true }` for an
+answer that costs a process start — the field takes the whole contribution shape, not a
+subset of it.
+
+Two consequences, both deliberate:
+
+- **It registers under the name `user`.** A second `setup` replaces your contribution
+  rather than stacking a copy on it, so reloading your config does not make the same
+  function fire twice. This is why a *plugin* should call `register` under its own name:
+  two callers sharing the `user` slot would silently delete each other.
+- **It never lands in the options table.** Functions are not settings, and the merge that
+  makes `setup` idempotent would interleave two lists rather than replace one.
+
+Everything in the next section applies to what you write here as well — sources win over
+positions, nothing a position answers is cached, and being quiet is your job.
 
 ## Contributing from a plugin
 
