@@ -73,6 +73,10 @@ is the right trade for a configuration — there is one of it, and reloading it
 must replace rather than duplicate — and the wrong one for a plugin, which
 would be deleting a contribution that is not its own.
 
+`:checkhealth hover` reads the registry back under *optional contributors*, so
+`registry: user -- 1 position preview` is the confirmation that a contribution
+arrived — and its absence from that list is the confirmation that it did not.
+
 So the table below lists who *ships* a contribution, not what is able to make
 one. See [contributing from your own
 config](../README.md#contributing-from-your-own-config) for the whole shape,

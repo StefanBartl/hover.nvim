@@ -416,4 +416,16 @@ entry point actually called, not just whether the module loads), every switch
 state, and the two configurations that silently do nothing: manual mode with
 no key bound, and every preview class switched off.
 
+It also reads |hover-registry| back: every name that registered, with a count
+per kind.
+>
+  registry: markdown.nvim -- 2 sources, 2 previews
+  registry: user -- 1 position preview (1 asked only on `:Hover show`)
+<
+That is the answer to "is my own hover registered at all?" after handing a
+function to |hover-contribute| -- everything from that field appears under the
+single name "user", and its absence from the list is the answer. The count in
+parentheses is how many entries said `on_request` and are therefore correct,
+registered and silent until an explicit `:Hover show`.
+
 vim:tw=78:ts=8:ft=help:norl:

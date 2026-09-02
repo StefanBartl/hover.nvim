@@ -641,6 +641,17 @@ Two consequences, both deliberate:
 - **It never lands in the options table.** Functions are not settings, and the merge that
   makes `setup` idempotent would interleave two lists rather than replace one.
 
+`:checkhealth hover` lists it back under `registry: user`, with a count per kind and, in
+parentheses, how many of those entries are `on_request`:
+
+```
+registry: user -- 1 position preview (1 asked only on `:Hover show`)
+```
+
+Worth knowing before you go looking anywhere else, because the two failures behind "my
+hover does not appear" are indistinguishable from the outside: a contribution that never
+registered is *absent* from that list, and one that registered and returns `nil` is on it.
+
 Everything in the next section applies to what you write here as well — sources win over
 positions, nothing a position answers is cached, and being quiet is your job.
 
@@ -798,7 +809,7 @@ completely different causes that look identical from the outside.
 | --- | --- |
 | **hover.nvim** | Is `lib.nvim` there, and is it new enough — the one dependency with no fallback |
 | **configuration** | Which mode is set, and every switch with its current state. Two warnings catch the silent cases: `mode: off`, and `manual` mode with no key bound to show anything — both leave a correctly installed plugin doing nothing |
-| **optional contributors** | Which sibling plugins are installed, what each absent one is not doing, and whether a link source is registered at all |
+| **optional contributors** | Which sibling plugins are installed, what each absent one is not doing, whether a link source is registered at all, and — read back off the registry — every name that registered, with a count per kind |
 | **external tools** | `soffice` and `pdftoppm` on `PATH`, and — the part worth the section — *whether they are even needed*: with office rendering off, a missing `soffice` is information rather than a warning |
 
 When a hover fails to appear for one specific thing rather than for everything,

@@ -1037,6 +1037,134 @@ describe("a force-only contribution, reached through hover.show", function()
   end)
 end)
 
+-- `contributors()` -- the answer to "did mine arrive?".
+--
+-- The accessor exists because `contribute` created an asker for a question
+-- nothing here could answer. `has_sources()` is the one that looks as though
+-- it could, and it is wrong in both directions for that question: it says
+-- "no" to a config whose contribution is a position preview, and "yes" to one
+-- whose own contribution never arrived while markdown.nvim was installed.
+-- Both of those are asserted below, because both are the failure someone
+-- would take to be a bug in the plugin.
+--
+-- The sort is asserted rather than assumed: two of the three lists behind it
+-- are arrays, but `previews` is keyed by target type, and an unsorted report
+-- would shuffle between two runs on the same configuration.
+describe("registry.contributors", function()
+  before_each(function()
+    registry.reset()
+  end)
+
+  after_each(function()
+    registry.reset()
+  end)
+
+  it("is empty with nothing registered", function()
+    assert.same({}, registry.contributors())
+  end)
+
+  it("counts each kind, under the name that registered it", function()
+    registry.register("one.nvim", {
+      sources = {
+        function() end,
+        function() end,
+      },
+      previews = {
+        image = function() end,
+        pdf = function() end,
+        anchor = function() end,
+      },
+      positions = {
+        function() end,
+      },
+    })
+
+    assert.same({
+      { name = "one.nvim", sources = 2, previews = 3, positions = 1, on_request = 0 },
+    }, registry.contributors())
+  end)
+
+  it("counts the on_request entries of both kinds that have them", function()
+    registry.register("costly.nvim", {
+      sources = {
+        { fn = function() end, on_request = true },
+      },
+      positions = {
+        function() end,
+        { fn = function() end, on_request = true },
+      },
+    })
+
+    local reported = registry.contributors()[1]
+    assert.equals(3, reported.sources + reported.positions)
+    assert.equals(2, reported.on_request, "one source and one position, not the plain one")
+  end)
+
+  it("reports a `contribute` from setup() under the name user", function()
+    require("hover").setup({
+      contribute = {
+        positions = {
+          function() end,
+        },
+      },
+    })
+
+    assert.same({
+      { name = "user", sources = 0, previews = 0, positions = 1, on_request = 0 },
+    }, registry.contributors())
+    config.reset()
+  end)
+
+  it("answers where has_sources answers wrongly, in both directions", function()
+    -- A position preview and nothing else: registered, and `has_sources` says
+    -- "no link source" -- correctly, and about the wrong question.
+    registry.register("user", { positions = { function() end } })
+    assert.is_false(registry.has_sources())
+    assert.equals("user", registry.contributors()[1].name)
+
+    -- The other direction: somebody else's source is registered and the
+    -- user's contribution is not, and `has_sources` says yes.
+    registry.reset()
+    registry.register("markdown.nvim", { sources = { function() end } })
+    assert.is_true(registry.has_sources())
+    local names = {}
+    for _, contributor in ipairs(registry.contributors()) do
+      names[#names + 1] = contributor.name
+    end
+    assert.same({ "markdown.nvim" }, names, "`user` is absent, which is the answer")
+  end)
+
+  it("sorts by name, so two runs of the same configuration read alike", function()
+    registry.register("zebra.nvim", { previews = { pdf = function() end } })
+    registry.register("alpha.nvim", { previews = { image = function() end } })
+    registry.register("middle.nvim", { sources = { function() end } })
+
+    local names = {}
+    for _, contributor in ipairs(registry.contributors()) do
+      names[#names + 1] = contributor.name
+    end
+    assert.same({ "alpha.nvim", "middle.nvim", "zebra.nvim" }, names)
+  end)
+
+  it("replaces rather than accumulates when a plugin registers twice", function()
+    registry.register("twice.nvim", {
+      sources = {
+        function() end,
+        function() end,
+      },
+    })
+    registry.register("twice.nvim", {
+      sources = {
+        function() end,
+      },
+    })
+
+    assert.same({
+      { name = "twice.nvim", sources = 1, previews = 0, positions = 0, on_request = 0 },
+    }, registry.contributors(), "a reload must not double the count it reports")
+  end)
+end)
+
 -- A hover of one's own, written in a user's config rather than in a plugin.
 --
 -- The mechanism was always public -- `registry.register` is a module like any

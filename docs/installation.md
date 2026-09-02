@@ -161,6 +161,11 @@ other — `mode = "manual"` with no key bound to `show`, for instance, because f
 outside that is indistinguishable from a broken plugin. The tools section looks for
 `pdftoppm` and — only when office rendering is on — `soffice`.
 
+The contributors section also reads the registry back — every name that registered, with
+a count per kind — so a hover you wrote yourself and handed to `setup` as `contribute`
+appears there as `registry: user`. That line is what separates "it never registered" from
+"it registered and declined", which look the same from the outside.
+
 ```vim
 :Hover status
 ```

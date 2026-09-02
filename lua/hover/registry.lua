@@ -232,6 +232,71 @@ function M.has_positions()
   return false
 end
 
+--- Every registered contributor, with how much each of them registered.
+---
+--- Exists for `:checkhealth`, and for one question in particular. Since
+--- `c374d5e` a hover can be written in a user's own config, and the first
+--- thing anyone asks after handing a function to `setup({ contribute = ... })`
+--- is "is it registered at all?". Nothing here could answer that.
+--- `has_sources()` looks as though it does and does not: it reports whether
+--- *anybody* registered a link source, so it says "no" to a config whose
+--- contribution is a position preview, and "yes" -- about markdown.nvim -- to
+--- one whose contribution silently failed.
+---
+--- **Counts, not the functions.** What the question needs is arrival and
+--- volume. Handing back the callables would make an accessor into a second
+--- way to run them, from outside the `pcall` that keeps one broken
+--- contribution from taking the hover down for every other.
+---
+--- **Sorted by name**, because one of the three lists read here is keyed by
+--- target type rather than ordered, and `pairs` order is not stable. A health
+--- report that shuffles between two runs on the same configuration cannot be
+--- compared against itself, which is most of what a health report is for.
+---@return Hover.Contributor[]
+function M.contributors()
+  ---@type table<string, Hover.Contributor>
+  local seen = {}
+
+  ---@param name string
+  ---@return Hover.Contributor
+  local function entry_for(name)
+    if not seen[name] then
+      seen[name] = { name = name, sources = 0, previews = 0, positions = 0, on_request = 0 }
+    end
+    return seen[name]
+  end
+
+  for _, entry in ipairs(sources) do
+    local contributor = entry_for(entry.name)
+    contributor.sources = contributor.sources + 1
+    if entry.on_request then
+      contributor.on_request = contributor.on_request + 1
+    end
+  end
+
+  for _, entry in pairs(previews) do
+    local contributor = entry_for(entry.name)
+    contributor.previews = contributor.previews + 1
+  end
+
+  for _, entry in ipairs(positions) do
+    local contributor = entry_for(entry.name)
+    contributor.positions = contributor.positions + 1
+    if entry.on_request then
+      contributor.on_request = contributor.on_request + 1
+    end
+  end
+
+  local out = {}
+  for _, contributor in pairs(seen) do
+    out[#out + 1] = contributor
+  end
+  table.sort(out, function(a, b)
+    return a.name < b.name
+  end)
+  return out
+end
+
 --- Drop every registration. Tests only.
 ---@return nil
 function M.reset()

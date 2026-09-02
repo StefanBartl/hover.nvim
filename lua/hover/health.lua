@@ -49,6 +49,39 @@ local function soft(module, entry, what)
 end
 
 ---@internal
+--- What one contributor registered, in words -- "2 sources, 1 preview".
+---
+--- Spelled out rather than tabulated because the question behind it is a
+--- yes/no one: someone who wrote one function needs to read `1`, and a reader
+--- who wrote none needs the name they did not write to be absent.
+---
+--- At least one count is non-zero for every entry the registry hands back --
+--- it builds them from the registrations themselves, so a name with nothing
+--- under it cannot occur -- which is why there is no empty case here.
+---@param contributor Hover.Contributor
+---@return string
+local function registered(contributor)
+  local parts = {}
+  local function add(n, noun)
+    if n > 0 then
+      parts[#parts + 1] = ("%d %s%s"):format(n, noun, n == 1 and "" or "s")
+    end
+  end
+  add(contributor.sources, "source")
+  add(contributor.previews, "preview")
+  add(contributor.positions, "position preview")
+
+  local out = table.concat(parts, ", ")
+  if contributor.on_request > 0 then
+    -- Worth its own clause: a contribution marked `on_request` is registered,
+    -- correct and still silent on the automatic trigger, which is exactly the
+    -- state someone would otherwise report as "it does not work".
+    out = ("%s (%d asked only on `:Hover show`)"):format(out, contributor.on_request)
+  end
+  return out
+end
+
+---@internal
 --- The hard dependency, and the specific modules of it this plugin uses. A
 --- present-but-partial lib.nvim is a real state (it is pinned by commit in
 --- every consumer's lockfile), and it fails at the first hover rather than
@@ -217,6 +250,25 @@ function M.check()
       "no link source registered -- only bare paths start a hover. "
         .. "markdown.nvim registers one from its setup(); if it is installed, its setup never ran."
     )
+  end
+
+  -- Who registered what, which is a different question from the one above and
+  -- the one `contribute` created: since a hover can be written in a user's
+  -- own config, "is mine registered?" has an asker, and the link-source line
+  -- answers it wrongly in both directions -- "no" for a config that
+  -- contributed a position preview, "yes, markdown.nvim" for one whose own
+  -- contribution never arrived.
+  local contributors = registry_ok and registry.contributors() or {}
+  if #contributors == 0 then
+    -- `info`, not `warn`: a plugin with no contributors installed is the
+    -- supported configuration, not a defect. Bare paths, bare URLs and git
+    -- object ids are built in and hover without any of this.
+    health.info(
+      "registry: empty -- no plugin, and no `contribute` in setup(), has registered anything"
+    )
+  end
+  for _, contributor in ipairs(contributors) do
+    health.ok(("registry: %s -- %s"):format(contributor.name, registered(contributor)))
   end
 
   health.start("hover.nvim: external tools")

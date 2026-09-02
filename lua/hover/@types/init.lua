@@ -172,9 +172,18 @@
 ---@field previews? table<string, Hover.PreviewFn> # Keyed by the target type this preview claims.
 ---@field positions? (Hover.PositionFn|Hover.OnRequest)[] # Tried in registration order, only after every source declined.
 
---- "What is under the cursor?" Returns a raw target string, or nil to
---- decline. Declared as an alias rather than written inline, because an
---- optional or nested function type does not survive inline (`LLS-13`).
+--- One registered contributor, as `hover.registry.contributors()` reports
+--- it: who registered, and how much of each kind. Counts rather than the
+--- functions themselves -- the question this exists to answer is "did mine
+--- arrive", and handing back the callables would make an accessor into a
+--- second way to run them.
+---@class Hover.Contributor
+---@field name string # The name it registered under. Everything handed to `setup({ contribute = ... })` shares the single name `"user"`.
+---@field sources integer # Registered sources.
+---@field previews integer # Registered previews, counted over the target types they claim.
+---@field positions integer # Registered position previews.
+---@field on_request integer # How many of the sources and positions above are asked only on an explicit request.
+
 --- An entry of `sources` or `positions` that says its answer is expensive.
 --- Asked only for an explicit request -- `:Hover show`, or a key bound to it
 --- -- never on the automatic trigger. See `hover.registry`.
@@ -182,6 +191,9 @@
 ---@field fn function # The source or position function itself.
 ---@field on_request boolean # `true` to be asked only on request.
 
+--- "What is under the cursor?" Returns a raw target string, or nil to
+--- decline. Declared as an alias rather than written inline, because an
+--- optional or nested function type does not survive inline (`LLS-13`).
 ---@alias Hover.SourceFn fun(bufnr: integer, row: integer, col: integer): string|nil, table|nil
 
 --- "Is there anything to say about this *place*?" Returns finished content,
