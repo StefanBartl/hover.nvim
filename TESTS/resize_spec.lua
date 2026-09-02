@@ -414,7 +414,9 @@ describe("hover.resize", function()
   -- (`docs/MANUAL-EVIDENCE.md`).
   it("knows its own rectangle, border ring included", function()
     assert.is_true(show_at("see ./pic.png here", 5))
-    local w = float.win()
+    -- `assert` rather than a nil check: `float.win()` is `integer|nil`, and
+    -- the whole spec is void if it is nil -- the same guard `geometry()` uses.
+    local w = assert(float.win())
     local pos = vim.api.nvim_win_get_position(w)
     local rows = vim.api.nvim_win_get_height(w)
     local cols = vim.api.nvim_win_get_width(w)
@@ -428,11 +430,19 @@ describe("hover.resize", function()
       float.contains(pos[1] + 2, pos[2] + cols + 2),
       "one column past the ring is inside"
     )
+    -- Deliberately outside the signature: `getmousepos()` can answer with
+    -- neither coordinate, and "no position is not inside the float" is
+    -- exactly what is under test here (`LLS-40`).
+    ---@diagnostic disable-next-line: param-type-mismatch
     assert.is_false(float.contains(nil, nil), "a missing position is inside")
   end)
 
   it("steps from the wheel only where the pointer is", function()
     local at = { screenrow = 1, screencol = 1 }
+    -- Stubbed, not called: `getmousepos()` reports where the *real* pointer
+    -- is, and there is none here. Overwriting a `vim.fn` entry is what the
+    -- diagnostic is for, and it is what this needs.
+    ---@diagnostic disable-next-line: duplicate-set-field
     vim.fn.getmousepos = function()
       return at
     end
@@ -441,7 +451,11 @@ describe("hover.resize", function()
       local w0, h0 = geometry()
 
       -- Pointing somewhere else entirely: the chord arrives, the gate holds.
-      local pos = vim.api.nvim_win_get_position(float.win())
+      -- Bound first, never inlined: in a spec `assert` is luassert, and it
+      -- answers with more than one value -- inside a call that expands to a
+      -- second argument, and `nvim_win_get_position` takes exactly one.
+      local win = assert(float.win())
+      local pos = vim.api.nvim_win_get_position(win)
       at = { screenrow = pos[1] + vim.o.lines, screencol = pos[2] + vim.o.columns }
       vim.api.nvim_feedkeys(
         vim.api.nvim_replace_termcodes("<M-ScrollWheelUp>", true, false, true),
