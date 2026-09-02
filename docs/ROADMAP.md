@@ -20,10 +20,10 @@ type?") or a *position* ("is there anything to say about this place?") and
 needs no change here at all. See [INTEGRATIONS.md](INTEGRATIONS.md) for the
 doors and which plugins use which.
 
-Four of the candidates that used to be listed here are built and live in the
-plugins that own them: migrate.nvim, reposcope.nvim, documentation.nvim and
-spotlight.nvim. What remains are the two that measurement ruled out, and the
-framework gap both of them are waiting on.
+Five of the candidates that used to be listed here are built and live in the
+plugins that own them: migrate.nvim, reposcope.nvim, documentation.nvim,
+spotlight.nvim and sandbox.nvim. What remains is one that is blocked on its
+own side, and two that are collisions rather than contributions.
 
 ### `insights.nvim` — who else uses this
 
@@ -41,26 +41,6 @@ enough to answer a lookup, with the preview declining when it is cold rather
 than building it. That is a change to that plugin's architecture, not a
 wiring job.
 
-### `sandbox.nvim` — the image under the cursor
-
-In a `Dockerfile` or a `compose.yml`, `nginx:1.27-alpine` is a target: is it
-pulled, is a container running from it, how big is it.
-
-**Unblocked, and now a small integration.** `on_request` ships, so a
-contribution can say its own answer is expensive and be asked only for
-`:Hover show`. That was the thing in the way: measured on this machine,
-`docker --version` costs 230 ms and `podman --version` 490 ms — the cheapest
-call either engine has, not an `inspect`, and five to twelve times the git
-cost that already ruled the automatic trigger out.
-
-What is left is on sandbox.nvim's side: a lookup that answers "is this image
-pulled" without a full `inspect`, and the registration itself.
-
-Second thing to settle once it is: **an image reference collides with
-`path:line` syntax.** `nginx:1.27` and `init.lua:42` are the same shape, and
-`hover.bare_path` already splits on the colon. Registration order decides it,
-and that has to be chosen deliberately rather than discovered.
-
 ### Two that are collisions rather than contributions
 
 **`fileops.nvim` opens a float on the same event.** Its `on_hold` feature is
@@ -73,9 +53,16 @@ other, someone has to sit with both on for a day.
 **`language.nvim` hovers a word.** Spelling, grammar, translation and
 synonyms for the word under the cursor is a hover, and a good one — but every
 word is a word. As an automatic trigger it is the noise problem in its purest
-form. If it is wired at all it belongs behind `:Hover show` only, which the
-framework supports (`show({ force = true })` opens every volume gate) but has
-no way to express *per source* today.
+form. "Behind `:Hover show` only" is expressible per source now — a
+contribution marked `on_request` is skipped by the automatic trigger and asked
+only when the reader asks for it.
+
+That settles the mechanism and not the question. sandbox.nvim gets away with
+`on_request` because a cheap text check rejects `init.lua:42` in a millisecond
+before any process starts; a word lookup has no such pre-check, so under
+`force` every position is a hit. Whether a dictionary should open in the
+middle of prose is a decision for language.nvim, and it has to come before the
+wiring rather than out of it.
 
 ### Considered and set aside
 
@@ -97,6 +84,41 @@ the same word.
 `REL-09`, and the only 🟢 left open in the release gate. The README carries an
 ASCII mock-up of the float, which explains the idea but not the feel — the
 thing worth showing is how little it interrupts reading, and a still cannot.
+
+### Zoom for a picture in the float
+
+Scope is decided: **pictures and screenshots**. A rasterized PDF page if it
+falls out — it half does — and text not at all.
+
+Text is the one that sounds like it belongs and does not. The font size
+belongs to the terminal emulator, so "zoom" for text could only mean a larger
+float, which shows *more* rather than anything *larger*. That is a different
+feature and wants a different word.
+
+For a picture the word fits: images.nvim draws into a cell area, and the same
+picture asked for in a larger area is real magnification. The drawing side is
+already there — `canvas_cells` clamps that area to `max_width`/`max_lines`, so
+a zoom factor is those two bounds raised for one preview, and `scroll` already
+re-runs a previewer with a changed parameter.
+
+**The work is in the borrowed keys, not in the drawing.** A picture declares
+no `scroll`, so `keys.borrow` installs nothing for it today — deliberately,
+because scrolling a picture is meaningless — and zoom needs a borrow condition
+of its own. A PDF page is the opposite: the scroll keys are borrowed there
+already and they page, so zoom would have to take different keys or collide
+with paging. That is why pictures come first, not the drawing path, which is
+the same for both.
+
+To settle before building: **which keys**. `+`/`-` through the existing borrow
+mechanism needs nothing new. The mouse wheel needs `getmousepos()` in a global
+map — the float is not focusable, so the pointer has to be located rather than
+followed — and it is silent for anyone without `mouse` set, which makes it a
+case for `:Hover why` rather than a default.
+
+A *sharp* PDF zoom is a second rasterization rather than a larger draw of the
+same PNG: `render_page` takes a `dpi`, and the page cache would need it in the
+key, which today is path, mtime and page number. That is the whole cost of the
+optional half.
 
 ---
 
