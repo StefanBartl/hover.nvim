@@ -417,6 +417,13 @@ function M.show(opts)
   local bufnr = api.nvim_get_current_buf()
   local found = M.target_under_cursor(bufnr, { force = opts.force })
   if not found then
+    -- Nothing the cursor *points at*. There may still be something to say
+    -- about where it *is* -- a deprecated call on this line, how often this
+    -- token occurs in the buffer. Asked here rather than earlier because a
+    -- target is the more specific reading of the same place.
+    if M.show_position(bufnr, opts) then
+      return true
+    end
     -- The most common exit by far, since moving the cursor off a target
     -- comes back through here. `hide` rather than `float.close`, for the two
     -- things it does besides closing: hand back the borrowed keys, and bump
@@ -494,6 +501,60 @@ function M.show(opts)
   return true
 end
 
+---@internal
+--- The position half of `show`: a registered *position* preview, for a cursor
+--- position that points at nothing.
+---
+--- Deliberately not cached. The target cache is keyed by what a target *is*,
+--- and a position has no such identity -- what a position preview answers can
+--- depend on the whole buffer, and a stale entry would be a wrong answer
+--- rather than an old one. The plugin that registered it owns its own
+--- freshness.
+---
+--- Dismissal works the same way it does for a target, keyed by plugin and
+--- row: waving away a deprecation note keeps it away while the cursor stays
+--- on that line, and moving to another line brings it back.
+---@param bufnr integer
+---@param opts { force?: boolean }
+---@return boolean shown
+function M.show_position(bufnr, opts)
+  if not require("hover.registry").has_positions() then
+    return false
+  end
+  if not opts.force and not config.positions_enabled() then
+    return false
+  end
+
+  local win = api.nvim_get_current_win()
+  if api.nvim_win_get_buf(win) ~= bufnr then
+    return false
+  end
+  local pos = api.nvim_win_get_cursor(win)
+  local row, col = pos[1], pos[2]
+
+  local content, name = require("hover.registry").position_at(bufnr, row, col)
+  if not content then
+    return false
+  end
+
+  local id = table.concat({ "position", name or "?", bufnr, row }, "|")
+  if _suppressed then
+    if opts.force or _suppressed ~= id then
+      _suppressed = nil
+    else
+      return false
+    end
+  end
+
+  _generation = _generation + 1
+  keys.release()
+  -- No `target` field: that absence is what `scroll` and `identity` read to
+  -- tell the two kinds apart, rather than a flag either could forget to set.
+  _open = { position = id, bufnr = bufnr, row = row }
+  present(content)
+  return true
+end
+
 --- Scroll the open hover's content by `delta` steps.
 ---
 --- A page for a PDF (and for an office document, which has become one by the
@@ -517,7 +578,16 @@ function M.scroll(delta)
     return false
   end
 
+  -- A position preview has no target to re-render at a new offset: its
+  -- content is whatever the registering plugin produced for this place, once.
+  -- Declining is the honest answer -- and `keys.borrow` only binds the scroll
+  -- keys for content that declares `scroll`, so reaching here at all means
+  -- such content was produced and the key was pressed anyway.
   local target = _open.target
+  if not target then
+    return false
+  end
+
   local c = config.get()
   local preview_opts = config.preview_opts()
 
@@ -593,6 +663,13 @@ end
 function M.dismiss()
   if not _open then
     return false
+  end
+  -- A position preview carries its own identity, already built by
+  -- `show_position`; a target's is derived from the target.
+  if _open.position then
+    _suppressed = _open.position
+    M.hide()
+    return true
   end
   _suppressed = identity(_open.target)
   M.hide()

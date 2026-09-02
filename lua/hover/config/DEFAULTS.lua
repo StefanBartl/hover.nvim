@@ -136,6 +136,25 @@ return {
     code = false,
   },
 
+  --- Whether a registered *position* preview may open a float: a plugin
+  --- saying something about where the cursor is, when it points at nothing.
+  --- A deprecated call on this line, how often this token occurs, what this
+  --- module does.
+  ---
+  --- On, and that is a judgement about who is asking rather than about the
+  --- class. Nothing registers one of these by accident: a plugin author has
+  --- already decided this position is worth interrupting a reader for, which
+  --- is the same trust the `sources` registry has always extended. The switch
+  --- exists for where that trust turns out to be misplaced -- a contributor
+  --- that answers for every token in a log is exactly the noise this
+  --- plugin's opt-in model is otherwise built to prevent, and one command
+  --- has to be able to stop it.
+  ---
+  --- With nothing registered this costs nothing: the trigger is not even
+  --- installed unless something could answer.
+  ---@type boolean
+  positions = true,
+
   --- Office documents (`.docx`, `.xlsx`, `.pptx`, `.odt`, and the legacy
   --- binary formats).
   office = {

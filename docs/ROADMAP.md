@@ -37,14 +37,35 @@ Everything the noise argument usually costs is free here: it fires *only*
 where there is something to say, because a line with nothing deprecated in it
 returns unchanged. No shape heuristic, no switch needed to keep it quiet.
 
-Two things to settle:
+**The framework side is built.** A `positions` contribution answers for a
+cursor position that points at nothing, which was the blocker here and for
+three of the entries below. Registering this is now:
 
-- **A preview needs a target type.** There is no `code` type, and inventing
-  one for a preview that is not about a *target* at all is the wrong shape —
-  this is a fact about the line, not about something the line points at. The
-  honest options are a `diagnostic`-flavoured type, or letting a registered
-  preview answer for "no target here" (which the framework currently reads as
-  "no hover"). The second is a real change to `hover.show`.
+```lua
+require("hover.registry").register("migrate.nvim", {
+  positions = {
+    function(bufnr, row)
+      local line = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1]
+      local migrator = require("migrate.lsp.migrator")
+      local migrated = line and migrator.migrate_line(line)
+      if not migrated or migrated == line then
+        return nil
+      end
+      return {
+        lines = { "deprecated", "", "now: " .. migrated },
+        title = "migrate.nvim",
+      }
+    end,
+  },
+})
+```
+
+Two things left, and both belong in migrate.nvim rather than here:
+
+- **Its rules do not register without a picker.** `migrate.common.picker`
+  fails to load in a bare Neovim, so `migrate_line` is a passthrough and the
+  pairing above could not be proven end to end from this side. It has to be
+  wired and measured where the rules actually exist.
 - **Cost per trigger.** `migrate_line` on every `CursorHold` is unmeasured.
   The lesson from `hover.scope` applies: measure it against the gates in
   front of it rather than assuming a string operation is cheap.
@@ -111,11 +132,13 @@ other occurrence, right now" and keeps its own list (`spotlight.list(filter)`,
 `toggle_here_at(text, pos)`). The float could say *how many* and *where the
 next one is* without highlighting anything.
 
-To settle: **this is a preview with no target**, the same structural problem
-as migrate.nvim above, and the two should be solved once rather than twice.
-Also the noise question is real here in a way it is not for migrate: every
-token in a log is a token, so this needs to answer only for tokens already
-spotlighted, or only under `:Hover show`.
+To settle: **the noise question**, which is real here in a way it is not for
+migrate. Every token in a log is a token, so this has to answer only for
+tokens already spotlighted — the framework has no shape heuristic to apply to
+a position preview and cannot help. `:Hover positions off` silences every
+registered plugin at once, which is the wrong granularity for "this one is
+too eager"; a per-plugin switch is the missing piece if a second noisy
+contributor ever appears.
 
 ### `reposcope.nvim` — a `repository` target type
 
@@ -172,10 +195,10 @@ no way to express *per source* today.
 
 `recommender.nvim` (repetition count for a dotted chain) and
 `runtime-analysis.nvim` (measured runtime for the function under the cursor)
-are both plausible previews and both want the same missing piece as
-migrate.nvim — a preview for a position rather than a target. They are not
-listed above because neither adds anything migrate.nvim does not already
-force a decision about. `github_stats.nvim` overlaps reposcope. `dap.nvim`
+are both plausible position previews, and the piece all three were waiting on
+now exists. They stay here rather than above because neither has an entry
+point as ready as `migrate_line` — both would need something new on their own
+side first. `github_stats.nvim` overlaps reposcope. `dap.nvim`
 and `lsp.nvim` are variable- and symbol-hover, a different feature wearing
 the same word.
 

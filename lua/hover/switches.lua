@@ -91,6 +91,13 @@ local SWITCHES = {
     off_msg = "in a parsed buffer, paths hover in comments and strings only",
     desc = "whether a bare path hovers inside executable code, not just comments and strings",
   },
+  positions = {
+    path = { "positions" },
+    label = "position previews",
+    on_msg = "registered plugins may answer for a position with no target",
+    off_msg = "only targets hover",
+    desc = "whether a plugin may say something about a cursor position that points at nothing",
+  },
   images = {
     path = { "inline_images" },
     label = "inline images",
@@ -110,7 +117,8 @@ local SWITCHES = {
 --- The order `status` and `:checkhealth` list them in: the hierarchy, read
 --- top down, rather than whatever `pairs` happens to produce.
 ---@type string[]
-local ORDER = { "links", "web", "fetch", "paths", "missing", "code", "images", "office" }
+local ORDER =
+  { "links", "web", "fetch", "paths", "missing", "code", "positions", "images", "office" }
 
 --- Every switch name, in display order.
 ---@return string[]

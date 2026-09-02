@@ -54,10 +54,19 @@ end
 --- degrades a picture to a description; it never makes the hover useless.
 ---@return boolean
 function M.anything_to_show()
-  if require("hover.config").paths_enabled() then
+  local config = require("hover.config")
+  if config.paths_enabled() then
     return true
   end
-  return require("hover.registry").has_sources()
+  local registry = require("hover.registry")
+  if registry.has_sources() then
+    return true
+  end
+  -- A position preview answers without a target, so a buffer where nothing
+  -- else could is still worth waking for -- as long as the class is on.
+  -- Missing this is how the whole kind would silently do nothing in exactly
+  -- the configuration someone would build to try it out.
+  return config.positions_enabled() and registry.has_positions()
 end
 
 --- Install the hover autocmds for `bufnr`.

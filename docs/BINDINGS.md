@@ -91,6 +91,7 @@ omitted, which toggles.
 | `:Hover paths [on\|off\|toggle]` | whether a path written in prose hovers |
 | `:Hover paths missing [on\|off\|toggle]` | whether a path resolving to nothing is marked broken |
 | `:Hover paths code [on\|off\|toggle]` | whether a bare path hovers inside executable code, not just comments and strings. Implies `paths on` |
+| `:Hover positions [on\|off\|toggle]` | whether a registered plugin may answer for a cursor position that points at nothing |
 | `:Hover images [on\|off\|toggle]` | whether pictures are drawn into the float, or described |
 | `:Hover office [on\|off\|toggle]` | whether office documents render through a PDF |
 

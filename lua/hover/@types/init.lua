@@ -39,6 +39,7 @@
 ---@field inline_images? boolean # Draw images / rasterized PDF pages into the float when a provider can. Default true.
 ---@field filetypes? string|string[] # `FileType` pattern the hover attaches on. Default "*".
 ---@field links? Hover.LinksConfig
+---@field positions? boolean # Whether a registered position preview may open a float. Default true.
 ---@field paths? Hover.PathsConfig
 ---@field office? Hover.OfficeConfig
 ---@field scroll_keys? Hover.ScrollKeys
@@ -100,11 +101,17 @@
 
 --- What the currently open hover is showing, so it can be re-rendered at a
 --- different position without re-resolving the cursor. Cleared on close.
+--- What the open float is showing. Two shapes, told apart by `target`:
+--- a target hover carries one and can be re-rendered at another offset or
+--- page, a position hover carries `position` instead and cannot -- its
+--- content was produced once, by the plugin that answered.
 ---@class Hover.Open
----@field target Hover.Target
+---@field target? Hover.Target # Absent for a position preview.
+---@field position? string # Dismissal identity of a position preview. Absent for a target.
 ---@field bufnr integer
----@field offset integer # Lines skipped, for a text preview.
----@field page integer # 1-based page, for a PDF preview.
+---@field row? integer # Cursor row a position preview answered for.
+---@field offset? integer # Lines skipped, for a text preview.
+---@field page? integer # 1-based page, for a PDF preview.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
 
 -- #####################################################################
@@ -137,11 +144,20 @@
 ---@class Hover.Contribution
 ---@field sources? Hover.SourceFn[] # Tried in registration order, before the built-in bare-path source.
 ---@field previews? table<string, Hover.PreviewFn> # Keyed by the target type this preview claims.
+---@field positions? Hover.PositionFn[] # Tried in registration order, only after every source declined.
 
 --- "What is under the cursor?" Returns a raw target string, or nil to
 --- decline. Declared as an alias rather than written inline, because an
 --- optional or nested function type does not survive inline (`LLS-13`).
 ---@alias Hover.SourceFn fun(bufnr: integer, row: integer, col: integer): string|nil, table|nil
+
+--- "Is there anything to say about this *place*?" Returns finished content,
+--- or nil to decline. Unlike a source it hands back no target string, because
+--- there is nothing the cursor points at -- the answer is about the position
+--- itself: a deprecated call on this line, how often this token occurs, what
+--- this module is. Declared as an alias for the same reason as `SourceFn`
+--- (`LLS-13`).
+---@alias Hover.PositionFn fun(bufnr: integer, row: integer, col: integer): Hover.Content|nil
 
 --- "How do I preview a target of this type?" Returning nil declines, and
 --- the built-in preview runs instead.

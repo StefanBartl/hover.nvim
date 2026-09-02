@@ -71,7 +71,7 @@ See ./docs/architecture.md#modules for details.
 | Preview on cursor rest | A float over whatever the cursor points at — a link, or a path written as plain text, in any filetype | [What it previews](#what-it-previews) |
 | `:Hover show` / `show({ force = true })` | One preview, here and now, ignoring every volume switch | [The `:Hover` command](#the-hover-command) |
 | `:Hover mode [auto\|manual\|off]` | The switch above every other switch. `manual` keeps every preview and gives up only the automatic trigger | [Modes](#modes) |
-| Eight runtime switches | `links`, `links web`, `links web fetch`, `paths`, `paths missing`, `paths code`, `images`, `office` — declared once, feeding routes, completion, `status` and `:checkhealth` alike | [The `:Hover` command](#the-hover-command) |
+| Nine runtime switches | `links`, `links web`, `links web fetch`, `paths`, `paths missing`, `paths code`, `positions`, `images`, `office` — declared once, feeding routes, completion, `status` and `:checkhealth` alike | [The `:Hover` command](#the-hover-command) |
 | `:Hover status` | The mode and every switch, in one message | [The `:Hover` command](#the-hover-command) |
 | Bare-path resolution | A path in prose, a code comment or a `:messages` dump is a target too — truncated ones included | [Bare paths](#bare-paths) |
 | `hover.scroll(1)` / `scroll(-1)` | Page through a file's head or a PDF's pages without leaving the document | [Scrolling a preview](#scrolling-a-preview) |
@@ -287,6 +287,7 @@ toggles.
 | `:Hover paths [on\|off\|toggle]` | whether a path written in prose hovers |
 | `:Hover paths missing [on\|off\|toggle]` | whether a path resolving to nothing is marked broken |
 | `:Hover paths code [on\|off\|toggle]` | whether a path hovers inside executable code, not just comments and strings. Implies `paths on` |
+| `:Hover positions [on\|off\|toggle]` | whether a plugin may say something about a position that points at nothing |
 | `:Hover images [on\|off\|toggle]` | whether pictures are drawn, or described |
 | `:Hover office [on\|off\|toggle]` | whether office documents render through a PDF |
 
@@ -496,6 +497,7 @@ require("hover").setup({
 | `links.timeout_ms` | `2000` | |
 | `paths.enabled` | `true` | Whether a path written without link syntax hovers. |
 | `paths.missing` | `true` | Whether a bare path resolving to nothing may be marked broken. |
+| `positions` | `true` | Whether a registered *position* preview may open a float â€” a plugin saying something about where the cursor is, when it points at nothing. Costs nothing with none registered. |
 | `paths.code` | `false` | Whether a bare path hovers inside executable code. Off: in a parsed buffer, only comments and strings are searched. Prose is untouched — see [Where a bare path is looked for](#where-a-bare-path-is-looked-for). |
 | `office.convert` | `false` | Whether a `.docx`/`.xlsx`/`.pptx`/… is converted to a PDF and shown as a page. |
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
@@ -535,6 +537,47 @@ A source that throws is skipped and the next one still runs.
 
 Target types a preview can claim: `image`, `pdf`, `office`, `markdown`, `file`,
 `directory`, `url`, `anchor`, `missing`.
+
+### When the cursor points at nothing
+
+Some things worth saying are not about a *target* at all. That a line uses a
+deprecated API, how often this token occurs in the buffer, what the module in
+this `require` actually does â€” none of those is something the cursor points
+at, and the framework used to have no way to express them: no target meant no
+hover, full stop.
+
+A third kind of contribution answers for the **position**:
+
+```lua
+require("hover.registry").register("your.nvim", {
+  -- Asked only after every source declined, because a target is the more
+  -- specific reading of the same place. Returns finished content â€” there is
+  -- nothing to classify â€” or nil to decline.
+  positions = {
+    function(bufnr, row, col)
+      local note = something_about(bufnr, row)
+      if not note then
+        return nil       -- silence is the common answer, and must stay cheap
+      end
+      return { lines = { note }, title = "your.nvim" }
+    end,
+  },
+})
+```
+
+Three things follow from the shape, and each is load-bearing:
+
+- **Sources win.** On a path inside a deprecated call, the file is what the
+  reader pointed at.
+- **Nothing is cached.** A target has an identity to key a cache by and a
+  position does not; what a position preview answers can depend on the whole
+  buffer, so a stale entry would be a *wrong* answer rather than an old one.
+  Freshness belongs to the plugin that registered it.
+- **It is your job to be quiet.** The framework has no shape heuristic to
+  apply here â€” it cannot know what your answer is about. Answer only where
+  there is something worth interrupting a reader for. `:Hover positions off`
+  exists for when that judgement turns out wrong, and it is a blunt
+  instrument: it silences every registered plugin at once.
 
 ## Two things that must not be changed casually
 

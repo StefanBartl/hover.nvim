@@ -144,6 +144,8 @@ toggles. >
                                          marked broken
   :Hover paths code [on|off|toggle]      bare paths hover inside code, not
                                          just comments and strings
+  :Hover positions [on|off|toggle]       a plugin may answer for a position
+                                         that points at nothing
   :Hover images [on|off|toggle]          pictures are drawn, or described
   :Hover office [on|off|toggle]          office documents render via PDF
 <
@@ -246,6 +248,7 @@ worth asserting.
     filetypes = "*",
     links = { enabled = true, web = false, fetch = false, timeout_ms = 2000 },
     paths = { enabled = true, missing = true, code = false },
+    positions = true,
     office = { convert = false, timeout_ms = 60000 },
     scroll_keys = {
       down = { "<M-PageDown>", "<C-Down>" },

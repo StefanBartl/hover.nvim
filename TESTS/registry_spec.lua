@@ -289,3 +289,272 @@ describe("text preview scrolling", function()
     assert.is_false(fits.scroll.more)
   end)
 end)
+
+-- A *position* preview answers for a cursor position that points at nothing:
+-- a deprecated call on this line, how often this token occurs, what this
+-- module is. It is the one contribution kind that hands back finished content
+-- instead of a target string, because there is nothing to classify -- and
+-- four plugins in this ecosystem were waiting on it (see docs/ROADMAP.md).
+--
+-- Three properties are worth pinning, and each of them is a way the kind
+-- could be built wrong:
+--
+--   1. **Sources win.** A position preview must be asked only after every
+--      source declined, or a plugin that answers for any line would shadow
+--      every link and path in the buffer.
+--   2. **A throwing contribution is skipped, not fatal.** Same guarantee
+--      `source_at` gives, for the same reason.
+--   3. **Content, not a target.** Anything that is not a table with a
+--      non-empty `lines` list is a decline, so a plugin returning `true` or
+--      an empty table cannot open a blank float.
+describe("hover.registry position previews", function()
+  before_each(function()
+    registry.reset()
+  end)
+
+  after_each(function()
+    registry.reset()
+  end)
+
+  it("has none until one is registered", function()
+    assert.is_false(registry.has_positions())
+    registry.register("p", { positions = { function() end } })
+    assert.is_true(registry.has_positions())
+  end)
+
+  it("answers with the content the plugin produced", function()
+    registry.register("p", {
+      positions = {
+        function()
+          return { lines = { "deprecated: vim.loop" }, title = "migrate" }
+        end,
+      },
+    })
+    local content, name = registry.position_at(0, 1, 0)
+    assert.same({ "deprecated: vim.loop" }, content.lines)
+    assert.equals("migrate", content.title)
+    assert.equals("p", name)
+  end)
+
+  it("takes the first that answers, in registration order", function()
+    registry.register("first", {
+      positions = {
+        function()
+          return nil
+        end,
+        function()
+          return { lines = { "second fn of first plugin" } }
+        end,
+      },
+    })
+    registry.register("later", {
+      positions = {
+        function()
+          return { lines = { "later plugin" } }
+        end,
+      },
+    })
+    local content, name = registry.position_at(0, 1, 0)
+    assert.same({ "second fn of first plugin" }, content.lines)
+    assert.equals("first", name)
+  end)
+
+  it("skips one that throws and keeps asking", function()
+    registry.register("broken", {
+      positions = {
+        function()
+          error("this contribution is broken")
+        end,
+      },
+    })
+    registry.register("fine", {
+      positions = {
+        function()
+          return { lines = { "still here" } }
+        end,
+      },
+    })
+    local content = registry.position_at(0, 1, 0)
+    assert.same({ "still here" }, content.lines)
+  end)
+
+  it("declines anything that is not content with lines", function()
+    for _, answer in ipairs({ true, "a string", {}, { lines = {} }, { lines = "no" } }) do
+      registry.reset()
+      registry.register("p", {
+        positions = {
+          function()
+            return answer
+          end,
+        },
+      })
+      assert.is_nil(registry.position_at(0, 1, 0))
+    end
+  end)
+
+  it("replaces a plugin's positions on re-registration, rather than stacking", function()
+    local calls = 0
+    local function counting()
+      calls = calls + 1
+      return nil
+    end
+    registry.register("p", { positions = { counting } })
+    registry.register("p", { positions = { counting } })
+    registry.position_at(0, 1, 0)
+    assert.equals(1, calls)
+  end)
+
+  it("leaves another plugin's positions alone when one re-registers", function()
+    registry.register("a", {
+      positions = {
+        function()
+          return nil
+        end,
+      },
+    })
+    registry.register("b", {
+      positions = {
+        function()
+          return { lines = { "b" } }
+        end,
+      },
+    })
+    registry.register("a", {
+      positions = {
+        function()
+          return nil
+        end,
+      },
+    })
+    local content, name = registry.position_at(0, 1, 0)
+    assert.same({ "b" }, content.lines)
+    assert.equals("b", name)
+  end)
+
+  it("is cleared by reset along with everything else", function()
+    registry.register("p", {
+      positions = {
+        function()
+          return { lines = { "x" } }
+        end,
+      },
+    })
+    registry.reset()
+    assert.is_false(registry.has_positions())
+    assert.is_nil(registry.position_at(0, 1, 0))
+  end)
+end)
+
+-- The wiring, not the registry: does a position preview actually reach the
+-- screen, does a target still beat it, does the switch stop it, and does the
+-- trigger get installed for a buffer where it is the only thing that could
+-- answer. The last one is the silent failure this kind invites -- the class
+-- works, and nothing ever calls it.
+describe("a position preview, end to end", function()
+  local hover = require("hover")
+  local float = require("hover.float")
+  local api = vim.api
+  local win, prev_buf, buf
+
+  --- A contribution that answers for every position with `text`.
+  ---@param text string
+  local function always(text)
+    registry.register("stub", {
+      positions = {
+        function()
+          return { lines = { text }, title = "stub" }
+        end,
+      },
+    })
+  end
+
+  before_each(function()
+    registry.reset()
+    config.reset()
+    win = api.nvim_get_current_win()
+    prev_buf = api.nvim_win_get_buf(win)
+    buf = api.nvim_create_buf(false, true)
+    api.nvim_win_set_buf(win, buf)
+    api.nvim_buf_set_lines(buf, 0, -1, false, { "ordinary prose with no target" })
+    api.nvim_win_set_cursor(win, { 1, 3 })
+  end)
+
+  after_each(function()
+    hover.hide()
+    pcall(api.nvim_win_set_buf, win, prev_buf)
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    registry.reset()
+    config.reset()
+  end)
+
+  it("opens a float where nothing is a target", function()
+    always("something about this line")
+    assert.is_true(hover.show())
+    assert.is_true(float.is_open())
+  end)
+
+  it("does not open when nothing is registered", function()
+    assert.is_false(hover.show())
+    assert.is_false(float.is_open())
+  end)
+
+  it("is silenced by its switch", function()
+    always("something about this line")
+    config.setup({ positions = false })
+    assert.is_false(hover.show())
+    assert.is_false(float.is_open())
+  end)
+
+  it("answers anyway when the request is explicit", function()
+    -- `:Hover show` opens every volume gate, and this is one of them.
+    always("something about this line")
+    config.setup({ positions = false })
+    assert.is_true(hover.show({ force = true }))
+  end)
+
+  it("loses to a source, which is the more specific reading", function()
+    always("the position preview")
+    registry.register("src", {
+      sources = {
+        function()
+          return "./somewhere.md"
+        end,
+      },
+    })
+    hover.show()
+    -- A float *does* open: the path does not exist, and a target a source
+    -- vouched for being missing is worth reporting. What matters is whose
+    -- content is in it.
+    assert.is_true(float.is_open())
+    local win_id = float.win()
+    local lines = api.nvim_buf_get_lines(api.nvim_win_get_buf(win_id), 0, -1, false)
+    assert.is_nil(
+      vim.iter(lines):find(function(l)
+        return l:find("the position preview", 1, true) ~= nil
+      end),
+      "the position preview must not shadow a source"
+    )
+  end)
+
+  it("stays away once dismissed, until the cursor leaves the line", function()
+    always("something about this line")
+    assert.is_true(hover.show())
+    assert.is_true(hover.dismiss())
+    assert.is_false(hover.show())
+
+    api.nvim_buf_set_lines(buf, 0, -1, false, { "line one", "line two" })
+    api.nvim_win_set_cursor(win, { 2, 3 })
+    assert.is_true(hover.show())
+  end)
+
+  it("counts as something that could answer, so the trigger is installed", function()
+    -- Without this the class would be registered, switched on, and never
+    -- called: `paths.enabled = false` and no source means no CursorHold.
+    config.setup({ paths = { enabled = false } })
+    assert.is_false(autocmds.anything_to_show())
+    always("something")
+    assert.is_true(autocmds.anything_to_show())
+    config.setup({ positions = false })
+    assert.is_false(autocmds.anything_to_show())
+  end)
+end)

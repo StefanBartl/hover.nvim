@@ -215,6 +215,12 @@ function M.paths_code_enabled()
   return M.paths_enabled() and type(paths) == "table" and paths.code == true
 end
 
+--- Whether a registered position preview may open a float.
+---@return boolean
+function M.positions_enabled()
+  return M.get().positions ~= false
+end
+
 --- Whether office documents are converted for a real page preview, rather
 --- than described by a badge.
 ---@return boolean

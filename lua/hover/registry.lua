@@ -52,6 +52,9 @@ local sources = {}
 ---@type table<string, { name: string, fn: function }>
 local previews = {}
 
+---@type { name: string, fn: function }[]
+local positions = {}
+
 --- Register a plugin's hover contributions.
 ---@param name string plugin name; re-registering replaces its previous entry
 ---@param contribution Hover.Contribution
@@ -72,6 +75,14 @@ function M.register(name, contribution)
   end
   sources = kept
 
+  local kept_positions = {}
+  for _, entry in ipairs(positions) do
+    if entry.name ~= name then
+      kept_positions[#kept_positions + 1] = entry
+    end
+  end
+  positions = kept_positions
+
   for _, fn in ipairs(contribution.sources or {}) do
     if type(fn) == "function" then
       sources[#sources + 1] = { name = name, fn = fn }
@@ -81,6 +92,12 @@ function M.register(name, contribution)
   for target_type, fn in pairs(contribution.previews or {}) do
     if type(fn) == "function" then
       previews[target_type] = { name = name, fn = fn }
+    end
+  end
+
+  for _, fn in ipairs(contribution.positions or {}) do
+    if type(fn) == "function" then
+      positions[#positions + 1] = { name = name, fn = fn }
     end
   end
 end
@@ -112,6 +129,39 @@ function M.preview_for(target_type)
   return entry and entry.fn or nil
 end
 
+--- Ask every registered *position* preview, in registration order, for
+--- something to say about this cursor position. The first one that answers
+--- wins.
+---
+--- Asked only after every source has declined, because a target is the more
+--- specific reading of the same place: on `./docs/x.md` inside a deprecated
+--- call, the file is what the reader pointed at.
+---
+--- Unlike a source this returns finished content rather than a string to
+--- classify -- there is nothing to classify, which is the entire point of the
+--- kind. See `Hover.PositionFn`.
+---@param bufnr integer
+---@param row integer 1-based
+---@param col integer 0-based
+---@return Hover.Content|nil content
+---@return string|nil name the plugin that answered, for the dismissal identity
+function M.position_at(bufnr, row, col)
+  for _, entry in ipairs(positions) do
+    -- `pcall` for the same reason as `source_at`: one broken contribution
+    -- must not take the hover down for every other.
+    local ok, content = pcall(entry.fn, bufnr, row, col)
+    if
+      ok
+      and type(content) == "table"
+      and type(content.lines) == "table"
+      and #content.lines > 0
+    then
+      return content, entry.name
+    end
+  end
+  return nil
+end
+
 --- Whether any source is registered. `markdown.hover`'s link scanning is the
 --- usual one; without it the hover still works from bare paths alone.
 ---@return boolean
@@ -119,10 +169,19 @@ function M.has_sources()
   return #sources > 0
 end
 
+--- Whether any position preview is registered. Separate from `has_sources`
+--- because the two answer different questions: the trigger needs to know
+--- whether *anything* could answer, and a buffer with only a position
+--- preview registered is still a buffer worth waking for.
+---@return boolean
+function M.has_positions()
+  return #positions > 0
+end
+
 --- Drop every registration. Tests only.
 ---@return nil
 function M.reset()
-  sources, previews = {}, {}
+  sources, previews, positions = {}, {}, {}
 end
 
 return M
