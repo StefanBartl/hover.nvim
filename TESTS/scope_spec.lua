@@ -1,10 +1,17 @@
----@diagnostic disable: need-check-nil, duplicate-set-field
+---@diagnostic disable: need-check-nil, duplicate-set-field, redundant-parameter
 -- The test body is the guard; see the note in TESTS/bare_path_spec.lua
 -- (`LLS-42`). `duplicate-set-field` is disabled for the same reason one step
 -- further on: the fail-open cases below can only be reached by replacing a
 -- `vim.treesitter` function with one that throws, and LuaLS reads every such
 -- replacement as redefining a field it already knows. Stubbing the API under
 -- test is the test.
+--
+-- `redundant-parameter` is the same cause one step further: once a stub has
+-- narrowed `vim.treesitter.get_captures_at_pos` to a nullary function, every
+-- later capture of that field inherits the narrowed type, and calling the
+-- *real* one through it reads as three arguments too many. Writing the
+-- parameters out does not help, because the type is wrong rather than the
+-- call.
 
 -- TESTS/scope_spec.lua -- the position gate, and the three ways it is allowed
 -- to be wrong.
@@ -281,9 +288,6 @@ describe("hover.scope", function()
       local asked = 0
       local buf = require_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
       local real = vim.treesitter.get_captures_at_pos
-      -- The real signature rather than varargs: the stub stands in for a
-      -- typed function, and `(...)` makes it look like it takes none.
-      ---@diagnostic disable-next-line: duplicate-set-field
       vim.treesitter.get_captures_at_pos = function(b, r, c)
         asked = asked + 1
         return real(b, r, c)
@@ -302,9 +306,6 @@ describe("hover.scope", function()
       local asked = 0
       local buf = require_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
       local real = vim.treesitter.get_captures_at_pos
-      -- The real signature rather than varargs: the stub stands in for a
-      -- typed function, and `(...)` makes it look like it takes none.
-      ---@diagnostic disable-next-line: duplicate-set-field
       vim.treesitter.get_captures_at_pos = function(b, r, c)
         asked = asked + 1
         return real(b, r, c)
@@ -320,9 +321,6 @@ describe("hover.scope", function()
       local asked = 0
       local buf = require_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
       local real = vim.treesitter.get_captures_at_pos
-      -- The real signature rather than varargs: the stub stands in for a
-      -- typed function, and `(...)` makes it look like it takes none.
-      ---@diagnostic disable-next-line: duplicate-set-field
       vim.treesitter.get_captures_at_pos = function(b, r, c)
         asked = asked + 1
         return real(b, r, c)
