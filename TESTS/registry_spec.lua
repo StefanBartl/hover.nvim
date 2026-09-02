@@ -820,3 +820,129 @@ describe("opening what the hover shows", function()
     assert.is_truthy(seen and seen:find("real.md", 1, true))
   end)
 end)
+
+-- `on_request`: a contribution saying its own answer is expensive.
+--
+-- The knowledge this exists to carry is knowledge only the contributor has.
+-- Measured, the population that needs it: a git start costs ~41 ms, a
+-- `docker --version` 230 ms, `podman --version` 490 ms -- the same whether
+-- they hit or miss. A trigger that fires after every keystroke followed by
+-- quiet cannot pay that, and the only lever before this was
+-- `:Hover positions off`, which silences every registered plugin at once.
+--
+-- Three properties, and the third is the one that would fail silently:
+--
+--   1. **It is skipped on the automatic trigger** and asked on an explicit
+--      one. That is the whole feature.
+--   2. **A bare function still means "every trigger"**, so nothing that
+--      registered before this existed changes behaviour.
+--   3. **It does not count as "something that could answer"** for the
+--      trigger's own installation check. A buffer whose only contribution is
+--      force-only must not get a CursorHold installed for it -- the trigger
+--      would wake, ask nobody, and go back to sleep, forever.
+describe("a contribution that answers only on request", function()
+  before_each(function()
+    registry.reset()
+    config.reset()
+  end)
+
+  after_each(function()
+    registry.reset()
+    config.reset()
+  end)
+
+  it("accepts a bare function and a table entry side by side", function()
+    local asked = { bare = 0, gated = 0 }
+    registry.register("p", {
+      sources = {
+        {
+          fn = function()
+            asked.gated = asked.gated + 1
+            return nil
+          end,
+          on_request = true,
+        },
+        function()
+          asked.bare = asked.bare + 1
+          return nil
+        end,
+      },
+    })
+
+    registry.source_at(0, 1, 0)
+    assert.equals(1, asked.bare, "a bare function is asked on the trigger")
+    assert.equals(0, asked.gated, "a force-only one is not")
+
+    registry.source_at(0, 1, 0, { force = true })
+    assert.equals(2, asked.bare, "and both are asked on request")
+    assert.equals(1, asked.gated)
+  end)
+
+  it("gates a position preview the same way", function()
+    local asked = 0
+    registry.register("p", {
+      positions = {
+        {
+          fn = function()
+            asked = asked + 1
+            return { lines = { "expensive" } }
+          end,
+          on_request = true,
+        },
+      },
+    })
+
+    assert.is_nil(registry.position_at(0, 1, 0))
+    assert.equals(0, asked)
+
+    local content = registry.position_at(0, 1, 0, { force = true })
+    assert.same({ "expensive" }, content.lines)
+    assert.equals(1, asked)
+  end)
+
+  it("keeps registration order across both shapes", function()
+    registry.register("p", {
+      sources = {
+        {
+          fn = function()
+            return "first, force-only"
+          end,
+          on_request = true,
+        },
+        function()
+          return "second, always"
+        end,
+      },
+    })
+    assert.equals("second, always", registry.source_at(0, 1, 0))
+    assert.equals("first, force-only", registry.source_at(0, 1, 0, { force = true }))
+  end)
+
+  it("does not count as something that could answer", function()
+    -- Otherwise the trigger is installed for a buffer where nothing can ever
+    -- answer it: it wakes, asks nobody, and sleeps again, forever.
+    config.setup({ paths = { enabled = false } })
+    registry.register("p", {
+      sources = { { fn = function() end, on_request = true } },
+      positions = { { fn = function() end, on_request = true } },
+    })
+    assert.is_false(registry.has_sources())
+    assert.is_false(registry.has_positions())
+    assert.is_false(autocmds.anything_to_show())
+
+    registry.register("q", { sources = { function() end } })
+    assert.is_true(registry.has_sources())
+    assert.is_true(autocmds.anything_to_show())
+  end)
+
+  it("ignores a malformed entry rather than failing", function()
+    registry.register("p", {
+      -- Every one of these is deliberately wrong: the registry promising to
+      -- skip them is what is under test (`LLS-40`).
+      ---@diagnostic disable-next-line: missing-fields, assign-type-mismatch
+      sources = { 42, {}, { fn = "not a function" }, { on_request = true } },
+    })
+    assert.is_false(registry.has_sources())
+    assert.is_nil(registry.source_at(0, 1, 0, { force = true }))
+  end)
+end)

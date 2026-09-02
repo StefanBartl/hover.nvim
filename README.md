@@ -571,6 +571,32 @@ require("hover.registry").register("your.nvim", {
 })
 ```
 
+### When your answer is expensive
+
+Both `sources` and `positions` accept a table entry instead of a bare
+function, and the table can say so:
+
+```lua
+positions = {
+  { fn = function(bufnr, row, col) … end, on_request = true },
+}
+```
+
+An `on_request` contribution is asked **only for an explicit request** —
+`:Hover show`, or a key bound to it — and never on the automatic trigger.
+
+That flag exists because how expensive your answer is, is knowledge only you
+have. Measured, the population it is for: a git start costs ~41 ms, a
+`docker --version` 230 ms, `podman --version` 490 ms — the same whether they
+hit or miss. A trigger that fires after every keystroke followed by quiet
+cannot pay that, and the only lever before this was `:Hover positions off`,
+which silences every registered plugin at once rather than the expensive one.
+
+It also does **not** count as "something that could answer" when the trigger
+decides whether to install itself at all. A buffer whose only contribution is
+force-only gets no `CursorHold` — one that woke, asked nobody and slept again
+would be pure cost.
+
 Three things follow from the shape, and each is load-bearing:
 
 - **Sources win.** On a path inside a deprecated call, the file is what the

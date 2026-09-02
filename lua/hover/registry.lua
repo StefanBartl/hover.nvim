@@ -55,6 +55,40 @@ local previews = {}
 ---@type { name: string, fn: function }[]
 local positions = {}
 
+---@internal
+--- Read one entry of a `sources` or `positions` list.
+---
+--- **Two shapes, and the second is why.** A bare function is asked on every
+--- trigger, which is right for a contribution that is cheap and quiet. A
+--- table entry can say `on_request = true`, and then it is asked only for an
+--- explicit request -- `:Hover show`, or a key bound to it.
+---
+--- That flag exists because "how expensive is your answer" is knowledge only
+--- the contributor has, and there was no way to state it. Measured, the
+--- population that needs it: a git start costs ~41 ms, a `docker --version`
+--- 230 ms, `podman --version` 490 ms -- the same whether they hit or miss.
+--- A trigger that fires after every keystroke followed by quiet cannot pay
+--- that, and the alternative on offer was `:Hover positions off`, which
+--- silences every registered plugin at once rather than the expensive one.
+---
+--- The flag lives on the *entry* rather than in a fourth contribution kind
+--- because it applies to both existing kinds identically. A
+--- `sources_on_request` list would have needed a `positions_on_request`
+--- beside it, and the pair would then have to stay in step by hand -- this
+--- repository has been bitten three times by exactly that shape.
+---@param entry any
+---@return function|nil fn
+---@return boolean on_request
+local function normalize(entry)
+  if type(entry) == "function" then
+    return entry, false
+  end
+  if type(entry) == "table" and type(entry.fn) == "function" then
+    return entry.fn, entry.on_request == true
+  end
+  return nil, false
+end
+
 --- Register a plugin's hover contributions.
 ---@param name string plugin name; re-registering replaces its previous entry
 ---@param contribution Hover.Contribution
@@ -83,9 +117,10 @@ function M.register(name, contribution)
   end
   positions = kept_positions
 
-  for _, fn in ipairs(contribution.sources or {}) do
-    if type(fn) == "function" then
-      sources[#sources + 1] = { name = name, fn = fn }
+  for _, entry in ipairs(contribution.sources or {}) do
+    local fn, on_request = normalize(entry)
+    if fn then
+      sources[#sources + 1] = { name = name, fn = fn, on_request = on_request }
     end
   end
 
@@ -95,9 +130,10 @@ function M.register(name, contribution)
     end
   end
 
-  for _, fn in ipairs(contribution.positions or {}) do
-    if type(fn) == "function" then
-      positions[#positions + 1] = { name = name, fn = fn }
+  for _, entry in ipairs(contribution.positions or {}) do
+    local fn, on_request = normalize(entry)
+    if fn then
+      positions[#positions + 1] = { name = name, fn = fn, on_request = on_request }
     end
   end
 end
@@ -109,13 +145,18 @@ end
 ---@param col integer 0-based
 ---@return string|nil target
 ---@return table|nil extra fields the source wants carried on the record
-function M.source_at(bufnr, row, col)
+function M.source_at(bufnr, row, col, opts)
+  local force = type(opts) == "table" and opts.force == true
   for _, entry in ipairs(sources) do
-    -- `pcall`: a broken contribution from one plugin must not take the hover
-    -- down for every other.
-    local ok, target, extra = pcall(entry.fn, bufnr, row, col)
-    if ok and type(target) == "string" and target ~= "" then
-      return target, extra
+    -- An `on_request` source is skipped on the automatic trigger: its author
+    -- said its answer is expensive, and only they could know.
+    if force or not entry.on_request then
+      -- `pcall`: a broken contribution from one plugin must not take the
+      -- hover down for every other.
+      local ok, target, extra = pcall(entry.fn, bufnr, row, col)
+      if ok and type(target) == "string" and target ~= "" then
+        return target, extra
+      end
     end
   end
   return nil
@@ -145,18 +186,21 @@ end
 ---@param col integer 0-based
 ---@return Hover.Content|nil content
 ---@return string|nil name the plugin that answered, for the dismissal identity
-function M.position_at(bufnr, row, col)
+function M.position_at(bufnr, row, col, opts)
+  local force = type(opts) == "table" and opts.force == true
   for _, entry in ipairs(positions) do
-    -- `pcall` for the same reason as `source_at`: one broken contribution
-    -- must not take the hover down for every other.
-    local ok, content = pcall(entry.fn, bufnr, row, col)
-    if
-      ok
-      and type(content) == "table"
-      and type(content.lines) == "table"
-      and #content.lines > 0
-    then
-      return content, entry.name
+    if force or not entry.on_request then
+      -- `pcall` for the same reason as `source_at`: one broken contribution
+      -- must not take the hover down for every other.
+      local ok, content = pcall(entry.fn, bufnr, row, col)
+      if
+        ok
+        and type(content) == "table"
+        and type(content.lines) == "table"
+        and #content.lines > 0
+      then
+        return content, entry.name
+      end
     end
   end
   return nil
@@ -166,7 +210,12 @@ end
 --- usual one; without it the hover still works from bare paths alone.
 ---@return boolean
 function M.has_sources()
-  return #sources > 0
+  for _, entry in ipairs(sources) do
+    if not entry.on_request then
+      return true
+    end
+  end
+  return false
 end
 
 --- Whether any position preview is registered. Separate from `has_sources`
@@ -175,7 +224,12 @@ end
 --- preview registered is still a buffer worth waking for.
 ---@return boolean
 function M.has_positions()
-  return #positions > 0
+  for _, entry in ipairs(positions) do
+    if not entry.on_request then
+      return true
+    end
+  end
+  return false
 end
 
 --- Drop every registration. Tests only.

@@ -27,6 +27,11 @@ contributor requires no change here at all.
 `pcall(require, "gopath.resolve")` — by name, from inside its own preview
 code, guarded so a missing plugin is a `nil` rather than an error.
 
+A `sources` or `positions` entry may also be a table —
+`{ fn = …, on_request = true }` — which asks to be consulted only for an
+explicit request. That is for a contribution whose answer costs a process
+start; see [the README](../README.md#when-your-answer-is-expensive).
+
 Door 1 is the better shape; door 2 is the honest one. A *capability* can be
 registered: "here is a function that previews an anchor" says everything the
 framework needs to know. A *renderer* cannot, because the hover has to

@@ -25,31 +25,6 @@ plugins that own them: migrate.nvim, reposcope.nvim, documentation.nvim and
 spotlight.nvim. What remains are the two that measurement ruled out, and the
 framework gap both of them are waiting on.
 
-### A source that answers only on request
-
-**The missing piece, and two entries below need it.** A registered
-contribution is asked on every trigger. There is no way for a plugin to say
-"ask me only when the reader asked" — which is exactly what an expensive
-answer needs, and what `hover.bare_git` gets by being built in rather than
-registered.
-
-Measured, the two populations this would unlock:
-
-    git cat-file -e            41 ms   (built in, force-only, shipped)
-    docker --version          230 ms
-    podman --version          490 ms
-
-Those are process starts, and a trigger that fires after every keystroke
-followed by quiet cannot pay them. `:Hover positions off` is the wrong
-granularity — it silences every registered plugin at once, not the expensive
-one.
-
-To settle: **what the flag attaches to.** A contribution is a list of plain
-functions today; making one of them force-only means either a table form
-(`{ fn = …, on_request = true }`, backwards compatible) or a fourth
-contribution kind. The first is smaller and reads worse; the second is
-honest and adds a concept.
-
 ### `insights.nvim` — who else uses this
 
 `insights.run_imports_reverse(module)` answers "which files import this
@@ -71,11 +46,15 @@ wiring job.
 In a `Dockerfile` or a `compose.yml`, `nginx:1.27-alpine` is a target: is it
 pulled, is a container running from it, how big is it.
 
-**Blocked on the entry above.** Measured on this machine, `docker --version`
-costs 230 ms and `podman --version` 490 ms — and that is the cheapest call
-either engine has, not an `inspect`. Five to twelve times the git cost that
-already ruled the automatic trigger out. It needs the force-only source
-first, and then it is a small integration.
+**Unblocked, and now a small integration.** `on_request` ships, so a
+contribution can say its own answer is expensive and be asked only for
+`:Hover show`. That was the thing in the way: measured on this machine,
+`docker --version` costs 230 ms and `podman --version` 490 ms — the cheapest
+call either engine has, not an `inspect`, and five to twelve times the git
+cost that already ruled the automatic trigger out.
+
+What is left is on sandbox.nvim's side: a lookup that answers "is this image
+pulled" without a full `inspect`, and the registration itself.
 
 Second thing to settle once it is: **an image reference collides with
 `path:line` syntax.** `nginx:1.27` and `init.lua:42` are the same shape, and

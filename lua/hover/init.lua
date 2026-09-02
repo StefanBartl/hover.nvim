@@ -176,7 +176,7 @@ function M.target_under_cursor(bufnr, opts)
   -- the same text may still be a resolvable bare path, and `paths` decides
   -- that separately.
   if force or config.links_enabled() then
-    local target, extra = require("hover.registry").source_at(bufnr, row, col)
+    local target, extra = require("hover.registry").source_at(bufnr, row, col, { force = force })
     if target then
       local record = { target = target, lnum = row, col = col, col_end = col }
       for k, v in pairs(type(extra) == "table" and extra or {}) do
@@ -569,7 +569,8 @@ function M.show_position(bufnr, opts)
   local pos = api.nvim_win_get_cursor(win)
   local row, col = pos[1], pos[2]
 
-  local content, name = require("hover.registry").position_at(bufnr, row, col)
+  local content, name =
+    require("hover.registry").position_at(bufnr, row, col, { force = opts.force })
   if not content then
     return false
   end

@@ -156,13 +156,20 @@
 --- One plugin's contribution, keyed by plugin name so a second `setup()`
 --- replaces it rather than stacking a second scanner onto every hover.
 ---@class Hover.Contribution
----@field sources? Hover.SourceFn[] # Tried in registration order, before the built-in bare-path source.
+---@field sources? (Hover.SourceFn|Hover.OnRequest)[] # Tried in registration order, before the built-in bare-path source.
 ---@field previews? table<string, Hover.PreviewFn> # Keyed by the target type this preview claims.
----@field positions? Hover.PositionFn[] # Tried in registration order, only after every source declined.
+---@field positions? (Hover.PositionFn|Hover.OnRequest)[] # Tried in registration order, only after every source declined.
 
 --- "What is under the cursor?" Returns a raw target string, or nil to
 --- decline. Declared as an alias rather than written inline, because an
 --- optional or nested function type does not survive inline (`LLS-13`).
+--- An entry of `sources` or `positions` that says its answer is expensive.
+--- Asked only for an explicit request -- `:Hover show`, or a key bound to it
+--- -- never on the automatic trigger. See `hover.registry`.
+---@class Hover.OnRequest
+---@field fn function # The source or position function itself.
+---@field on_request boolean # `true` to be asked only on request.
+
 ---@alias Hover.SourceFn fun(bufnr: integer, row: integer, col: integer): string|nil, table|nil
 
 --- "Is there anything to say about this *place*?" Returns finished content,
