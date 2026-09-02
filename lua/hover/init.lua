@@ -66,6 +66,13 @@ local _open = nil
 ---@type string|nil Identity of a target dismissed by `M.dismiss`, until the cursor leaves it.
 local _suppressed = nil
 
+---@type number What one zoom step multiplies the picture's box by.
+--- 1.25 rather than 1.5: measured against a real Neovim on 2026-09-02, a
+--- 210x55 terminal has room for five steps at this size (71x20 cells of
+--- picture up to 181x51) and only two at 1.5. Five presses to fill the screen
+--- is a dial; two is a switch with an awkward middle.
+local ZOOM_STEP = 1.25
+
 -- ---------------------------------------------------------------------------
 -- Configuration
 -- ---------------------------------------------------------------------------
@@ -440,7 +447,13 @@ local function present(content)
     end
   end
 
-  keys.borrow(content, M.scroll)
+  -- What is on screen now, so `zoom` can tell "the box grew" from "the
+  -- terminal said no". Nothing else reads it.
+  if _open then
+    _open.canvas = content.canvas
+  end
+
+  keys.borrow(content, M.scroll, M.zoom)
 end
 
 -- ---------------------------------------------------------------------------
@@ -925,6 +938,86 @@ function M.scroll(delta)
     -- Paged past the last PDF page: step back and leave what is on screen.
     if content.scroll and content.scroll.past_end then
       _open.page = math.max(1, (_open.page or 1) - delta)
+      return
+    end
+    present(content)
+  end)
+
+  return true
+end
+
+--- Zoom the open hover's picture by `delta` steps.
+---
+--- Only a drawn hover has anything to zoom: an image, or a PDF/office page,
+--- which is a PNG by the time it is on screen. That is also the borrow
+--- condition -- `keys.borrow` binds these keys on `content.canvas` and on
+--- nothing else.
+---
+--- **Not a second drawing path.** A step multiplies the box `canvas_cells`
+--- fits the picture into; the letterboxing, the inset images.nvim keeps free
+--- on every side and the clamp against the terminal all still happen where
+--- they always did. A PDF page is not re-rasterized either, so zooming one
+--- costs nothing and is correspondingly unsharp -- a sharp version would
+--- mean a second render at a higher DPI, and the page cache is keyed without
+--- one.
+---
+--- **The ceiling is the terminal, and it is found rather than declared.**
+--- Measured against a real Neovim on 2026-09-02, 1200x675 image, defaults
+--- 80x20:
+---
+---     terminal 210x55  ->  five steps, 71x20 cells of picture up to 181x51
+---     terminal  80x24  ->  no step at all: 20 rows is already `lines - 4`
+---
+--- Any fixed limit would be wrong on one of those two, so there is none. A
+--- step that produces the same canvas is stepped back off -- the same way
+--- `scroll` steps back off the end of a PDF -- and the level then stops
+--- exactly where the screen does.
+---@param delta integer positive zooms in, negative out
+---@return boolean asked `false` when there is no picture to zoom. `true` says the re-render was started, not that the box grew -- for a PDF the answer is asynchronous, and the terminal may refuse the step either way.
+function M.zoom(delta)
+  -- The same safety net `scroll` carries: a mapping that outlived its float
+  -- takes itself away rather than swallowing the key from then on.
+  if not (_open and float.win()) then
+    keys.release()
+    _open = nil
+    return false
+  end
+
+  -- Nothing drawn, nothing to zoom. A text preview's size *is* its content,
+  -- and the setting for that is `max_lines`. Reachable only by calling this
+  -- directly: the keys are not bound for such a hover.
+  local before = _open.canvas
+  local target = _open.target
+  if not before or not target then
+    return false
+  end
+
+  local level = (_open.zoom or 0) + delta
+  _open.zoom = level
+
+  local preview_opts = config.preview_opts()
+  preview_opts.zoom = ZOOM_STEP ^ level
+  -- Where the hover already is. Zooming a PDF open on page 3 has to stay on
+  -- page 3; `preview_opts` is built fresh from the configuration and knows
+  -- nothing about either.
+  preview_opts.page = _open.page
+  preview_opts.offset = _open.offset
+
+  -- Bypass the cache, for the same reason `scroll` does: it is keyed by what
+  -- a target is, not by how large it is being shown.
+  _generation = _generation + 1
+  local generation = _generation
+
+  build(target, _open.bufnr, preview_opts, function(content)
+    if generation ~= _generation or not content or content.pending then
+      return
+    end
+    local now = content.canvas
+    if now and now.cols == before.cols and now.rows == before.rows then
+      -- The screen refused, not this function. Undo the step so holding the
+      -- key does not run the level off somewhere it has to be pressed back
+      -- from, and leave the float alone -- it already shows this.
+      _open.zoom = level - delta
       return
     end
     present(content)

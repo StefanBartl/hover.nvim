@@ -32,6 +32,21 @@ one thing work once, on one machine.
 | **How** | Rest the cursor on a `./assets/*.png` path. The picture appears inside the float, fitted, not beside it. |
 | **Watch for** | The picture landing beside its own frame — that is the placement bug written up in [the README](../README.md#two-things-that-must-not-be-changed-casually), and it only shows with a sidebar open. Reproduce with a real image; a generated test card cannot reveal an aspect-ratio problem. |
 
+### A picture zoomed
+
+| | |
+| --- | --- |
+| **Checked** | *never* |
+| **On** | — |
+| **How** | Hover an image, then press `+` a few times and `-` back. The float grows and shrinks with it, and the picture fills it edge to edge at every size. |
+| **Watch for** | The **frame** growing while the picture inside it does not — that is the one failure a spec cannot see. `TESTS/zoom_spec.lua` pins the geometry all the way to `nvim_win_get_config`, but the cell area is only a *request* to the terminal, and whether the drawing actually followed it is visible and nothing else. Also: letterboxing that drifts as the box grows (the picture no longer centred, or gaining a margin on one side only), which would mean the inset is being added at the wrong end of the scaling. |
+
+Measured, not seen, on 2026-09-02: a 1200×675 image at the default `80×20`
+grows through five steps on a 210×55 terminal (71×20 cells of picture up to
+181×51) and through none at all on 80×24, where 20 rows is already
+`lines - 4`. Those are float geometries read back from Neovim — they say the
+frame is the right size, not that a picture arrived in it.
+
 ### A PDF page rasterized
 
 | | |

@@ -98,17 +98,27 @@ local function take(seen, lhs, rhs, desc)
 end
 
 --- Bind the keys the hover on screen borrows: the dismiss keys always, the
---- scroll keys only when there is something to scroll.
+--- scroll keys only when there is something to scroll, the zoom keys only
+--- when there is a picture.
 ---
 --- The asymmetry is the point. Every hover can be waved away, so `q` and
 --- `<Esc>` are bound for all of them -- including a picture, which has
 --- nothing to scroll. Scrolling an image, or a file that already fits in the
 --- float, is meaningless, so those keys are left alone entirely and keep
 --- whatever they mean elsewhere.
+---
+--- **Zoom needed its own condition, and that was the whole work of it.**
+--- There was exactly one borrow condition here, `content.scroll`, and an
+--- image does not declare one -- `canvas_for` returns `lines`, `canvas` and
+--- `image_path`, nothing else. Hanging zoom off the existing condition would
+--- have bound it for every case except the one it is for. The condition is
+--- `content.canvas`: it is what a drawn hover has and a text one does not,
+--- and it is exactly what zoom changes.
 ---@param content Hover.Content|nil
 ---@param rerender fun(delta: integer)
+---@param rezoom? fun(delta: integer)
 ---@return nil
-function M.borrow(content, rerender)
+function M.borrow(content, rerender, rezoom)
   M.release()
 
   local cfg = require("hover.config").get()
@@ -145,6 +155,23 @@ function M.borrow(content, rerender)
       take(seen, lhs, function()
         rerender(-1)
       end, "hover: scroll preview up")
+    end
+  end
+
+  -- After the scroll keys, so a key configured for both keeps the older
+  -- meaning. A PDF page is the one content that has both, and paging is what
+  -- its keys have always done.
+  if rezoom and content and content.canvas then
+    local zk = type(cfg.zoom_keys) == "table" and cfg.zoom_keys or {}
+    for _, lhs in ipairs(M.keylist(zk.larger)) do
+      take(seen, lhs, function()
+        rezoom(1)
+      end, "hover: zoom the picture in")
+    end
+    for _, lhs in ipairs(M.keylist(zk.smaller)) do
+      take(seen, lhs, function()
+        rezoom(-1)
+      end, "hover: zoom the picture out")
     end
   end
 end

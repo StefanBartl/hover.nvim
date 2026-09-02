@@ -211,6 +211,29 @@ return {
     up = { "<M-PageUp>", "<C-Up>" },
   },
 
+  --- The picture's box, larger or smaller. Borrowed only while a *drawn*
+  --- hover is on screen -- an image, or a PDF/office page, which is a PNG by
+  --- the time anything is visible.
+  ---
+  --- Zoom means nothing for text: the font size belongs to the terminal
+  --- emulator and Neovim cannot change it, so "zoom" there could only mean a
+  --- bigger float -- *more*, not *bigger*. That is `max_lines`, and it is a
+  --- different feature that should keep its own name.
+  ---
+  --- One key per direction, not two. The scroll keys are doubled because a
+  --- key that is not on the keyboard cannot be pressed -- laptop and 60%
+  --- layouts reach PageUp/PageDown only through an Fn chord -- and that
+  --- argument does not carry here: `+` and `-` are on every keyboard there
+  --- is. `=` was considered as an unshifted stand-in for `+` on a US layout
+  --- and left alone: it is the indent operator, and borrowing an operator
+  --- buys convenience nobody asked for.
+  zoom_keys = {
+    ---@type string|string[]
+    larger = { "+" },
+    ---@type string|string[]
+    smaller = { "-" },
+  },
+
   -- Bound for *every* hover, not only scrollable ones: anything can be waved
   -- away, including a picture, which has nothing to scroll. The price is
   -- that `q` records no macro for as long as one float is up.

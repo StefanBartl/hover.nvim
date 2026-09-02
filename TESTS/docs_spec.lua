@@ -362,6 +362,115 @@ describe("the target types against each other", function()
   end)
 end)
 
+describe("the borrowed keys against the defaults", function()
+  -- Added when `zoom_keys` was: two documents tabulate every key list with
+  -- its default, and a new pair is two more rows nobody fails to write.
+  local DEFAULTS = require("hover.config.DEFAULTS")
+
+  --- Every key named in one table cell, in either notation the documents
+  --- use: `docs/BINDINGS.md` writes them as separate spans -- `q`, `<Esc>` --
+  --- and the README as the Lua literal it would be configured with,
+  --- `{ "q", "<Esc>" }`.
+  ---@param cell string
+  ---@return string[]
+  local function keys_in(cell)
+    local out = {}
+    for span in cell:gmatch("`([^`]+)`") do
+      if span:find('"') then
+        for key in span:gmatch('"([^"]+)"') do
+          out[#out + 1] = key
+        end
+      else
+        out[#out + 1] = span
+      end
+    end
+    return out
+  end
+
+  --- The default at a dotted option path, as a list.
+  ---@param path string
+  ---@return string[]|nil
+  local function default_keys(path)
+    local node = DEFAULTS
+    for key in path:gmatch("[^.]+") do
+      if type(node) ~= "table" then
+        return nil
+      end
+      node = node[key]
+    end
+    if type(node) == "string" then
+      return { node }
+    end
+    return type(node) == "table" and node or nil
+  end
+
+  --- Every `| \`something_keys…\` | keys |` row of a document.
+  ---@param text string
+  ---@return table<string, string[]>
+  local function tabulated_keys(text)
+    local out = {}
+    for row in text:gmatch("[^\n]+") do
+      local name, rest = row:match("^|%s*`([%a][%w_]*_keys[%w_.]*)`%s*|(.*)$")
+      if name then
+        out[name] = keys_in(rest:match("^([^|]*)") or "")
+      end
+    end
+    return out
+  end
+
+  local FILES = { "README.md", "docs/BINDINGS.md" }
+
+  it("tabulates the keys each list actually holds", function()
+    local wrong = {}
+    for _, file in ipairs(FILES) do
+      for name, documented in pairs(tabulated_keys(read(file))) do
+        local actual = default_keys(name)
+        if not actual then
+          wrong[#wrong + 1] = ("%s documents `%s`, which is not an option"):format(file, name)
+        elseif not vim.deep_equal(actual, documented) then
+          wrong[#wrong + 1] = ("%s says %s is %s, it is %s"):format(
+            file,
+            name,
+            vim.inspect(documented, { newline = " ", indent = "" }),
+            vim.inspect(actual, { newline = " ", indent = "" })
+          )
+        end
+      end
+    end
+    table.sort(wrong)
+    assert.same({}, wrong)
+  end)
+
+  it("leaves no key list undocumented, in either table", function()
+    -- The direction that catches a *new* pair rather than a changed one.
+    local expected = {}
+    for name, value in pairs(DEFAULTS) do
+      if name:match("_keys$") then
+        if vim.islist(value) then
+          expected[name] = true
+        else
+          for sub in pairs(value) do
+            expected[name .. "." .. sub] = true
+          end
+        end
+      end
+    end
+    assert.is_true(vim.tbl_count(expected) > 0, "found no key lists in the defaults")
+
+    local missing = {}
+    for _, file in ipairs(FILES) do
+      local documented = tabulated_keys(read(file))
+      for name in pairs(expected) do
+        if not documented[name] then
+          missing[#missing + 1] = ("%s never tabulates `%s`"):format(file, name)
+        end
+      end
+    end
+    table.sort(missing)
+    assert.same({}, missing)
+  end)
+end)
+
 describe("docs/BINDINGS.md against the groups the source installs", function()
   --- The `Group` column of one table of `docs/BINDINGS.md`, from its header
   --- row down to the blank line that ends it.

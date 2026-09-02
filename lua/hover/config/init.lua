@@ -80,22 +80,28 @@ end
 --- would leave the default's second key sitting at index 2 and bind both --
 --- and `dismiss_keys = { "<C-c>" }` would leave `<Esc>` bound. A configured
 --- key list is a closed, curated set (`ERR-52`), not an addition.
+---
+--- **Declared rather than written out**, and for the reason this repository
+--- has now met four times: a hand-written list of what needs special
+--- handling falls behind the table it is supposed to cover, and nothing
+--- fails when it does. `zoom_keys` would have been the fourth `if` here.
 ---@param opts table the user's options, unmerged
 ---@return nil
 local function replace_key_lists(opts)
-  if type(opts.scroll_keys) == "table" then
-    for _, dir in ipairs({ "down", "up" }) do
-      if opts.scroll_keys[dir] ~= nil then
-        _options.scroll_keys[dir] = vim.deepcopy(opts.scroll_keys[dir])
+  -- Tables of key lists: whatever direction the user named is replaced, and
+  -- the ones they did not name keep their default.
+  for _, name in ipairs({ "scroll_keys", "zoom_keys", "keymaps" }) do
+    if type(opts[name]) == "table" and type(_options[name]) == "table" then
+      for key, value in pairs(opts[name]) do
+        _options[name][key] = vim.deepcopy(value)
       end
     end
   end
-  if opts.dismiss_keys ~= nil then
-    _options.dismiss_keys = vim.deepcopy(opts.dismiss_keys)
-  end
-  if type(opts.keymaps) == "table" then
-    for key, value in pairs(opts.keymaps) do
-      _options.keymaps[key] = vim.deepcopy(value)
+
+  -- Flat key lists: the whole list is the setting.
+  for _, name in ipairs({ "dismiss_keys", "open_keys" }) do
+    if opts[name] ~= nil then
+      _options[name] = vim.deepcopy(opts[name])
     end
   end
 end

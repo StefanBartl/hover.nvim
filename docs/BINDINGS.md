@@ -43,6 +43,8 @@ require("hover").setup({ keymaps = { show = false } })
 | `open_keys` | `gf` | hovers with a target | open what the float is showing, then close it |
 | `scroll_keys.down` | `<M-PageDown>`, `<C-Down>` | scrollable hovers only | next screenful of lines, or next PDF page |
 | `scroll_keys.up` | `<M-PageUp>`, `<C-Up>` | scrollable hovers only | back |
+| `zoom_keys.larger` | `+` | hovers with a picture only | the picture, one step (×1.25) larger |
+| `zoom_keys.smaller` | `-` | hovers with a picture only | one step smaller |
 
 Three things follow from "borrowed", and each has been a bug at some point:
 
@@ -55,6 +57,11 @@ Three things follow from "borrowed", and each has been a bug at some point:
 - **Scroll keys are not bound when there is nothing to scroll.** An image, or
   a file that already fits in the float, leaves them alone entirely and they
   keep whatever they mean elsewhere.
+- **Zoom keys hang off a different condition, and had to.** The one above is
+  `content.scroll`, which an image deliberately does not declare — so zoom
+  reads `content.canvas` instead: what a drawn hover has and a text one does
+  not, and exactly what zoom changes. Hanging it off the existing condition
+  would have bound it for every case except the one it is for.
 
 The cost of `q` being borrowed is that it records no macro for as long as one
 float is up, and none after it. That is the deliberate trade for a dismissal

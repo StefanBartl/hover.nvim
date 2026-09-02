@@ -54,6 +54,7 @@ See ./docs/architecture.md#modules for details.
 - [Bare paths](#bare-paths)
 - [Where a bare path is looked for](#where-a-bare-path-is-looked-for)
 - [Waving one hover away](#waving-one-hover-away)
+- [Zooming a picture](#zooming-a-picture)
 - [Scrolling a preview](#scrolling-a-preview)
 - [Configuration](#configuration)
 - [Contributing from your own config](#contributing-from-your-own-config)
@@ -78,6 +79,7 @@ See ./docs/architecture.md#modules for details.
 | `:Hover why` | Why nothing hovered at the cursor: which of the seven gates refused, named, with the command that opens it | [The `:Hover` command](#the-hover-command) |
 | Bare-path resolution | A path in prose, a code comment or a `:messages` dump is a target too — truncated ones included | [Bare paths](#bare-paths) |
 | `hover.scroll(1)` / `scroll(-1)` | Page through a file's head or a PDF's pages without leaving the document | [Scrolling a preview](#scrolling-a-preview) |
+| `hover.zoom(1)` / `zoom(-1)` | `+` and `-` make a picture larger or smaller, up to whatever room the terminal has | [Zooming a picture](#zooming-a-picture) |
 | `hover.dismiss()` | Wave one float away and keep it away, until the cursor reaches another target | [Waving one hover away](#waving-one-hover-away) |
 | `hover.pin()` | Keep one float on screen while the cursor goes elsewhere — for comparing rather than reading. One float, so the trigger opens nothing while it is up | [The `:Hover` command](#the-hover-command) |
 | `hover.registry.register()` | Another plugin contributes a *source* or a *preview*; hover.nvim never says its name | [Contributing from a plugin](#contributing-from-a-plugin) |
@@ -508,6 +510,52 @@ your own mapping, which works whether or not a hover happens to be open:
 vim.keymap.set("n", "<C-d>", function() require("hover").scroll(1) end)
 ```
 
+## Zooming a picture
+
+While a hover with a **picture** in it is open — an image, or a PDF/office page, which is
+a PNG by the time you are looking at it:
+
+| Key | Does |
+| --- | --- |
+| `+` | the picture, one step larger |
+| `-` | one step smaller |
+
+One key per direction rather than two. The scroll pairs are doubled because a key that is
+not on the keyboard cannot be pressed; `+` and `-` are on every keyboard, so that argument
+does not carry. `=` was considered as the unshifted `+` of a US layout and left alone — it
+is the indent operator, and borrowing an operator buys convenience nobody asked for.
+
+**Text is not zoomable, and that is not an omission.** The font size belongs to the
+terminal emulator and Neovim cannot change it, so "zoom" for text could only mean a larger
+float — which shows *more*, not anything *larger*. That is `max_lines`, and it is a
+different feature that should keep its own name. The keys are bound on the picture, so a
+text hover never takes them.
+
+**The ceiling is your terminal, and the plugin finds it rather than carrying a number.** A
+step multiplies the box the picture is fitted into by 1.25; the letterboxing and the clamp
+against the screen still happen exactly where they did. A step that changes nothing is
+stepped back off, so holding `+` does not run the zoom off somewhere you have to press it
+back from. Measured against a real Neovim, a 1200×675 image at the default `80×20`:
+
+| Terminal | Steps in | Picture goes from | to |
+| --- | --- | --- | --- |
+| 210×55 | five | 71×20 cells | 181×51 |
+| 80×24 | **none** | 71×20 | 71×20 — 20 rows is already `lines - 4` |
+
+A PDF page is not re-rasterized, so zooming one costs nothing and is correspondingly
+unsharp. A sharp version would be a second render at a higher DPI, and the page cache is
+keyed on path, mtime and page number — without one.
+
+```lua
+require("hover").setup({
+  zoom_keys = { larger = { "+", "<C-=>" }, smaller = "-" },   -- a string or a list
+  -- zoom_keys = { larger = {}, smaller = {} },               -- bind nothing
+})
+```
+
+`hover.zoom(delta)` is public, like `scroll`, and returns `false` when there is no picture
+to zoom.
+
 ## Configuration
 
 ```lua
@@ -543,6 +591,8 @@ require("hover").setup({
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | |
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | |
+| `zoom_keys.larger` | `{ "+" }` | Bound only for a hover with a picture in it — see [Zooming a picture](#zooming-a-picture). |
+| `zoom_keys.smaller` | `{ "-" }` | |
 | `open_keys` | `{ "gf" }` | Open what the float is showing — through [open.nvim](https://github.com/StefanBartl/open.nvim) when installed, else `vim.ui.open`. Borrowed and restored like the others; `{}` binds nothing. |
 | `dismiss_keys` | `{ "q", "<Esc>" }` | |
 | `keymaps.show` | `false` | A key for `:Hover show`. No key is claimed unless asked for. |

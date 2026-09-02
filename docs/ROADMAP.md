@@ -85,40 +85,32 @@ the same word.
 ASCII mock-up of the float, which explains the idea but not the feel — the
 thing worth showing is how little it interrupts reading, and a still cannot.
 
-### Zoom for a picture in the float
+### Zoom for a picture, by mouse wheel
 
-Scope is decided: **pictures and screenshots**. A rasterized PDF page if it
-falls out — it half does — and text not at all.
+The keys are built: `+` and `-` are borrowed while a hover with a picture is
+open, and a step scales the box the picture is fitted into. What is not built
+is the pointer.
 
-Text is the one that sounds like it belongs and does not. The font size
-belongs to the terminal emulator, so "zoom" for text could only mean a larger
-float, which shows *more* rather than anything *larger*. That is a different
-feature and wants a different word.
+Two things stand in the way, and both are properties of the float rather than
+of zoom. The float is not focusable, so it never receives a wheel event and
+cannot be clicked into; the pointer has to be *located* instead, with
+`getmousepos()` inside a global `<ScrollWheelUp>` map, which is a global
+mapping taken for a float that may not be there. And it needs `mouse` set,
+which is the user's own setting and is never set on their behalf — so for
+anyone without it the feature is silent, which is a case for `:Hover why`
+rather than a default.
 
-For a picture the word fits: images.nvim draws into a cell area, and the same
-picture asked for in a larger area is real magnification. The drawing side is
-already there — `canvas_cells` clamps that area to `max_width`/`max_lines`, so
-a zoom factor is those two bounds raised for one preview, and `scroll` already
-re-runs a previewer with a changed parameter.
+Decide first whether a global wheel map is acceptable at all. If it is not,
+the keys already cover the feature and this stays unbuilt.
 
-**The work is in the borrowed keys, not in the drawing.** A picture declares
-no `scroll`, so `keys.borrow` installs nothing for it today — deliberately,
-because scrolling a picture is meaningless — and zoom needs a borrow condition
-of its own. A PDF page is the opposite: the scroll keys are borrowed there
-already and they page, so zoom would have to take different keys or collide
-with paging. That is why pictures come first, not the drawing path, which is
-the same for both.
+### A sharp zoom for a PDF page
 
-To settle before building: **which keys**. `+`/`-` through the existing borrow
-mechanism needs nothing new. The mouse wheel needs `getmousepos()` in a global
-map — the float is not focusable, so the pointer has to be located rather than
-followed — and it is silent for anyone without `mouse` set, which makes it a
-case for `:Hover why` rather than a default.
-
-A *sharp* PDF zoom is a second rasterization rather than a larger draw of the
-same PNG: `render_page` takes a `dpi`, and the page cache would need it in the
-key, which today is path, mtime and page number. That is the whole cost of the
-optional half.
+Zooming a PDF page today draws the same PNG into a larger area, so it is free
+and it is unsharp. Sharp means a second rasterization: `pdfport.render_page`
+takes a `dpi` (default 216) and this plugin passes none. The obstacle is the
+page cache, whose key is path, mtime and page number — two resolutions of one
+page would overwrite each other. One `dpi` in the key, one in the call, and a
+decision about how many resolutions are worth keeping.
 
 ---
 
