@@ -82,7 +82,7 @@ omitted, which toggles.
 | Command | Does |
 | --- | --- |
 | `:Hover show` | one hover, here, now, ignoring every volume switch |
-| `:Hover status` | the mode and every switch, in one message |
+| `:Hover status` | the mode and every switch — a chooser where `<CR>` toggles the picked line, falling back to one message without lib.nvim`s UI kit |
 | `:Hover why` | why nothing hovered at the cursor -- which gate refused, and what to type about it |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |

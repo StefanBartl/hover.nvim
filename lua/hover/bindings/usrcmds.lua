@@ -113,13 +113,71 @@ end
 ---@internal
 --- Report everything that is on or off, in one message rather than seven.
 ---@return nil
-local function report_status()
-  local status = hover().status()
+---@internal
+--- The status as one message. The fallback, and the whole of what `:Hover
+--- status` used to be.
+---@param status table
+---@return nil
+local function notify_status(status)
   local lines = { ("mode: %s"):format(status.mode) }
   for _, s in ipairs(status.switches) do
     lines[#lines + 1] = ("  %-22s %s"):format(s.label, s.enabled and "on" or "off")
   end
   require("hover.notify").info(table.concat(lines, "\n"))
+end
+
+---@internal
+--- The status as a chooser, when lib.nvim's UI kit is there to draw one.
+---
+--- **Why a selection at all.** Nine switches read as a message tell you the
+--- state and then leave you to type a command at it -- and the command's name
+--- is not the label you just read (`broken-target marker` is
+--- `:Hover paths missing`). Picking the line you are already looking at is
+--- one step instead of two, and needs no translation.
+---
+--- It stays a *report* first: the list is the same nine lines in the same
+--- order, so reading it costs nothing new. Choosing is the addition.
+---
+--- **`pcall`, even though lib.nvim is a hard dependency.** It is pinned by
+--- commit, so a present-but-older lib.nvim without the kit is a real state
+--- rather than a hypothetical -- the same reason `hover.health` checks for
+--- partial installs. Without the kit this returns false and the message runs,
+--- which is exactly the previous behaviour.
+---@param status table
+---@return boolean shown
+local function choose_status(status)
+  local ok, kit = pcall(require, "lib.nvim.ui.kit")
+  if not ok or type(kit) ~= "table" or type(kit.select) ~= "function" then
+    return false
+  end
+
+  local items, by_label = {}, {}
+  for _, sw in ipairs(status.switches) do
+    local label = ("%-22s %s"):format(sw.label, sw.enabled and "on" or "off")
+    items[#items + 1] = label
+    by_label[label] = sw.name
+  end
+
+  local shown = pcall(kit.select, {
+    title = ("hover: mode %s  --  <CR> toggles"):format(status.mode),
+    items = items,
+    on_select = function(choice)
+      local name = type(choice) == "string" and by_label[choice] or nil
+      if name then
+        -- Through `switches.set`, not a second toggle path: the implication
+        -- chain, the cache drop and the announcement all live there.
+        switches.set(name, nil)
+      end
+    end,
+  })
+  return shown == true
+end
+
+local function report_status()
+  local status = hover().status()
+  if not choose_status(status) then
+    notify_status(status)
+  end
 end
 
 --- Every `:Hover` route, in the shape `composer.verb` expects. Public so a

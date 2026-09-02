@@ -134,25 +134,56 @@ function M.spec(name)
 end
 
 ---@internal
---- Read a switch's flag out of the *effective* configuration -- the one that
---- folds in `vim.g.hover_disable` and the implication chain. Deliberately
---- not a raw table lookup: `web` being `true` in the options while `links`
---- is off does not mean web links hover.
+--- The raw flag at a switch's `path` in the merged configuration.
+---
+--- Raw on purpose, and never the answer on its own: `web` being `true` in the
+--- options while `links` is off does not mean web links hover. `effective`
+--- below is what folds in the chain.
+---@param path string[]
+---@return any
+local function flag_at(path)
+  local node = require("hover.config").get()
+  for _, key in ipairs(path) do
+    if type(node) ~= "table" then
+      return nil
+    end
+    node = node[key]
+  end
+  return node
+end
+
+--- **Derived, after being a hand-written table that a switch fell out of.**
+--- This used to map each name to a `config.*_enabled` reader by hand, and a
+--- switch added without a matching entry read as permanently `off`: `name`
+--- was simply not in the table, and `read ~= nil` answered false. `code`
+--- hid it -- its default is off, so the wrong answer was the right one --
+--- and `positions` exposed it, reported off while being on. `:Hover status`
+--- and the `:checkhealth` section both read from here, so both lied.
+---
+--- Third consumer of `SWITCHES` to fall behind it this way (`ac50599` was
+--- the command tree). The lesson is the same and it is worth writing down
+--- once more: "one table feeds everything" holds only for the consumers that
+--- actually read the table.
+---
+--- Every switch declares its own `path` and its own `implies`, which is all
+--- an answer needs -- the flag itself, and the chain above it. The merged
+--- configuration always carries a concrete boolean at every switch path,
+--- because `DEFAULTS` provides one and the merge only overwrites, so `== true`
+--- is exact rather than a default-direction guess.
 ---@param name string
 ---@return boolean
 local function effective(name)
-  local config = require("hover.config")
-  local readers = {
-    links = config.links_enabled,
-    web = config.web_enabled,
-    fetch = config.fetch_enabled,
-    paths = config.paths_enabled,
-    missing = config.missing_enabled,
-    images = config.images_enabled,
-    office = config.office_enabled,
-  }
-  local read = readers[name]
-  return read ~= nil and read() == true
+  local spec = SWITCHES[name]
+  if not spec then
+    return false
+  end
+  if flag_at(spec.path) ~= true then
+    return false
+  end
+  if spec.implies then
+    return effective(spec.implies)
+  end
+  return true
 end
 
 --- Whether `name` is in effect right now, implications included.

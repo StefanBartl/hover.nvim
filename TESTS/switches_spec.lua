@@ -390,3 +390,70 @@ describe("hover.why", function()
     assert.is_truthy(report:find("Hover positions on", 1, true))
   end)
 end)
+
+-- The generic version of a bug that has now happened twice: a consumer of
+-- `SWITCHES` with its own hand-written list, which a newly added switch falls
+-- out of without anything failing. `route_path` was the first (`ac50599`,
+-- a switch registered at the wrong place in the command tree); `effective`
+-- was the second, and reported `positions` as off while it was on -- in
+-- `:Hover status` and in `:checkhealth` alike, since both read from there.
+--
+-- These specs are written over `switches.names()` rather than over a list, so
+-- a tenth switch is covered the moment it is declared. That is the only shape
+-- that actually prevents the third occurrence.
+describe("every switch, generically", function()
+  before_each(function()
+    config.reset()
+    vim.g.hover_disable = nil
+  end)
+
+  after_each(function()
+    config.reset()
+    vim.g.hover_disable = nil
+  end)
+
+  it("reports its own state, rather than a hardcoded reader's", function()
+    for _, name in ipairs(switches.names()) do
+      switches.set(name, true, { silent = true })
+      assert.is_true(
+        switches.enabled(name),
+        ("%q was switched on and did not report as on"):format(name)
+      )
+      switches.set(name, false, { silent = true })
+      assert.is_false(
+        switches.enabled(name),
+        ("%q was switched off and did not report as off"):format(name)
+      )
+      config.reset()
+    end
+  end)
+
+  it("appears in status with the state it actually has", function()
+    for _, name in ipairs(switches.names()) do
+      switches.set(name, true, { silent = true })
+      local seen = false
+      for _, row in ipairs(switches.status()) do
+        if row.name == name then
+          seen = true
+          assert.is_true(row.enabled, ("status reported %q as off while it was on"):format(name))
+        end
+      end
+      assert.is_true(seen, ("%q is missing from status entirely"):format(name))
+      config.reset()
+    end
+  end)
+
+  it("has a config path that resolves to a boolean in the defaults", function()
+    -- What makes the derived reader exact rather than a default-direction
+    -- guess: every switch path carries a concrete boolean before any merge.
+    local defaults = require("hover.config.DEFAULTS")
+    for _, name in ipairs(switches.names()) do
+      local node = defaults
+      for _, key in ipairs(switches.spec(name).path) do
+        assert.is_table(node, ("%q has a path that leaves the defaults"):format(name))
+        node = node[key]
+      end
+      assert.equals("boolean", type(node), ("%q does not point at a boolean default"):format(name))
+    end
+  end)
+end)

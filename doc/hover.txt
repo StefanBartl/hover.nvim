@@ -132,7 +132,8 @@ toggles. >
 
   :Hover show                            one hover, here, now -- ignores
                                          every volume switch
-  :Hover status                          the mode and every switch
+  :Hover status                          the mode and every switch; <CR>
+                                         toggles the line you pick
   :Hover why                             why nothing hovered here: which
                                          gate refused, and what to type
   :Hover mode [auto|manual|off]          set the mode; omitted, report it
