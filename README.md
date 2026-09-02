@@ -565,8 +565,9 @@ separate feature; see [the roadmap](docs/ROADMAP.md). The whole reasoning, inclu
 two measurements behind the pointer gate, is in
 [docs/FEATURES/RESIZE.md](docs/FEATURES/RESIZE.md).
 
-`zoom_keys` is still accepted as the old spelling of `resize_keys`, and `hover.zoom(delta)`
-still calls `hover.resize(delta)`.
+`zoom_keys` is still accepted as the old spelling of `resize_keys`. **`hover.zoom(delta)`
+is not an alias for it** — it is [the real zoom](#zoom), a different feature, and the name
+belongs to that. Anything that called the pre-rename spelling wants `hover.resize(delta)`.
 
 **The ceiling is your terminal, and the plugin finds it rather than carrying a number.** A
 step multiplies the box the picture is fitted into by 1.25; the letterboxing and the clamp

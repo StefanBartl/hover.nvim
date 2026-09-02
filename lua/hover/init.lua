@@ -312,7 +312,12 @@ end
 ---    shows the finished page and nothing else, with no flash of a
 ---    differently sized text float first. One that misses it has a real wait
 ---    to explain, and then the placeholder is worth its interruption.
----@param run fun(on_result: fun(content: Hover.Content)): Hover.Content
+--- `run` may answer `nil` -- `media.zoomed` does, when there is nothing to
+--- crop -- and the `type(provisional) ~= "table"` check below has always
+--- handled it. The annotation said `Hover.Content` and was simply narrower
+--- than the code, which is the direction that produces a finding rather than
+--- a bug.
+---@param run fun(on_result: fun(content: Hover.Content)): Hover.Content|nil
 ---@param emit fun(content: Hover.Content|nil)
 ---@return nil
 local function build_async(run, emit)
@@ -1095,26 +1100,32 @@ function M.resize(delta)
   return true
 end
 
---- The pre-rename spelling of `resize`, kept because it was public.
----@deprecated use `hover.resize`
----@param delta integer
----@return boolean
-function M.zoom(delta)
-  return M.resize(delta)
-end
+-- There is deliberately no `M.zoom` alias for `resize` here any more. One was
+-- written when `zoom` was renamed (`8ec5b40`, "kept because it was public"),
+-- and `9fba190` then defined a *real* `M.zoom` below it -- a different
+-- feature, on the same name, silently winning because it comes second. The
+-- README claimed the alias still forwarded to `resize`; it had not since the
+-- day the real zoom landed. `zoom_keys` is still folded into `resize_keys` by
+-- `config.normalize`, which is the half of the rename anyone configures.
 
 ---@internal
---- Re-render the open hover with whatever `_open` now says. The tail `zoom`
+--- Re-render the open hover with whatever `open` now says. The tail `zoom`
 --- and `pan` both end in, and the same shape `resize` and `scroll` use: a
 --- fresh generation so a slower answer cannot land afterwards, and the cache
 --- bypassed because it is keyed by what a target *is*, not by which part of
 --- it is on screen.
+---
+--- Takes the open hover rather than reading `_open`, and a target rather than
+--- reading it back off that: both callers have just had `zoomable` confirm
+--- the two are there, and re-reading a field that is typed nilable turns a
+--- checked fact back into an unchecked one.
+---@param open Hover.Open
+---@param target Hover.Target
 ---@return boolean
-local function rerender()
+local function rerender(open, target)
   _generation = _generation + 1
   local generation = _generation
-  local target = _open.target
-  build(target, _open.bufnr, current_preview_opts(), function(content)
+  build(target, open.bufnr, current_preview_opts(), function(content)
     if generation ~= _generation or not content then
       return
     end
@@ -1125,15 +1136,24 @@ end
 
 ---@internal
 --- The image a zoom would act on, or nil plus the reason it cannot.
+---
+--- Hands back the open hover and its target alongside the path, so a caller
+--- holds all three as non-nil locals. Without that every caller re-reads
+--- `_open`, which is nilable by declaration, and the checks below have to be
+--- made again at each use -- twelve `need-check-nil` findings' worth, which
+--- is how this shape was noticed.
 ---@return string|nil path
 ---@return string|nil why
+---@return Hover.Open|nil open
+---@return Hover.Target|nil target
 local function zoomable()
-  if not (_open and float.win()) then
+  local open = _open
+  if not (open and float.win()) then
     keys.release()
     _open = nil
     return nil, nil
   end
-  local target = _open.target
+  local target = open.target
   -- Images only, and deliberately so. A PDF page is a picture too, but the
   -- file on screen is a rasterization living in this plugin's own cache
   -- rather than at `target.path` -- and the sharp answer for a page is a
@@ -1146,7 +1166,7 @@ local function zoomable()
   if not media.can_zoom() then
     return nil, "zoom needs images.nvim with `images.convert.crop`, and ImageMagick on PATH"
   end
-  return target.path, nil
+  return target.path, nil, open, target
 end
 
 --- Magnify a detail of the picture on screen, or step back out.
@@ -1173,8 +1193,8 @@ end
 ---@param delta integer positive magnifies, negative steps back out
 ---@return boolean asked
 function M.zoom(delta)
-  local path, why = zoomable()
-  if not path then
+  local path, why, open, target = zoomable()
+  if not (path and open and target) then
     if why then
       require("hover.notify").info(why)
     end
@@ -1182,14 +1202,14 @@ function M.zoom(delta)
   end
 
   local media = require("hover.preview.media")
-  local px = _open.zoom_px or media.pixel_size(path)
+  local px = open.zoom_px or media.pixel_size(path)
   if not px then
     require("hover.notify").info("cannot read this picture's size, so cannot zoom it")
     return false
   end
-  _open.zoom_px = px
+  open.zoom_px = px
 
-  local was = _open.zoom or 0
+  local was = open.zoom or 0
   local level = math.max(0, was + delta)
   if level == was then
     return false
@@ -1199,14 +1219,14 @@ function M.zoom(delta)
     return false
   end
 
-  _open.zoom = level
+  open.zoom = level
   if level == 0 then
     -- Back to the whole picture, and back to the middle: a centre kept from a
     -- zoomed view means nothing once the whole picture is on screen, and
     -- keeping it would make the next zoom start somewhere nobody chose.
-    _open.zoom_cx, _open.zoom_cy = nil, nil
+    open.zoom_cx, open.zoom_cy = nil, nil
   end
-  return rerender()
+  return rerender(open, target)
 end
 
 --- Move the magnified view, in fractions of what is currently visible.
@@ -1220,29 +1240,29 @@ end
 ---@param dy integer -1 up, 1 down
 ---@return boolean asked
 function M.pan(dx, dy)
-  local path = zoomable()
-  if not path then
+  local path, _, open, target = zoomable()
+  if not (path and open and target) then
     return false
   end
-  if (_open.zoom or 0) <= 0 then
+  if (open.zoom or 0) <= 0 then
     -- The whole picture is on screen; there is nothing outside the view to
     -- move towards. Declining is honest, and the keys are not bound in that
     -- state anyway.
     return false
   end
 
-  local step = 0.25 / (ZOOM_VIEW_STEP ^ (_open.zoom or 0))
-  local cx = math.max(0, math.min(1, (_open.zoom_cx or 0.5) + dx * step))
-  local cy = math.max(0, math.min(1, (_open.zoom_cy or 0.5) + dy * step))
-  if cx == (_open.zoom_cx or 0.5) and cy == (_open.zoom_cy or 0.5) then
+  local step = 0.25 / (ZOOM_VIEW_STEP ^ (open.zoom or 0))
+  local cx = math.max(0, math.min(1, (open.zoom_cx or 0.5) + dx * step))
+  local cy = math.max(0, math.min(1, (open.zoom_cy or 0.5) + dy * step))
+  if cx == (open.zoom_cx or 0.5) and cy == (open.zoom_cy or 0.5) then
     -- Already against that edge. `zoom_rect` clamps the rectangle inside the
     -- source anyway, so this only saves a `magick` run that would produce the
     -- picture already on screen.
     return false
   end
 
-  _open.zoom_cx, _open.zoom_cy = cx, cy
-  return rerender()
+  open.zoom_cx, open.zoom_cy = cx, cy
+  return rerender(open, target)
 end
 
 --- Close any open hover.

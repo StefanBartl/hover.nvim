@@ -175,7 +175,11 @@ function M.borrow(content, handlers)
   local s = content and content.scroll
   -- Nothing below and nothing above: not scrollable in either direction.
   local at_start = s and (s.offset or 0) == 0 and (s.page or 1) == 1
-  if s and (s.more or not at_start) then
+  -- `rerender and` for the same reason `resize and` and `pan and` appear
+  -- below: every handler is optional, and this was the one branch that did
+  -- not say so. A caller handing over `resize` but no `scroll` for scrollable
+  -- content would have bound a key that calls nil.
+  if rerender and s and (s.more or not at_start) then
     local sk = type(cfg.scroll_keys) == "table" and cfg.scroll_keys or {}
     for _, lhs in ipairs(M.keylist(sk.down)) do
       take(seen, lhs, function()
