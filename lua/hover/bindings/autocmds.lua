@@ -84,7 +84,7 @@ function M.attach(bufnr)
   if not config.is_enabled() then
     return
   end
-  if not api.nvim_buf_is_valid(bufnr) then
+  if not require("lib.nvim.safe_api").is_valid_buffer(bufnr) then
     return
   end
   if vim.bo[bufnr].buftype ~= "" then

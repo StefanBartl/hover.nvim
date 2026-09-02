@@ -14,6 +14,11 @@ local M = {}
 
 local api = vim.api
 local autocmd = require("lib.nvim.bindings.autocmd")
+-- `safe_api.is_valid_*` rather than `handle and nvim_*_is_valid(handle)`:
+-- it answers false for nil, for a non-number and for a negative handle, so
+-- the nil guard stops being a separate condition that a later edit can drop
+-- (`LUA-01`, `LUA-11`).
+local safe_api = require("lib.nvim.safe_api")
 
 ---@type integer|nil
 local _win = nil
@@ -43,7 +48,7 @@ local HL_DEFAULTS = {
 --- Is a hover window currently open?
 ---@return boolean
 function M.is_open()
-  return _win ~= nil and api.nvim_win_is_valid(_win)
+  return safe_api.is_valid_window(_win)
 end
 
 --- Register teardown to run when this hover closes — used by previewers that
@@ -71,10 +76,10 @@ function M.close(on_close)
     pcall(api.nvim_del_augroup_by_id, _augroup)
     _augroup = nil
   end
-  if _win and api.nvim_win_is_valid(_win) then
+  if safe_api.is_valid_window(_win) then
     pcall(api.nvim_win_close, _win, true)
   end
-  if _buf and api.nvim_buf_is_valid(_buf) then
+  if safe_api.is_valid_buffer(_buf) then
     pcall(api.nvim_buf_delete, _buf, { force = true })
   end
   _win, _buf = nil, nil
