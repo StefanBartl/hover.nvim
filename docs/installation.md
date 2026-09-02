@@ -165,7 +165,7 @@ outside that is indistinguishable from a broken plugin. The tools section looks 
 :Hover status
 ```
 
-The mode and all seven switches in one message. `:Hover` is registered from
+The mode and all nine switches in one message. `:Hover` is registered from
 `plugin/hover.lua` whether or not anything called `enable()`, so this answers even from
 the session where the hover appears to be doing nothing — which is the session someone
 typing it is usually in.

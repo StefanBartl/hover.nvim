@@ -349,8 +349,8 @@ setup() running twice does not leave two copies firing on every hover. A
 source that throws is skipped and the next one still runs.
 
 Target types a preview can claim: image, pdf, office, markdown, file,
-directory, url, anchor, missing. Returning nil declines, and the built-in
-preview runs instead.
+directory, url, anchor, missing, git. Returning nil declines, and the
+built-in preview runs instead.
 
                                                              *hover-contribute*
 The same table can be handed to |hover.setup()| as `contribute`, which
