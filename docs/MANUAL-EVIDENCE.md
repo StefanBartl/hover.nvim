@@ -61,6 +61,34 @@ grows through five steps on a 210×55 terminal (71×20 cells of picture up to
 `lines - 4`. Those are float geometries read back from Neovim — they say the
 frame is the right size, not that a picture arrived in it.
 
+### A picture zoomed, and panned around in
+
+| | |
+| --- | --- |
+| **Checked** | *never* |
+| **On** | — |
+| **How** | Hover an image, then `:Hover zoom` two or three times. Each step takes about a quarter of a second and shows a **smaller part of the picture, larger** — not the same picture bigger. Then `h` `j` `k` `l` to move around in it; `:Hover zoom out` steps back, `:Hover zoom reset` returns to the whole picture. Finally press `h` with the hover **not** zoomed: the float should go away, because there the key is the cursor motion it always was. |
+| **Watch for** | The **whole picture getting larger** instead of a detail — that is resize's answer arriving where zoom's was asked for, and it looks almost right. Also: panning that jumps to a corner rather than moving a quarter of a view (a pixel centre instead of a fractional one would do that), and a centre that survives `reset` and makes the next zoom start somewhere nobody chose. |
+
+**What is covered without a person.** `TESTS/zoom_spec.lua` pins the
+arithmetic, and outside the suite the crops have been confirmed to be written
+and to shrink as calculated — `800x533+200+133`, then `533x355+333+222`, then
+`355x237+422+281`, with the centre clamped inside the source and `reset`
+returning the whole image.
+
+**What that leaves.** Every one of those numbers is a rectangle handed to
+ImageMagick. Whether the resulting file is *drawn* into the float, and whether
+what appears is a magnified detail rather than a scaled whole, is visible and
+nothing else — the same gap as the resize row above, one layer further along.
+And whether `h/j/k/l` feel right while panning is not a question a spec can be
+asked at all.
+
+**One reason it may not be checkable from the suite either.**
+`scripts/minimal_init.lua` does not put images.nvim on the runtimepath *inside*
+a spec, though it does when invoked directly, so the one spec that would check
+the crop itself runs as pending. Until that is fixed, this row is the only
+coverage the crop has.
+
 ### The resize wheel, where it points
 
 | | |
@@ -185,6 +213,6 @@ Windows, per push.
 ## Keeping this honest
 
 A row whose date is older than the code it describes is worse than no row,
-because it reads as a check that happened. When one of the six paths above
+because it reads as a check that happened. When one of the seven paths above
 changes, either check it again and move the date, or set the date back to
 *never* and say why.

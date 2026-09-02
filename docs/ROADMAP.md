@@ -85,30 +85,30 @@ the same word.
 ASCII mock-up of the float, which explains the idea but not the feel — the
 thing worth showing is how little it interrupts reading, and a still cannot.
 
-### A real zoom — a cropped detail, panned
+### A sharp zoom for a PDF page
 
-`hover.resize` is not zoom and does not pretend to be: it changes the box and
-the whole picture is letterboxed into it, so the *framing* never changes. A
-zoom is the other operation — same box, more of the picture cut away, and keys
-to move the cut around.
+The picture half of this entry is **built** — `:Hover zoom`, a cropped detail
+with `h/j/k/l` to move it, at 258 ms a step. Why it is a route rather than a
+key, and why the ceiling is capped instead of discovered, is in
+[docs/FEATURES/ZOOM.md](FEATURES/ZOOM.md). What is left here is the half that
+crop cannot answer.
 
-That is a different mechanism, not a bigger version of this one. images.nvim
-draws a *file* into a cell area, so a detail means writing a cropped temporary
-PNG per step (ImageMagick, or pdfport's producers) rather than asking for a
-different area. It also needs panning keys and a centre to zoom about — the
-pointer, for the wheel, where `float.contains` is already half the work.
+**A PDF page on screen is not the file the target names.** It is a
+rasterization in this plugin's own cache, rendered once at pdfport's default
+DPI. Cropping it magnifies a bitmap that is already as sharp as it will ever
+be: bigger, and no more detail — which is the one thing a zoom is for.
 
-**For a PDF page it merges with the sharpness problem**, which is why the two
-belong in one entry. A page is rasterized once at pdfport's default DPI and
-resized unsharp from there. A sharp zoom is a second rasterization:
-`render_page` takes a `dpi` and this plugin passes none. The obstacle is the
-page cache, whose key is path, mtime and page number — two resolutions of one
-page would overwrite each other. One `dpi` in the key, one in the call, and a
-decision about how many resolutions are worth keeping.
+The answer is a second rasterization. `render_page` takes a `dpi` and this
+plugin passes none. The obstacle is the page cache, whose key is path, mtime
+and page number: two resolutions of one page would overwrite each other. One
+`dpi` in the key, one in the call, and a decision about how many resolutions
+are worth keeping.
 
-To settle first: whether a temporary file per zoom step is acceptable at all.
-If it is not, the answer for images is "resize is what you get", and only the
-PDF half is worth building.
+**To settle first: the price.** A second render was measured at 3.3 s against
+258 ms for a crop, on the same machine and the same day. That is well past the
+point where the existing placeholder machinery merely covers a wait, and a
+feature whose cheapest honest form takes three seconds may want a different
+shape than "press the same key again".
 
 ---
 

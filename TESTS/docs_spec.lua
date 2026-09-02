@@ -115,6 +115,35 @@ local function declared_routes()
   return out
 end
 
+--- Every value any route declares for an argument, so a document writing the
+--- concrete `:Hover resize bigger` is read as the `resize` route rather than
+--- as a route called "resize bigger".
+---
+--- **Derived rather than listed, and that is the point.** This was a literal
+--- table naming seven values, written when `resize` was the newest route.
+--- `9fba190` then added `zoom` (`in|out|reset`) and `pan`
+--- (`left|right|up|down`) and did not extend it, so the moment a document
+--- wrote `:Hover zoom out` the spec reported a command that does not exist --
+--- against a command that does.
+---
+--- That is the fourth time in this repository a hand-kept copy of something
+--- the source already knows has fallen behind it, and the first time it
+--- happened *inside the spec written to catch exactly that*. The routes
+--- declare their own `args[].enum` for completion; reading it here is the
+--- same move the rest of this file makes everywhere else.
+---@return table<string, true>
+local function argument_values()
+  local out = {}
+  for _, route in ipairs(usrcmds.routes()) do
+    for _, arg in ipairs(route.args or {}) do
+      for _, value in ipairs(arg.enum or {}) do
+        out[value] = true
+      end
+    end
+  end
+  return out
+end
+
 --- Every `:Hover …` a document names, as route paths.
 ---
 --- Two shapes, and both have to be read exactly rather than greedily -- a
@@ -138,18 +167,7 @@ end
 ---@param vimdoc boolean Also read the indented command block.
 ---@return table<string, true>
 local function documented_routes(text, vimdoc)
-  -- Argument values, not just switch states: `mode` contributes auto and
-  -- manual, `resize` contributes bigger and smaller. A document writing the
-  -- concrete `:Hover resize bigger` still means the `resize` route.
-  local STATES = {
-    on = true,
-    off = true,
-    toggle = true,
-    auto = true,
-    manual = true,
-    bigger = true,
-    smaller = true,
-  }
+  local STATES = argument_values()
   local mentions = {}
 
   for mention in text:gmatch("`:Hover([^`]*)`") do

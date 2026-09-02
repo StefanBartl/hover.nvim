@@ -46,8 +46,10 @@ as a deprecated alias. Neither costs a branch at runtime.
 **A real zoom is a different mechanism**, not a larger version of this one:
 same box, more of the picture cut away, and keys to move the cut around. It
 needs a cropped temporary file per step, panning keys, and a centre to zoom
-about. It is on [ROADMAP.md](../ROADMAP.md), together with the sharp PDF zoom,
-because for a rasterized page the two are the same second render.
+about. **It is built** for pictures — `:Hover zoom`, `h/j/k/l` to pan, and a
+step that costs 258 ms rather than nothing; see [ZOOM.md](ZOOM.md). What
+remains on [ROADMAP.md](../ROADMAP.md) is the **sharp PDF zoom**, because for
+a rasterized page the answer is a second render rather than a crop.
 
 ## The keys split by what they cost
 
