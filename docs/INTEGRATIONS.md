@@ -51,7 +51,10 @@ ran.
 | [gopath.nvim](https://github.com/StefanBartl/gopath.nvim) | named | resolving truncated paths and `:line:col` suffixes | ordinary relative and absolute paths still resolve; truncated ones do not |
 | [images.nvim](https://github.com/StefanBartl/images.nvim) | named | drawing the picture into the float (OSC 1337) | an image target shows format, dimensions and size as text |
 | [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | named | rasterizing a PDF page to PNG; converting an office document to a PDF (opt-in) | a PDF shows its size and why it could not be rendered; a `.docx` shows what it is and how big |
-| [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) | — | *planned* — see below | no repository hover |
+| [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) | registry | `owner/repo` under the cursor, as the path of its cached README | no repository hover |
+| [migrate.nvim](https://github.com/StefanBartl/migrate.nvim) | registry | a *position* preview: this line uses a deprecated API, and what replaces it | no deprecation notice in the float |
+| [documentation.nvim](https://github.com/StefanBartl/documentation.nvim) | registry | a *position* preview: what the dotted module under the cursor is, out of the generated map | no module summary |
+| [spotlight.nvim](https://github.com/StefanBartl/spotlight.nvim) | registry | a *position* preview: how often a spotlighted token occurs in this buffer | no occurrence count |
 
 All of them are optional and **none is required**. With none installed the
 hover still gives file heads, directory listings, image and PDF metadata, a
@@ -182,55 +185,46 @@ Three things worth knowing when this misbehaves, all in
   a pending result, so without that guard every `CursorHold` during a
   conversion would start another one.
 
-## reposcope.nvim — planned
+## The four that arrive through the registry
 
-[reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) searches,
-previews and clones repositories from GitHub / GitLab / Codeberg, and already
-keeps every README it has fetched in a RAM + on-disk cache
-(`reposcope.cache.readme_cache`, keyed `owner/repo`). Everything a hover would
-need is therefore already local: the natural feature is resting the cursor on
-`owner/repo` — in a repo list, a plugin spec, a lockfile, a note — and getting
-that README's head in the float.
+Everything above is a *named soft dependency*: hover.nvim `pcall`s for it by
+name from inside its own preview code. The four below are the other door —
+they call `hover.registry.register` and hover.nvim never says their names.
+Adding a fifth needs no change here at all, which is the point of the shape.
 
-> **Not to be confused with what reposcope shipped on 2026-08-29.** It gained
-> `<C-p>` in its own prompt: draw the image a repository's README references
-> over its own preview pane, through `images.browse.draw_in_window` and
-> `images.remote`. That is a reposcope-to-images.nvim crossing that never
-> touches this library — no float, no registry, no `classify`. It is mentioned
-> here only because "reposcope draws a picture now" and "reposcope is wired to
-> the hover" are easy to conflate, and this file exists to keep exactly that
-> kind of question answerable. The section below is still unbuilt.
+Each is documented on its own side, because that is where the code is:
 
-**Not wired today.** No reposcope module calls into `hover.nvim`, and the
-hover names no reposcope module. When it is built it belongs on door 1, and
-needs no change to hover.nvim:
+| Plugin | Kind | What it contributes | Its own write-up |
+| --- | --- | --- | --- |
+| markdown.nvim | source + preview | link and `<figure>` scanning; `#heading` sections | [docs/hover.md](https://github.com/StefanBartl/markdown.nvim/blob/main/docs/hover.md) |
+| reposcope.nvim | source | `owner/repo` → the path of its cached README | [docs/hover.md](https://github.com/StefanBartl/reposcope.nvim/blob/main/docs/hover.md) |
+| migrate.nvim | position | this line uses a deprecated API, and what replaces it | [docs/hover.md](https://github.com/StefanBartl/migrate.nvim/blob/main/docs/hover.md) |
+| documentation.nvim | position | what the dotted module under the cursor is | [docs/hover.md](https://github.com/StefanBartl/documentation.nvim/blob/main/docs/hover.md) |
+| spotlight.nvim | position | how often a spotlighted token occurs in this buffer | [docs/hover.md](https://github.com/StefanBartl/spotlight.nvim/blob/main/docs/hover.md) |
 
-```lua
-require("hover.registry").register("reposcope.nvim", {
-  sources = {
-    -- `owner/repo` under the cursor, once it is a repo reposcope knows.
-    function(bufnr, row, col) return repo_slug_at(bufnr, row, col) end,
-  },
-  previews = {
-    -- Answer from the README cache; return nil to decline, and whatever the
-    -- built-in preview for that type is runs instead.
-    markdown = function(target, opts) return readme_head(target, opts) end,
-  },
-})
-```
+Three of those five are **position** previews, and that is not a coincidence:
+until the kind existed, "no target" meant "no hover", and a fact *about* a
+line — it is deprecated, this token occurs fourteen times, this module does X
+— was not expressible at all. Three plugins were waiting on the same missing
+piece.
 
-Two things to settle first, and they are why this is not done yet:
+**Each answers only where it has something to say**, and each enforces that
+itself rather than relying on a switch here:
 
-- **A slug is not a path.** `owner/repo` is two components with no extension
-  and no root, which the bare-path rules deliberately treat as prose (`and/or`
-  is spelled identically). A reposcope source therefore has to run *before*
-  the bare-path source — registration order already guarantees that — and must
-  answer only for slugs it can confirm against its own cache, never for
-  arbitrary text.
-- **There is no `repository` target type.** Either reposcope resolves the slug
-  to the cached README's path on disk and rides the existing `markdown`
-  preview, or `classify` grows a type. The first needs no library change at
-  all, and is the one to try.
+- migrate.nvim asks its own migrator, which returns the line unchanged unless
+  it genuinely migrates.
+- reposcope.nvim answers only for slugs its cache confirms — never for
+  arbitrary `owner/repo`-shaped text, which is spelled exactly like `and/or`.
+- documentation.nvim answers only for names in the generated map, and says so
+  when the map is older than the code.
+- spotlight.nvim answers only for tokens that are already spotlighted, because
+  a spotlight is the only available signal that this token matters to the
+  reader.
+
+That distribution of responsibility is deliberate. The framework has no way to
+judge whether a contribution is noisy — it cannot know what the answer is
+about — so `:Hover positions off` is a blunt instrument that silences all of
+them at once. Being quiet is the contributor's job.
 
 ## Reading a symptom back to its owner
 

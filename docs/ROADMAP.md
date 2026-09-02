@@ -15,90 +15,72 @@ a to-do list.
 ## Ecosystem integrations
 
 hover.nvim knows almost nothing on purpose: a plugin registers a *source*
-("what is under the cursor?") or a *preview* ("how do I render a target of
-this type?") and needs no change here at all. See
-[INTEGRATIONS.md](INTEGRATIONS.md) for the two doors and which plugins use
-which.
+("what is under the cursor?"), a *preview* ("how do I render a target of this
+type?") or a *position* ("is there anything to say about this place?") and
+needs no change here at all. See [INTEGRATIONS.md](INTEGRATIONS.md) for the
+doors and which plugins use which.
 
-The candidates below came out of reading every `.nvim` repository in this
-ecosystem against that question. Each names the entry point that already
-exists — none needs a new API on the other side. Roughly ordered by value
-per unit of work.
+Four of the candidates that used to be listed here are built and live in the
+plugins that own them: migrate.nvim, reposcope.nvim, documentation.nvim and
+spotlight.nvim. What remains are the two that measurement ruled out, and the
+framework gap both of them are waiting on.
 
-### `migrate.nvim` — the deprecated call under the cursor
+### A source that answers only on request
 
-**The best fit found, and the cheapest.**
-`migrate.lsp.migrator.migrate_line(line)` takes a line and returns the
-migrated version. Hand it the line under the
-cursor: if what comes back differs, that line uses a deprecated Neovim API,
-and the float can say which and what replaces it.
+**The missing piece, and two entries below need it.** A registered
+contribution is asked on every trigger. There is no way for a plugin to say
+"ask me only when the reader asked" — which is exactly what an expensive
+answer needs, and what `hover.bare_git` gets by being built in rather than
+registered.
 
-Everything the noise argument usually costs is free here: it fires *only*
-where there is something to say, because a line with nothing deprecated in it
-returns unchanged. No shape heuristic, no switch needed to keep it quiet.
+Measured, the two populations this would unlock:
 
-**The framework side is built.** A `positions` contribution answers for a
-cursor position that points at nothing, which was the blocker here and for
-three of the entries below. Registering this is now:
+    git cat-file -e            41 ms   (built in, force-only, shipped)
+    docker --version          230 ms
+    podman --version          490 ms
 
-```lua
-require("hover.registry").register("migrate.nvim", {
-  positions = {
-    function(bufnr, row)
-      local line = vim.api.nvim_buf_get_lines(bufnr, row - 1, row, false)[1]
-      local migrator = require("migrate.lsp.migrator")
-      local migrated = line and migrator.migrate_line(line)
-      if not migrated or migrated == line then
-        return nil
-      end
-      return {
-        lines = { "deprecated", "", "now: " .. migrated },
-        title = "migrate.nvim",
-      }
-    end,
-  },
-})
-```
+Those are process starts, and a trigger that fires after every keystroke
+followed by quiet cannot pay them. `:Hover positions off` is the wrong
+granularity — it silences every registered plugin at once, not the expensive
+one.
 
-Two things left, and both belong in migrate.nvim rather than here:
-
-- **Its rules do not register without a picker.** `migrate.common.picker`
-  fails to load in a bare Neovim, so `migrate_line` is a passthrough and the
-  pairing above could not be proven end to end from this side. It has to be
-  wired and measured where the rules actually exist.
-- **Cost per trigger.** `migrate_line` on every `CursorHold` is unmeasured.
-  The lesson from `hover.scope` applies: measure it against the gates in
-  front of it rather than assuming a string operation is cheap.
-
-### `documentation.nvim` — the module under the cursor
-
-It already produces `docs/map/module_map.json` with a summary, a function
-list and a body for every module in a repository. A source that recognises a
-dotted module name (`lib.nvim.bindings.usercmd.composer`) plus a preview that
-reads that artifact would turn any `require("…")` in any file into its own
-documentation, with no scan at runtime.
-
-To settle:
-
-- **The artifact is a snapshot and can be stale**, and it is untracked in at
-  least one repository here. A preview from a stale map is worse than none:
-  it looks current. Needs the mtime in the float, or a staleness check
-  against the source file.
-- **A dotted name is not a path**, and the bare-path rules deliberately treat
-  it as prose. Same shape as the reposcope entry below: register the source
-  ahead of the bare-path one, and answer only for names the map confirms.
+To settle: **what the flag attaches to.** A contribution is a list of plain
+functions today; making one of them force-only means either a table form
+(`{ fn = …, on_request = true }`, backwards compatible) or a fourth
+contribution kind. The first is smaller and reads worse; the second is
+honest and adds a concept.
 
 ### `insights.nvim` — who else uses this
 
 `insights.run_imports_reverse(module)` answers "which files import this
-module", and `get_symbols(scope)` indexes symbols. Cursor on a `require`
-target: how many places depend on it, and where. That is the question one
-actually has while reading a module header, and it is currently a picker away.
+module", which is the question one actually has while reading a module header.
 
-To settle: **it is a scan, not a lookup.** The reverse-import query builds an
-index; doing that inside a `CursorHold` is out of the question. It needs the
-index to be warm and the preview to decline when it is not, rather than
-blocking the trigger.
+**Blocked, and not on hover.nvim's side.** `run_reverse` runs
+`scan_cwd_async` — a full walk of the working directory, chunked over
+`vim.schedule` — and opens a scratch buffer with the report. There is no
+index to consult: every query re-scans. A hover cannot start that, and
+`positions` cannot answer asynchronously.
+
+To settle, in insights.nvim rather than here: **a cached import index**, warm
+enough to answer a lookup, with the preview declining when it is cold rather
+than building it. That is a change to that plugin's architecture, not a
+wiring job.
+
+### `sandbox.nvim` — the image under the cursor
+
+In a `Dockerfile` or a `compose.yml`, `nginx:1.27-alpine` is a target: is it
+pulled, is a container running from it, how big is it.
+
+**Blocked on the entry above.** Measured on this machine, `docker --version`
+costs 230 ms and `podman --version` 490 ms — and that is the cheapest call
+either engine has, not an `inspect`. Five to twelve times the git cost that
+already ruled the automatic trigger out. It needs the force-only source
+first, and then it is a small integration.
+
+Second thing to settle once it is: **an image reference collides with
+`path:line` syntax.** `nginx:1.27` and `init.lua:42` are the same shape, and
+`hover.bare_path` already splits on the colon. Registration order decides it,
+and that has to be chosen deliberately rather than discovered.
 
 ### `open.nvim` — the same classification, twice
 
@@ -124,56 +106,6 @@ are not wrong about anything. Worth settling before either grows:
   which the float cannot hold — it is `focusable = false` — so it would be
   another borrowed key, and the borrowed-key budget is already `q`, `<Esc>`
   and four scroll keys.
-
-### `spotlight.nvim` — how often does this token occur
-
-Reading a log, the cursor on a request id: spotlight already answers "every
-other occurrence, right now" and keeps its own list (`spotlight.list(filter)`,
-`toggle_here_at(text, pos)`). The float could say *how many* and *where the
-next one is* without highlighting anything.
-
-To settle: **the noise question**, which is real here in a way it is not for
-migrate. Every token in a log is a token, so this has to answer only for
-tokens already spotlighted — the framework has no shape heuristic to apply to
-a position preview and cannot help. `:Hover positions off` silences every
-registered plugin at once, which is the wrong granularity for "this one is
-too eager"; a per-plugin switch is the missing piece if a second noisy
-contributor ever appears.
-
-### `reposcope.nvim` — a `repository` target type
-
-[reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) already keeps
-every README it has fetched in a RAM + on-disk cache keyed `owner/repo`.
-Everything a hover would need is therefore already local: the natural feature
-is resting the cursor on `owner/repo` — in a repo list, a plugin spec, a
-lockfile, a note — and getting that README's head in the float.
-
-Two things to settle:
-
-- **A slug is not a path.** `owner/repo` is two components with no extension
-  and no root, which the bare-path rules deliberately treat as prose (`and/or`
-  is spelled identically). A reposcope source therefore has to run *before* the
-  bare-path source — registration order already guarantees that — and must
-  answer only for slugs it can confirm against its own cache, never for
-  arbitrary text.
-- **There is no `repository` target type.** Either reposcope resolves the slug
-  to the cached README's path on disk and rides the existing `markdown`
-  preview, or `classify` grows a type. The first needs no change here at all,
-  and is the one to try.
-
-Nothing in this repository has to change for either version.
-
-### `sandbox.nvim` — the image under the cursor
-
-In a `Dockerfile` or a `compose.yml`, `nginx:1.27-alpine` is a target: is it
-pulled, is a container running from it, how big is it. sandbox.nvim manages
-containers across pluggable backends and knows all three.
-
-To settle: **an image reference collides with `path:line` syntax.**
-`nginx:1.27` and `init.lua:42` are the same shape, and `hover.bare_path`
-already splits on the colon. Whichever source runs first wins, which is a
-registration-order decision that has to be made deliberately rather than
-discovered.
 
 ### Two that are collisions rather than contributions
 
