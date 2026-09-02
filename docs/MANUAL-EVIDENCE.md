@@ -48,6 +48,27 @@ grows through five steps on a 210×55 terminal (71×20 cells of picture up to
 `lines - 4`. Those are float geometries read back from Neovim — they say the
 frame is the right size, not that a picture arrived in it.
 
+### The zoom wheel, where it points
+
+| | |
+| --- | --- |
+| **Checked** | *never* |
+| **On** | — |
+| **How** | Hover an image. With the pointer **on** the float, `<M-ScrollWheelUp>` a few times: it grows. Move the pointer well off the float and press it again: nothing happens. `<M-ScrollWheelDown>` on the float shrinks it back. |
+| **Watch for** | Nothing happening *anywhere*, which is the interesting failure and has two causes that look identical: `'mouse'` not covering the mode (`:checkhealth hover` warns about exactly this), or the terminal not sending Alt+wheel as a distinct chord. `<M-ScrollWheelUp>` mapped to `:echo` tells the two apart in one press. Also worth watching: zooming while the pointer is *beside* the float rather than on it — the gate is a rectangle test, and a wrong one would show up as a float that zooms from anywhere. |
+
+**Why this cannot be a spec.** Mouse input needs a UI attached: measured on
+2026-09-02, `nvim_input_mouse` fired **zero** mappings with
+`#nvim_list_uis() == 0`, while `feedkeys` with the same termcode fired one. So
+the specs drive the chord and stub the pointer position, which pins the
+mapping and the rectangle test but says nothing about a real wheel reaching
+Neovim.
+
+The same measurement is why the gate does not use `getmousepos().winid`: the
+float is `focusable = false`, and with the pointer squarely inside one, that
+field named the window *underneath* it. Only the screen coordinates are
+usable, so `hover.float.contains` does the rectangle test itself.
+
 ### A PDF page rasterized
 
 | | |
@@ -151,6 +172,6 @@ Windows, per push.
 ## Keeping this honest
 
 A row whose date is older than the code it describes is worse than no row,
-because it reads as a check that happened. When one of the five paths above
+because it reads as a check that happened. When one of the six paths above
 changes, either check it again and move the date, or set the date back to
 *never* and say why.

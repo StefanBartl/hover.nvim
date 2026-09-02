@@ -332,4 +332,50 @@ function M.win()
   return M.is_open() and _win or nil
 end
 
+--- Whether a screen cell is inside the open float, its border counted in.
+---
+--- **`getmousepos()` cannot answer this, and that is the whole reason the
+--- function exists.** This float is `focusable = false`, and a non-focusable
+--- float is invisible to that call: measured 2026-09-02, with the pointer
+--- squarely inside one, `getmousepos().winid` reported the window
+--- *underneath* it (1000 for a float that was 1001). Only `screenrow` and
+--- `screencol` come back usable, so the hit test is done here, against the
+--- geometry the float reports about itself -- the same `nvim_win_get_position`
+--- images.nvim reads back to place a picture.
+---
+--- **The border ring counts as inside**, and that is not generosity. The
+--- float is anchored one row below the cursor, which puts its top ring on
+--- the cursor's own row -- so under `trigger = { "mouse" }`, where the
+--- pointer *is* the cursor, the pointer sits exactly on that ring. Excluding
+--- it would mean the wheel never fired in the one workflow that puts a
+--- pointer there to begin with.
+---@param screenrow integer 1-based, as `getmousepos()` reports it
+---@param screencol integer 1-based
+---@return boolean
+function M.contains(screenrow, screencol)
+  local win = M.win()
+  if not win or type(screenrow) ~= "number" or type(screencol) ~= "number" then
+    return false
+  end
+
+  -- `pcall`: the window can be gone between the check above and here, and a
+  -- wheel event is not worth an error message.
+  local ok, pos = pcall(api.nvim_win_get_position, win)
+  if not ok then
+    return false
+  end
+
+  local cfg = api.nvim_win_get_config(win)
+  local ring = (cfg.border and cfg.border ~= "none") and 1 or 0
+
+  -- `pos` is the 0-based origin of the *text* area; the ring is drawn around
+  -- it. +1 converts to the 1-based screen coordinates `getmousepos()` uses.
+  local top = pos[1] + 1 - ring
+  local left = pos[2] + 1 - ring
+  local bottom = pos[1] + api.nvim_win_get_height(win) + ring
+  local right = pos[2] + api.nvim_win_get_width(win) + ring
+
+  return screenrow >= top and screenrow <= bottom and screencol >= left and screencol <= right
+end
+
 return M

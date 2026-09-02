@@ -520,11 +520,30 @@ a PNG by the time you are looking at it:
 | --- | --- |
 | `+` | the picture, one step larger |
 | `-` | one step smaller |
+| `<M-ScrollWheelUp>` | one step larger — **only while the pointer is over the float** |
+| `<M-ScrollWheelDown>` | one step smaller, same rule |
+| `:Hover zoom [in\|out]` | the same step from the command line; omitted, it zooms in |
 
 One key per direction rather than two. The scroll pairs are doubled because a key that is
 not on the keyboard cannot be pressed; `+` and `-` are on every keyboard, so that argument
 does not carry. `=` was considered as the unshifted `+` of a US layout and left alone — it
 is the indent operator, and borrowing an operator buys convenience nobody asked for.
+
+**The wheel obeys a different rule than the keys, and it is the rule you already
+have for a wheel.** `+` acts on the one float there is, wherever the pointer happens
+to be. A wheel *points*, so `<M-ScrollWheelUp>` acts on what it is aimed at: it zooms
+only while the pointer sits on the float, its border ring included. Pointing elsewhere
+does nothing, which is the honest answer rather than a missing one.
+
+The ring counts as inside for a reason worth knowing: the float is anchored one row
+below the cursor, so its top border sits on the cursor's own row — and under
+`trigger = { "mouse" }`, where the pointer *is* the cursor, that is exactly where the
+pointer already is. You do not have to move it onto the picture first.
+
+Alt rather than Ctrl, because `<C-ScrollWheel>` is the terminal emulator's own zoom
+nearly everywhere. And the wheel needs `'mouse'` to include your mode — with it empty
+no wheel event reaches Neovim at all and the mapping is inert rather than broken.
+`:checkhealth hover` says so, because from the outside those look identical.
 
 **Text is not zoomable, and that is not an omission.** The font size belongs to the
 terminal emulator and Neovim cannot change it, so "zoom" for text could only mean a larger
@@ -549,8 +568,12 @@ keyed on path, mtime and page number — without one.
 
 ```lua
 require("hover").setup({
-  zoom_keys = { larger = { "+", "<C-=>" }, smaller = "-" },   -- a string or a list
-  -- zoom_keys = { larger = {}, smaller = {} },               -- bind nothing
+  zoom_keys = {
+    larger = { "+", "<C-=>" },      -- a string or a list
+    smaller = "-",
+    wheel_larger = { "<M-ScrollWheelUp>" },
+    wheel_smaller = {},             -- an empty list binds nothing
+  },
 })
 ```
 
@@ -594,6 +617,8 @@ require("hover").setup({
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | |
 | `zoom_keys.larger` | `{ "+" }` | Bound only for a hover with a picture in it — see [Zooming a picture](#zooming-a-picture). |
 | `zoom_keys.smaller` | `{ "-" }` | |
+| `zoom_keys.wheel_larger` | `{ "<M-ScrollWheelUp>" }` | The wheel acts on what it points at: these fire only while the pointer is over the float, its border included. Needs `'mouse'` set |
+| `zoom_keys.wheel_smaller` | `{ "<M-ScrollWheelDown>" }` | |
 | `open_keys` | `{ "gf" }` | Open what the float is showing — through [open.nvim](https://github.com/StefanBartl/open.nvim) when installed, else `vim.ui.open`. Borrowed and restored like the others; `{}` binds nothing. |
 | `dismiss_keys` | `{ "q", "<Esc>" }` | |
 | `keymaps.show` | `false` | A key for `:Hover show`. No key is claimed unless asked for. |
@@ -861,7 +886,7 @@ When a hover fails to appear for one specific thing rather than for everything,
   be settled first: which sibling plugin could contribute a preview and through which
   entry point, which features are missing, which of the things this plugin already does
   it does worse than it could — and what was considered and rejected.
-- [Manual evidence](docs/MANUAL-EVIDENCE.md) — the five things no CI can check
+- [Manual evidence](docs/MANUAL-EVIDENCE.md) — the six things no CI can check
   (a drawn image, a zoomed one, a rasterized PDF page, a converted office document, and
   a contribution asked only on request), when each was last checked by hand, and on what.
 - `:help hover` — the vimdoc: the same ground, offline.

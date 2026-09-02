@@ -45,6 +45,8 @@ require("hover").setup({ keymaps = { show = false } })
 | `scroll_keys.up` | `<M-PageUp>`, `<C-Up>` | scrollable hovers only | back |
 | `zoom_keys.larger` | `+` | hovers with a picture only | the picture, one step (×1.25) larger |
 | `zoom_keys.smaller` | `-` | hovers with a picture only | one step smaller |
+| `zoom_keys.wheel_larger` | `<M-ScrollWheelUp>` | hovers with a picture only, **and only while the pointer is over the float** | the picture one step larger |
+| `zoom_keys.wheel_smaller` | `<M-ScrollWheelDown>` | as above | one step smaller |
 
 Three things follow from "borrowed", and each has been a bug at some point:
 

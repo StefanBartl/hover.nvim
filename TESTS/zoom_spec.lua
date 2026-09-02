@@ -130,7 +130,7 @@ describe("the keys a drawn hover borrows", function()
     -- failing assertion returns before its own cleanup, and the leaked `+`
     -- then reads as a second failure in the next test. Found by sabotaging
     -- the borrow away and watching two specs fall for one reason.
-    for _, lhs in ipairs({ "+", "-" }) do
+    for _, lhs in ipairs({ "+", "-", "<M-ScrollWheelUp>", "<M-ScrollWheelDown>" }) do
       pcall(vim.keymap.del, "n", lhs)
     end
     config.reset()
@@ -150,6 +150,9 @@ describe("the keys a drawn hover borrows", function()
     )
     assert.is_true(mapped("+"))
     assert.is_true(mapped("-"))
+    -- The wheel hangs off the same condition, so it is the same borrow.
+    assert.is_true(mapped("<M-ScrollWheelUp>"))
+    assert.is_true(mapped("<M-ScrollWheelDown>"))
   end)
 
   it("takes no zoom key for text, which has nothing to zoom", function()
@@ -162,6 +165,8 @@ describe("the keys a drawn hover borrows", function()
     )
     assert.is_false(mapped("+"))
     assert.is_false(mapped("-"))
+    assert.is_false(mapped("<M-ScrollWheelUp>"))
+    assert.is_false(mapped("<M-ScrollWheelDown>"))
   end)
 
   it("takes none when no zoom handler was handed over", function()
@@ -335,6 +340,87 @@ describe("hover.zoom", function()
     assert.is_true(hover.zoom(1))
     assert.equals(2, seen[#seen].page, "zooming lost the page the hover was on")
     assert.is_true((seen[#seen].zoom or 1) > 1, "the zoom factor never reached the previewer")
+  end)
+
+  -- The wheel. Two things are asserted and a third deliberately is not.
+  --
+  -- **`float.contains` exists because `getmousepos()` cannot answer it.** The
+  -- float is `focusable = false`, and a non-focusable float is invisible to
+  -- that call's `winid`: measured 2026-09-02 with the pointer squarely inside
+  -- one, it named the window underneath (1000 for a float that was 1001).
+  -- Only the screen coordinates are usable, so the rectangle test is ours.
+  --
+  -- **The border ring counts as inside**, and that is load-bearing rather
+  -- than generous: the float is anchored one row below the cursor, which puts
+  -- its top ring on the cursor's own row. Under `trigger = { "mouse" }` the
+  -- pointer *is* there, so excluding the ring would mean the wheel never
+  -- fired in the workflow that puts a pointer over the float to begin with.
+  --
+  -- **Not asserted: that a terminal delivers the chord at all.** Mouse input
+  -- cannot be driven here -- `nvim_input_mouse` is a no-op with no UI
+  -- attached (measured: zero mappings fired, `#nvim_list_uis() == 0`), while
+  -- `feedkeys` with the termcode does fire one. So the mapping and the gate
+  -- are real below, and the wheel reaching Neovim is evidenced by hand
+  -- (`docs/MANUAL-EVIDENCE.md`).
+  it("knows its own rectangle, border ring included", function()
+    assert.is_true(show_at("see ./pic.png here", 5))
+    local w = float.win()
+    local pos = vim.api.nvim_win_get_position(w)
+    local rows = vim.api.nvim_win_get_height(w)
+    local cols = vim.api.nvim_win_get_width(w)
+
+    -- `pos` is 0-based and names the text area; `getmousepos()` is 1-based.
+    assert.is_true(float.contains(pos[1] + 2, pos[2] + 2), "the middle is not inside")
+    assert.is_true(float.contains(pos[1], pos[2] + 2), "the top border ring is not inside")
+    assert.is_true(float.contains(pos[1] + rows + 1, pos[2] + 2), "the bottom ring is not inside")
+    assert.is_false(float.contains(pos[1] - 1, pos[2] + 2), "one row above the ring is inside")
+    assert.is_false(
+      float.contains(pos[1] + 2, pos[2] + cols + 2),
+      "one column past the ring is inside"
+    )
+    assert.is_false(float.contains(nil, nil), "a missing position is inside")
+  end)
+
+  it("zooms from the wheel only where the pointer is", function()
+    local at = { screenrow = 1, screencol = 1 }
+    vim.fn.getmousepos = function()
+      return at
+    end
+    local ok, err = pcall(function()
+      assert.is_true(show_at("see ./pic.png here", 5))
+      local w0, h0 = geometry()
+
+      -- Pointing somewhere else entirely: the chord arrives, the gate holds.
+      local pos = vim.api.nvim_win_get_position(float.win())
+      at = { screenrow = pos[1] + vim.o.lines, screencol = pos[2] + vim.o.columns }
+      vim.api.nvim_feedkeys(
+        vim.api.nvim_replace_termcodes("<M-ScrollWheelUp>", true, false, true),
+        "x",
+        false
+      )
+      assert.same({ w0, h0 }, { geometry() }, "the wheel zoomed a float it was not pointing at")
+
+      -- Over the picture: the same chord, the same handler, a bigger float.
+      at = { screenrow = pos[1] + 2, screencol = pos[2] + 2 }
+      vim.api.nvim_feedkeys(
+        vim.api.nvim_replace_termcodes("<M-ScrollWheelUp>", true, false, true),
+        "x",
+        false
+      )
+      local w1, h1 = geometry()
+      assert.is_true(w1 > w0 and h1 > h0, "the wheel did not zoom where it pointed")
+
+      vim.api.nvim_feedkeys(
+        vim.api.nvim_replace_termcodes("<M-ScrollWheelDown>", true, false, true),
+        "x",
+        false
+      )
+      assert.same({ w0, h0 }, { geometry() }, "the wheel did not zoom back out")
+    end)
+    -- Removed rather than restored: assigning the original back would leave a
+    -- real key shadowing `vim.fn`'s metatable for every later spec.
+    vim.fn.getmousepos = nil
+    assert.is_true(ok, tostring(err))
   end)
 
   -- `:Hover zoom` -- the same step, reached the way the rest of this plugin

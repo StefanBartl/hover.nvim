@@ -104,6 +104,8 @@
 ---@class Hover.ZoomKeys
 ---@field larger? string|string[] # Default `{ "+" }`.
 ---@field smaller? string|string[] # Default `{ "-" }`.
+---@field wheel_larger? string|string[] # Default `{ "<M-ScrollWheelUp>" }`. Fires only while the pointer is over the float; needs `'mouse'` set.
+---@field wheel_smaller? string|string[] # Default `{ "<M-ScrollWheelDown>" }`. Same pointer rule.
 
 --- Keymaps this plugin sets in the user's own namespace, each disableable on
 --- its own with `false`.

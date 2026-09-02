@@ -155,6 +155,22 @@ local function check_config()
     end
   end
 
+  -- The zoom wheel is *inert* without 'mouse', not broken, and from the
+  -- outside those look identical: a chord that arrives and does nothing, and
+  -- one that never arrives at all. Reported here because the difference is
+  -- invisible everywhere else -- `:Hover why` answers about a float that did
+  -- not open, not about a key that was never delivered.
+  local keylist = require("hover.bindings.keymaps").keylist
+  local zk = config.get().zoom_keys
+  local wheel = type(zk) == "table"
+    and (#keylist(zk.wheel_larger) > 0 or #keylist(zk.wheel_smaller) > 0)
+  if wheel and vim.o.mouse == "" then
+    health.warn("zoom wheel bound, but 'mouse' is empty -- no wheel event arrives", {
+      "`:set mouse=a`, or any mode you use the wheel in.",
+      "`+` / `-` and `:Hover zoom` are unaffected; only the wheel needs this.",
+    })
+  end
+
   local any = false
   for _, s in ipairs(require("hover.switches").status()) do
     if s.enabled then

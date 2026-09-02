@@ -97,6 +97,26 @@ local function take(seen, lhs, rhs, desc)
   end
 end
 
+---@internal
+--- Whether the mouse pointer is over the float on screen.
+---
+--- Asked only for the wheel, and only because a wheel *points*: `+` acts on
+--- the one float there is, wherever the pointer happens to be, and a wheel
+--- has to act on what it is aimed at or it is not a wheel.
+---
+--- `getmousepos()` is used for its coordinates and **not** for its `winid`:
+--- the float is `focusable = false`, and a non-focusable float is invisible
+--- to that field -- measured 2026-09-02, it names the window underneath. The
+--- rectangle test lives in `hover.float`, which owns that geometry.
+---@return boolean
+local function pointer_over_float()
+  local ok, pos = pcall(vim.fn.getmousepos)
+  if not ok or type(pos) ~= "table" then
+    return false
+  end
+  return require("hover.float").contains(pos.screenrow, pos.screencol)
+end
+
 --- Bind the keys the hover on screen borrows: the dismiss keys always, the
 --- scroll keys only when there is something to scroll, the zoom keys only
 --- when there is a picture.
@@ -172,6 +192,25 @@ function M.borrow(content, rerender, rezoom)
       take(seen, lhs, function()
         rezoom(-1)
       end, "hover: zoom the picture out")
+    end
+
+    -- The wheel, gated on where it points. Silence when it points elsewhere
+    -- is the correct answer rather than a missing one: the chord means
+    -- nothing else while this float is up, and zooming a picture the pointer
+    -- is nowhere near would be the surprising half.
+    for _, lhs in ipairs(M.keylist(zk.wheel_larger)) do
+      take(seen, lhs, function()
+        if pointer_over_float() then
+          rezoom(1)
+        end
+      end, "hover: zoom in, where the pointer is")
+    end
+    for _, lhs in ipairs(M.keylist(zk.wheel_smaller)) do
+      take(seen, lhs, function()
+        if pointer_over_float() then
+          rezoom(-1)
+        end
+      end, "hover: zoom out, where the pointer is")
     end
   end
 end

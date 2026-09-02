@@ -213,6 +213,22 @@ LARGER. That is `max_lines`, and a different feature.
 One key per direction, not two: `+` and `-` are on every keyboard, so the
 argument that doubles the scroll pairs does not apply.
 
+The wheel is the other half and obeys a different rule.
+`<M-ScrollWheelUp>` / `<M-ScrollWheelDown>` zoom only while the POINTER is
+over the float, its border ring included -- a wheel acts on what it is aimed
+at, where `+` acts on the one float there is. The ring counts as inside on
+purpose: the float sits one row below the cursor, so its top border is on the
+cursor's own row, which is where the pointer already is under
+`trigger = { "mouse" }`.
+
+Alt rather than Ctrl: `<C-ScrollWheel>` is the terminal emulator's own zoom
+nearly everywhere. The wheel also needs 'mouse' to include the mode -- with it
+empty no wheel event reaches Neovim and the mapping is inert rather than
+broken. `:checkhealth hover` reports that, because the two look the same from
+outside.
+
+`:Hover zoom [in|out]` does the same step without any key at all.
+
 A step scales the box the picture is fitted into by 1.25 and nothing else --
 the letterboxing and the clamp against the terminal still happen where they
 did, so the ceiling is the screen. It is found rather than declared: a step
@@ -289,7 +305,13 @@ worth asserting.
       down = { "<M-PageDown>", "<C-Down>" },
       up = { "<M-PageUp>", "<C-Up>" },
     },
-    zoom_keys = { larger = { "+" }, smaller = { "-" } },
+    zoom_keys = {
+      larger = { "+" },
+      smaller = { "-" },
+      -- Only while the pointer is over the float; needs 'mouse'.
+      wheel_larger = { "<M-ScrollWheelUp>" },
+      wheel_smaller = { "<M-ScrollWheelDown>" },
+    },
     dismiss_keys = { "q", "<Esc>" },
     open_keys = { "gf" },
     keymaps = { show = false },

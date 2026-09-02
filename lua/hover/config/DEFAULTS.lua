@@ -227,11 +227,28 @@ return {
   --- is. `=` was considered as an unshifted stand-in for `+` on a US layout
   --- and left alone: it is the indent operator, and borrowing an operator
   --- buys convenience nobody asked for.
+  --- **The wheel is the other half, and it obeys a different rule.** `+`
+  --- acts on the one float there is, wherever the pointer happens to be. A
+  --- wheel *points*, so it acts on what it points at: these two fire only
+  --- while the pointer is over the float, its border ring included.
+  ---
+  --- Alt rather than Ctrl. `<C-ScrollWheel>` is the terminal emulator's own
+  --- zoom nearly everywhere -- WezTerm does not take it here, but the
+  --- expectation is set, and a plugin that borrows it would be wrong on the
+  --- next machine. Alt collides with nothing measured on this one.
+  ---
+  --- Needs `'mouse'` to include the mode: with it empty no wheel event
+  --- reaches Neovim at all, and the mapping is inert rather than broken.
+  --- `:checkhealth hover` says so, because the two look identical.
   zoom_keys = {
     ---@type string|string[]
     larger = { "+" },
     ---@type string|string[]
     smaller = { "-" },
+    ---@type string|string[]
+    wheel_larger = { "<M-ScrollWheelUp>" },
+    ---@type string|string[]
+    wheel_smaller = { "<M-ScrollWheelDown>" },
   },
 
   -- Bound for *every* hover, not only scrollable ones: anything can be waved
