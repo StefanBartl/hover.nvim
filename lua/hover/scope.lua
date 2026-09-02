@@ -213,9 +213,14 @@ local _last = nil
 ---@param col integer 0-based.
 ---@return boolean
 function M.allows_path(bufnr, row, col)
-  local ok_tick, tick = pcall(api.nvim_buf_get_changedtick, bufnr)
-  if not ok_tick then
-    tick = nil
+  -- Annotated rather than inferred: `pcall`'s second return is the tick on
+  -- success and the error on failure, and a buffer handle that is gone is a
+  -- real case here -- the memo simply does not apply then.
+  ---@type integer|nil
+  local tick = nil
+  local ok_tick, got = pcall(api.nvim_buf_get_changedtick, bufnr)
+  if ok_tick and type(got) == "number" then
+    tick = got
   end
 
   if

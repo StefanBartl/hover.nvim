@@ -256,6 +256,10 @@ describe("hover.scope", function()
     )
 
     it("ignores malformed entries instead of failing", function()
+      -- The wrong types are what is under test: the reader promising to skip
+      -- them is the behaviour, so the suppression is the honest answer
+      -- rather than a workaround (`LLS-40`).
+      ---@diagnostic disable-next-line: assign-type-mismatch
       config.setup({ paths = { scope = { code = { 42, "", false, "zeta" } } } })
       assert.is_false(decide({ { capture = "zeta" } }))
       assert.is_true(decide({ { capture = "unrelated" } }))
@@ -275,8 +279,7 @@ describe("hover.scope", function()
   describe("the one-slot memo", function()
     it("answers the same position twice without asking again", function()
       local asked = 0
-      local buf = parsed_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
-      assert.is_truthy(buf)
+      local buf = require_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
       local real = vim.treesitter.get_captures_at_pos
       vim.treesitter.get_captures_at_pos = function(...)
         asked = asked + 1
@@ -294,8 +297,7 @@ describe("hover.scope", function()
       -- Captures are per column, so moving along a line is all misses --
       -- which is why the memo is one slot and not a per-row table.
       local asked = 0
-      local buf = parsed_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
-      assert.is_truthy(buf)
+      local buf = require_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
       local real = vim.treesitter.get_captures_at_pos
       vim.treesitter.get_captures_at_pos = function(...)
         asked = asked + 1
@@ -310,8 +312,7 @@ describe("hover.scope", function()
 
     it("asks again after the buffer changes", function()
       local asked = 0
-      local buf = parsed_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
-      assert.is_truthy(buf)
+      local buf = require_buf("lua", { "-- see ./docs/BINDINGS.md for more" })
       local real = vim.treesitter.get_captures_at_pos
       vim.treesitter.get_captures_at_pos = function(...)
         asked = asked + 1

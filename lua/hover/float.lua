@@ -83,7 +83,9 @@ function M.set_pinned(pinned)
     text = cfg.title
   end
 
-  text = text:gsub("^" .. vim.pesc(MARKER), "")
+  -- Parenthesised: `gsub` returns the string *and* a count, and passing both
+  -- on would make `title` a two-value expression in the concatenation below.
+  text = (text:gsub("^" .. vim.pesc(MARKER), ""))
   local title = pinned and (MARKER .. text) or text
   if title == "" then
     return
