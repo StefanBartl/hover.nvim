@@ -229,6 +229,23 @@ function M.routes()
       run = report_status,
     },
     {
+      path = { "pin" },
+      desc = "Keep this hover on screen while the cursor goes elsewhere",
+      run = function()
+        local h = hover()
+        if not h.pin then
+          return
+        end
+        local was = h.pinned()
+        local now = h.pin()
+        if now == was and not now then
+          require("hover.notify").info("no hover to pin")
+        else
+          require("hover.notify").info(now and "hover pinned" or "hover released")
+        end
+      end,
+    },
+    {
       path = { "why" },
       -- The counterpart to `status`: that one says what is configured, this
       -- one says what happened *here*. A hover that does not open is silent

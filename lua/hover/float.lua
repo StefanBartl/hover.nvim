@@ -21,6 +21,9 @@ local autocmd = require("lib.nvim.bindings.autocmd")
 local safe_api = require("lib.nvim.safe_api")
 
 ---@type integer|nil
+---@type string Prefixed onto a pinned float's title.
+local MARKER = "📌 "
+
 local _win = nil
 ---@type integer|nil
 local _buf = nil
@@ -49,6 +52,43 @@ local HL_DEFAULTS = {
 ---@return boolean
 function M.is_open()
   return safe_api.is_valid_window(_win)
+end
+
+--- Mark the open float as pinned, or unmark it.
+---
+--- Visible in the border rather than only in state: a float that stops
+--- following the cursor and does not say so reads as a bug -- the same
+--- argument that makes every switch announce itself. The marker is a prefix
+--- on the existing title, and stripped before it is added again so toggling
+--- twice does not stack two of them.
+---@param pinned boolean
+---@return nil
+function M.set_pinned(pinned)
+  if not safe_api.is_valid_window(_win) then
+    return
+  end
+  local ok, cfg = pcall(api.nvim_win_get_config, _win)
+  if not ok or type(cfg) ~= "table" then
+    return
+  end
+
+  -- The title comes back as the chunk list `nvim_open_win` stores, not as the
+  -- string it was given.
+  local text = ""
+  if type(cfg.title) == "table" then
+    for _, chunk in ipairs(cfg.title) do
+      text = text .. (type(chunk) == "table" and chunk[1] or tostring(chunk))
+    end
+  elseif type(cfg.title) == "string" then
+    text = cfg.title
+  end
+
+  text = text:gsub("^" .. vim.pesc(MARKER), "")
+  local title = pinned and (MARKER .. text) or text
+  if title == "" then
+    return
+  end
+  pcall(api.nvim_win_set_config, _win, { title = title, title_pos = "left" })
 end
 
 --- Register teardown to run when this hover closes — used by previewers that

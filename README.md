@@ -77,6 +77,7 @@ See ./docs/architecture.md#modules for details.
 | Bare-path resolution | A path in prose, a code comment or a `:messages` dump is a target too — truncated ones included | [Bare paths](#bare-paths) |
 | `hover.scroll(1)` / `scroll(-1)` | Page through a file's head or a PDF's pages without leaving the document | [Scrolling a preview](#scrolling-a-preview) |
 | `hover.dismiss()` | Wave one float away and keep it away, until the cursor reaches another target | [Waving one hover away](#waving-one-hover-away) |
+| `hover.pin()` | Keep one float on screen while the cursor goes elsewhere — for comparing rather than reading. One float, so the trigger opens nothing while it is up | [The `:Hover` command](#the-hover-command) |
 | `hover.registry.register()` | Another plugin contributes a *source* or a *preview*; hover.nvim never says its name | [Contributing from a plugin](#contributing-from-a-plugin) |
 | `:checkhealth hover` | One check per soft dependency, asking for the entry point actually called rather than for the module | [Bindings](docs/BINDINGS.md) |
 | `vim.g.hover_disable` | Forces `mode = "off"` from a plugin spec, outranking anything a host configures | [Modes](#modes) |
@@ -282,6 +283,7 @@ toggles.
 | `:Hover show` | one hover, here, now, ignoring every volume switch |
 | `:Hover status` | the mode and every switch — as a chooser where picking a line toggles it, or as one message where lib.nvim has no UI kit |
 | `:Hover why` | why nothing hovered *here* — which of the gates refused, and what to type about it |
+| `:Hover pin` | keep this float on screen while the cursor goes elsewhere; again releases it |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |

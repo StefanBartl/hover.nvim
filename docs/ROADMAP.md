@@ -206,18 +206,6 @@ the same word.
 
 ## Features
 
-### Pin a float
-
-A preview is transient by design: move the cursor and it is gone, which is
-right for reading and wrong for comparing. Pinning one — keep it on screen
-until dismissed, while the cursor goes elsewhere — costs one flag in
-`hover.float` and a decision about what happens when the next hover opens.
-
-To settle: **the generation counter assumes one float.** `_open`, `_generation`
-and the async-result guard are all written for a single window; a second
-concurrent preview is not a flag, it is a lifecycle. Worth knowing before
-this is estimated as small.
-
 ### A demo GIF
 
 `REL-09`, and the only 🟢 left open in the release gate. The README carries an

@@ -432,6 +432,13 @@ function M.show(opts)
     return false
   end
 
+  -- A pinned float belongs to the reader, not to the cursor. The trigger
+  -- neither replaces it nor closes it; an explicit request does both, because
+  -- asking about something else is unambiguous about what you want.
+  if _open and _open.pinned and not opts.force then
+    return false
+  end
+
   local bufnr = api.nvim_get_current_buf()
   local found = M.target_under_cursor(bufnr, { force = opts.force })
   if not found then
@@ -690,6 +697,57 @@ function M.why()
   return out
 end
 
+--- Pin the open hover, or unpin it.
+---
+--- **What pinning is, and what it deliberately is not.** A preview is
+--- transient by design: move the cursor and it is gone, which is right for
+--- reading and wrong for comparing. Pinning keeps *this* float on screen
+--- while the cursor goes elsewhere -- into another window, another buffer,
+--- into insert mode -- so the thing being compared against stays visible.
+---
+--- It does **not** open a second float. That was the obvious reading and it
+--- is a lifecycle rather than a flag: `_open`, the generation counter and the
+--- async-result guard are each written for one window, and a second
+--- concurrent preview would need all three rebuilt. What this does instead is
+--- take one float out of the cursor's hands, which delivers the reason
+--- someone wants pinning without pretending the rest is free.
+---
+--- The consequence, stated rather than discovered: **while a float is pinned,
+--- the automatic trigger opens nothing.** There is one float, and it is
+--- spoken for. `:Hover show` still answers -- an explicit request replaces
+--- the pinned float, because asking about something else is unambiguous --
+--- and `q`/`<Esc>` still take it away.
+---@param on? boolean explicit state; omitted toggles
+---@return boolean pinned
+function M.pin(on)
+  if not (_open and float.win()) then
+    return false
+  end
+  if on == nil then
+    on = not _open.pinned
+  end
+  _open.pinned = on and true or nil
+  float.set_pinned(_open.pinned == true)
+  return _open.pinned == true
+end
+
+--- Whether the open hover is pinned.
+---@return boolean
+function M.pinned()
+  return (_open and _open.pinned) == true
+end
+
+---@internal
+--- Close the float unless it is pinned. What the `BufLeave`/`InsertEnter`
+--- autocmds call: those events are why someone pinned it.
+---@return nil
+function M.hide_unless_pinned()
+  if M.pinned() then
+    return
+  end
+  M.hide()
+end
+
 --- Scroll the open hover's content by `delta` steps.
 ---
 --- A page for a PDF (and for an office document, which has become one by the
@@ -774,6 +832,9 @@ end
 --- hover that has already been closed.
 ---@return nil
 function M.hide()
+  if _open then
+    _open.pinned = nil
+  end
   keys.release()
   _open = nil
   _generation = _generation + 1

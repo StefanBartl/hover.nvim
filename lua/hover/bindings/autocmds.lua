@@ -140,7 +140,9 @@ function M.attach(bufnr)
   end
 
   autocmd.create({ "BufLeave", "InsertEnter" }, function()
-    hover().hide()
+    -- Not `hide()`: leaving the buffer and entering insert are exactly the
+    -- moments someone pinned a float *for*.
+    hover().hide_unless_pinned()
   end, {
     group = group,
     buffer = bufnr,

@@ -566,3 +566,116 @@ describe("a position preview, end to end", function()
     assert.is_false(autocmds.anything_to_show())
   end)
 end)
+
+-- Pinning. What it does is take one float out of the cursor's hands; what it
+-- deliberately does not do is open a second one, which would be a lifecycle
+-- rather than a flag -- `_open`, the generation counter and the async guard
+-- are each written for one window.
+--
+-- The consequence is the thing worth pinning down: while a float is pinned,
+-- the automatic trigger opens nothing. That is a real cost and it should fail
+-- loudly if someone "fixes" it.
+describe("a pinned hover", function()
+  local hover = require("hover")
+  local float = require("hover.float")
+  local api = vim.api
+  local win, prev_buf, buf
+
+  local function always(text)
+    registry.register("stub", {
+      positions = {
+        function()
+          return { lines = { text }, title = "stub" }
+        end,
+      },
+    })
+  end
+
+  before_each(function()
+    registry.reset()
+    config.reset()
+    vim.g.hover_disable = nil
+    win = api.nvim_get_current_win()
+    prev_buf = api.nvim_win_get_buf(win)
+    buf = api.nvim_create_buf(true, false)
+    api.nvim_win_set_buf(win, buf)
+    api.nvim_buf_set_lines(buf, 0, -1, false, { "one", "two" })
+    api.nvim_win_set_cursor(win, { 1, 1 })
+  end)
+
+  after_each(function()
+    hover.hide()
+    pcall(api.nvim_win_set_buf, win, prev_buf)
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    registry.reset()
+    config.reset()
+    vim.g.hover_disable = nil
+  end)
+
+  it("does nothing when no hover is open", function()
+    assert.is_false(hover.pin())
+    assert.is_false(hover.pinned())
+  end)
+
+  it("toggles, and reports its state", function()
+    always("first")
+    assert.is_true(hover.show())
+    assert.is_true(hover.pin())
+    assert.is_true(hover.pinned())
+    assert.is_false(hover.pin())
+    assert.is_false(hover.pinned())
+  end)
+
+  it("survives the trigger, which opens nothing while it is up", function()
+    always("first")
+    hover.show()
+    hover.pin()
+    api.nvim_win_set_cursor(win, { 2, 1 })
+    -- The trigger's own call. It must neither replace the float nor close it.
+    assert.is_false(hover.show())
+    assert.is_true(float.is_open())
+    assert.is_true(hover.pinned())
+  end)
+
+  it("is replaced by an explicit request, which is unambiguous", function()
+    always("first")
+    hover.show()
+    hover.pin()
+    assert.is_true(hover.show({ force = true }))
+    assert.is_true(float.is_open())
+  end)
+
+  it("survives leaving the buffer and entering insert", function()
+    -- The two events someone pinned a float *for*.
+    always("first")
+    hover.show()
+    hover.pin()
+    hover.hide_unless_pinned()
+    assert.is_true(float.is_open())
+  end)
+
+  it("is closed by those events once released", function()
+    always("first")
+    hover.show()
+    hover.hide_unless_pinned()
+    assert.is_false(float.is_open())
+  end)
+
+  it("does not outlive its window: hide clears the pin", function()
+    always("first")
+    hover.show()
+    hover.pin()
+    hover.hide()
+    assert.is_false(hover.pinned())
+    assert.is_false(float.is_open())
+  end)
+
+  it("is taken away by a dismissal like any other float", function()
+    always("first")
+    hover.show()
+    hover.pin()
+    assert.is_true(hover.dismiss())
+    assert.is_false(float.is_open())
+    assert.is_false(hover.pinned())
+  end)
+end)

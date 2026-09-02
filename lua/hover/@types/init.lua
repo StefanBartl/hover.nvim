@@ -122,6 +122,7 @@
 ---@field row? integer # Cursor row a position preview answered for.
 ---@field offset? integer # Lines skipped, for a text preview.
 ---@field page? integer # 1-based page, for a PDF preview.
+---@field pinned? boolean # Taken out of the cursor's hands: the trigger neither replaces nor closes it.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
 
 -- #####################################################################
