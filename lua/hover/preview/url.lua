@@ -187,6 +187,7 @@ end
 ---@param target Hover.Target
 ---@param opts Hover.PreviewOpts
 ---@param callback fun(content: Hover.Content)
+---@return nil # The answer arrives through `callback`, never as a return value.
 function M.fetch(target, opts, callback)
   local url = target.url or target.raw
 

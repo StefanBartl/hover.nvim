@@ -50,12 +50,14 @@ end
 --- draw into the window after it is already open (a rasterized PDF page
 --- arriving from an async render, say) and must clear that drawing again.
 ---@param on_close fun()
+---@return nil
 function M.set_on_close(on_close)
   _on_close = on_close
 end
 
 --- Close the hover window, if any. Safe to call repeatedly.
 ---@param on_close fun()|nil Extra teardown, in addition to any registered via `set_on_close`.
+---@return nil
 function M.close(on_close)
   if _on_close then
     pcall(_on_close)
