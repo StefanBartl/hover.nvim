@@ -85,7 +85,10 @@ function M.set_pinned(pinned)
     end
     text = table.concat(parts)
   elseif type(cfg.title) == "string" then
-    text = cfg.title
+    -- `tostring` rather than the field itself: the window-config type has
+    -- `title` as a union, and a guard on a *field* does not narrow it -- so
+    -- the assignment reads as possibly nil at the next use.
+    text = tostring(cfg.title)
   end
 
   -- Parenthesised: `gsub` returns the string *and* a count, and passing both
