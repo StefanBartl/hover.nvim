@@ -218,16 +218,6 @@ and the async-result guard are all written for a single window; a second
 concurrent preview is not a flag, it is a lifecycle. Worth knowing before
 this is estimated as small.
 
-### A git object under the cursor
-
-A 7-to-40 character hex string in a commit message, a log or a review is a
-target: `git show --stat` of it in the float. Unambiguous enough to be safe
-(a hex string of that length in a repository that has it) and useless enough
-to be silent everywhere else.
-
-To settle: **shelling out per trigger.** `git cat-file -e` is cheap, `git show`
-is not, and the answer belongs behind the same async guard PDF rendering uses.
-
 ### A demo GIF
 
 `REL-09`, and the only 🟢 left open in the release gate. The README carries an

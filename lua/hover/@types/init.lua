@@ -129,7 +129,7 @@
 
 --- What a target turned out to be.
 ---@class Hover.Target
----@field type "image"|"pdf"|"office"|"markdown"|"file"|"directory"|"url"|"anchor"|"missing"
+---@field type "image"|"pdf"|"office"|"markdown"|"file"|"directory"|"url"|"anchor"|"missing"|"git"
 ---@field raw string # The target exactly as written.
 ---@field path? string # Absolute, normalized path for local targets.
 ---@field anchor? string # Fragment after `#`, without the `#`.

@@ -202,6 +202,17 @@ function M.target_under_cursor(bufnr, opts)
     end
   end
 
+  -- A git object id, and only on an explicit request. Confirming that a hex
+  -- string is an object costs a git start -- 41 ms measured, the same whether
+  -- it hits or misses -- so this class is the one that never rides the
+  -- automatic trigger at all. See `hover.bare_git`.
+  if force then
+    local git = require("hover.bare_git").under_cursor(bufnr)
+    if git then
+      return git
+    end
+  end
+
   -- Nothing claimed it: the text may be a path carrying no link syntax at
   -- all. Same target shape, so everything downstream is unchanged.
   if not (force or config.paths_enabled()) then
@@ -338,6 +349,10 @@ local function build(target, bufnr, opts, emit)
     build_async(function(on_result)
       return require("hover.preview.office").preview(target, opts, on_result)
     end, emit)
+  elseif target.type == "git" then
+    build_async(function(on_result)
+      return require("hover.preview.git").preview(target, opts, on_result, bufnr)
+    end, emit)
   elseif target.type == "url" then
     local url = require("hover.preview.url")
     if opts.url_fetch then
@@ -441,7 +456,14 @@ function M.show(opts)
   end
 
   local source = api.nvim_buf_get_name(bufnr)
-  local target = classify.classify(found.target, source ~= "" and source or nil)
+  local target
+  if found.kind == "git" then
+    -- Not classified: a hex run is not a path and `classify`'s job is to
+    -- decide what a *path-like string* is. The source already decided.
+    target = { type = "git", raw = found.target }
+  else
+    target = classify.classify(found.target, source ~= "" and source or nil)
+  end
 
   -- The web hover is off and the cursor is on a link: nothing opens.
   --

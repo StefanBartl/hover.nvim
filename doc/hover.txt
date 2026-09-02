@@ -27,6 +27,11 @@ section, a URL taken apart -- or, when the target does not exist, that.
 A file whose bytes are not text (a .docx, an archive, an executable) gets a
 badge naming the format rather than a float full of its bytes.
 
+A git object id (7 to 40 hex characters) is a target too, but only via
+`:Hover show` -- never on the automatic trigger. Asking git whether a hex
+string is an object costs a git start, ~41 ms measured, the same whether it
+hits or misses.
+
 ==============================================================================
 2. REQUIREMENTS                                            *hover-requirements*
 

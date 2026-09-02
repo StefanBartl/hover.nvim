@@ -95,6 +95,7 @@ See ./docs/architecture.md#modules for details.
 | an office document | a badge, or its first page once `:Hover office on` |
 | a file with no text in it | a badge naming the format, not a screen of bytes |
 | an http(s) link | host, path and decoded query; plus status code and title with fetching on |
+| a git object id | what that commit did (`git show --stat`) — only on `:Hover show`, never on the timer |
 | a target that does not exist | that — often the most useful answer of all |
 
 Half of that list is somebody else's work. Every plugin that contributes to it is
@@ -642,6 +643,7 @@ Two traps, both of which cost days:
 | `hover.classify` | Target string → typed target. Pure, no I/O beyond one `fs_stat` |
 | `hover.formats` | What an extension names, and whether it is convertible |
 | `hover.bare_path` | Paths with no link syntax; asks gopath.nvim when present |
+| `hover.bare_git` | A git object id under the cursor — shape only, no process |
 | `hover.scope` | Whether the cursor sits somewhere a path could be written at all |
 | `hover.bare_url` | URLs with no link syntax, in any filetype |
 | `hover.float` | The window |
@@ -651,6 +653,7 @@ Two traps, both of which cost days:
 | `hover.preview.binary` | Is this text at all, and what to say when it is not |
 | `hover.preview.office` | Office documents: the badge, or the converted PDF's page |
 | `hover.preview.url` | URL details, optional fetch |
+| `hover.preview.git` | `git show --stat` of an object, async |
 | `hover.preview.media` | Images and PDF pages, via whatever provider is installed |
 
 ---
