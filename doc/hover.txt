@@ -146,7 +146,7 @@ toggles. >
                                          omitted, bigger
   :Hover zoom [in|out|reset]             magnify a detail of the picture;
                                          omitted, in
-  :Hover pan {left|right|up|down}        move the magnified view
+  :Hover nav {left|right|up|down}        move the magnified view
   :Hover why                             why nothing hovered here: which
                                          gate refused, and what to type
   :Hover mode [auto|manual|off]          set the mode; omitted, report it
@@ -199,6 +199,9 @@ never hold a mapping of its own.
   +, -                        the picture, larger or smaller
   <M-ScrollWheelUp/Down>      any hover, larger or smaller -- but only
                               where the pointer is
+  <M-z>, <M-Z>, <M-R>         zoom a detail in, out, or back to the whole
+                              picture. Bound whenever the picture CAN be
+                              zoomed
   h, j, k, l                  move the magnified view. Bound ONLY while a
                               hover is zoomed in
 <
@@ -259,9 +262,13 @@ letterboxes the WHOLE picture into a bigger box. A zoom keeps the box and cuts
 the source, so what is on screen is a SMALLER PART of the picture, larger.
 Only the second one is magnification.
 
-`:Hover zoom [in|out|reset]` is the way in, and deliberately the only one
-bound by default: a step writes a cropped file, which costs about a quarter of
-a second, and that makes it a deliberate operation rather than a dial. Measured
+`:Hover zoom [in|out|reset]`, or the keys `<M-z>` in, `<M-Z>` out and `<M-R>`
+back to the whole picture. A step writes a cropped file and costs about a
+quarter of a second, so it is a deliberate press rather than a dial -- which
+is why the keys are ALT CHORDS and not `+`/`-`: an operation this slow is not
+worth displacing a motion for, and a chord displaces nothing. They are
+borrowed whenever the picture on screen CAN be zoomed, not only while it
+already is. Measured
 on Windows, 2026-09-02 -- a `magick` start alone is 71 ms, a 1920x1080
 screenshot cropped and fitted 258 ms, a dense image of that size 502 ms, a 4K
 source ~900 ms. No format or compression setting brought it under ~150 ms. It
@@ -272,7 +279,7 @@ runs behind the same placeholder as a PDF page, which it beats: one page cost
 zoomed in. They are motions, like `+` and `-`, but with one difference that
 settles it: what `h` would otherwise do is move the cursor, and the dismissal
 hangs on CursorMoved -- so the unbound key takes the picture away. Nobody
-presses `h` at a magnified picture meaning that. `:Hover pan` is the same move
+presses `h` at a magnified picture meaning that. `:Hover nav` is the same move
 without a key.
 
 A zoom step divides the visible rectangle by 1.5 and keeps its centre, so
@@ -357,7 +364,10 @@ worth asserting.
       down = { "<M-PageDown>", "<C-Down>" },
       up = { "<M-PageUp>", "<C-Up>" },
     },
-    pan_keys = { left = { "h" }, right = { "l" }, up = { "k" }, down = { "j" } },
+    nav_keys = { left = { "h" }, right = { "l" }, up = { "k" }, down = { "j" } },
+    -- Alt chords, so no motion is displaced. Bound whenever the picture
+    -- on screen can be zoomed at all.
+    zoom_keys = { into = { "<M-z>" }, out = { "<M-Z>" }, reset = { "<M-R>" } },
     resize_keys = {
       larger = { "+" },
       smaller = { "-" },

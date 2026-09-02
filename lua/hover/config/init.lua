@@ -55,19 +55,36 @@ local function normalize(opts)
     opts.bare_paths = nil
   end
 
-  -- `zoom_keys` was the name while the feature only applied to pictures,
-  -- where "make the box bigger" and "zoom" happen to coincide. They stop
-  -- coinciding for text -- a bigger float shows *more*, not anything larger --
-  -- so the feature was renamed when it grew to cover every hover.
+  -- `zoom_keys` has had two meanings, and this is the seam between them.
+  --
+  -- It was the name of what is now `resize_keys`, back when the feature only
+  -- applied to pictures and "make the box bigger" and "zoom" happened to
+  -- coincide. `8ec5b40` renamed it and folded the old spelling. Then a *real*
+  -- zoom arrived, and the name it wants is the one the old spelling occupies.
+  --
+  -- **So the name is taken back, and the old shape is reported rather than
+  -- reinterpreted.** Silently folding it would have been the cheaper line and
+  -- exactly the wrong one: this repository has just spent a day on a name
+  -- that quietly meant something else than the reader thought (`bd72836`), and
+  -- a config written against the old spelling would otherwise have started
+  -- binding a 258 ms crop to the key it chose for a free resize step.
+  --
+  -- Told apart by shape, not by date: the old set has `larger`/`smaller`, the
+  -- new one `into`/`out`/`reset`. Nothing else in this table can be confused
+  -- for either.
   if type(opts.zoom_keys) == "table" then
-    opts.resize_keys = type(opts.resize_keys) == "table" and opts.resize_keys or {}
-    for key, value in pairs(opts.zoom_keys) do
-      if opts.resize_keys[key] == nil then
-        opts.resize_keys[key] = value
-      end
+    local old = opts.zoom_keys.larger ~= nil
+      or opts.zoom_keys.smaller ~= nil
+      or opts.zoom_keys.wheel_larger ~= nil
+      or opts.zoom_keys.wheel_smaller ~= nil
+    if old then
+      require("hover.notify").warn(
+        "hover.nvim: `zoom_keys` now configures the picture zoom, not resizing. "
+          .. "Rename your `larger`/`smaller` entries to `resize_keys` -- they are being ignored."
+      )
+      opts.zoom_keys = nil
     end
   end
-  opts.zoom_keys = nil
 
   -- `url = { hover, fetch, timeout_ms }` covered only http(s). It is the web
   -- half of `links`, and the half that was already switchable.
@@ -95,16 +112,33 @@ end
 --- and `dismiss_keys = { "<C-c>" }` would leave `<Esc>` bound. A configured
 --- key list is a closed, curated set (`ERR-52`), not an addition.
 ---
---- **Declared rather than written out**, and for the reason this repository
---- has now met four times: a hand-written list of what needs special
---- handling falls behind the table it is supposed to cover, and nothing
---- fails when it does. `zoom_keys` would have been the fourth `if` here.
+--- **Which tables those are is read off `DEFAULTS`, not listed here**, and the
+--- list this replaced is why. It named `scroll_keys`, `resize_keys`,
+--- `pan_keys` and `keymaps`, and the doc comment above it claimed to be
+--- "declared rather than written out" while being a literal -- so adding
+--- `zoom_keys` would have been the fifth time in this repository that a
+--- hand-kept copy of something `DEFAULTS` already knows fell behind it, and
+--- nothing would have failed: a configured `zoom_keys.into` would simply have
+--- merged alongside the default instead of replacing it, and bound both.
+---
+--- The rule is mechanical: every `DEFAULTS` entry whose name ends in `_keys`,
+--- plus `keymaps`, which is the one key table that does not. A new key set is
+--- picked up by existing, which is the only kind of list that cannot drift.
 ---@param opts table the user's options, unmerged
 ---@return nil
 local function replace_key_lists(opts)
+  ---@type string[]
+  local key_tables = { "keymaps" }
+  for name, value in pairs(DEFAULTS) do
+    if type(value) == "table" and name:match("_keys$") then
+      key_tables[#key_tables + 1] = name
+    end
+  end
+  table.sort(key_tables)
+
   -- Tables of key lists: whatever direction the user named is replaced, and
   -- the ones they did not name keep their default.
-  for _, name in ipairs({ "scroll_keys", "resize_keys", "pan_keys", "keymaps" }) do
+  for _, name in ipairs(key_tables) do
     if type(opts[name]) == "table" and type(_options[name]) == "table" then
       for key, value in pairs(opts[name]) do
         _options[name][key] = vim.deepcopy(value)

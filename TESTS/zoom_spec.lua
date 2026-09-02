@@ -139,15 +139,24 @@ describe("the keys a zoomed hover borrows", function()
     return vim.fn.maparg(lhs, "n") ~= ""
   end
 
+  ---@type integer[] every delta the zoom handler was asked for
+  local asked = {}
+
   ---@param content table
   ---@param zoomed boolean
+  ---@param zoomable? boolean defaults to `zoomed`, which is the common case
   ---@return nil
-  local function borrow(content, zoomed)
+  local function borrow(content, zoomed, zoomable)
+    asked = {}
     keys.borrow(content, {
       scroll = function() end,
       resize = function() end,
-      pan = function() end,
+      nav = function() end,
+      zoom = function(delta)
+        asked[#asked + 1] = delta
+      end,
       zoomed = zoomed,
+      zoomable = zoomable == nil and zoomed or zoomable,
     })
   end
 
@@ -174,19 +183,98 @@ describe("the keys a zoomed hover borrows", function()
   end)
 
   it("binds nothing when the key list is emptied", function()
-    config.setup({ pan_keys = { left = {}, right = {}, up = {}, down = {} } })
+    config.setup({ nav_keys = { left = {}, right = {}, up = {}, down = {} } })
     borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, true)
     assert.is_false(mapped("h"))
     assert.is_false(mapped("l"))
   end)
 
-  it("takes none when no pan handler was handed over", function()
+  it("takes none when no nav handler was handed over", function()
     keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, { zoomed = true })
     assert.is_false(mapped("h"))
   end)
+
+  -- The zoom keys sit on a *wider* condition than hjkl, and the asymmetry is
+  -- deliberate: these are Alt chords and displace nothing, so `out` and
+  -- `reset` are bound before there is anything to step out of. Binding them
+  -- only after a successful press would make the pair appear and disappear
+  -- under the reader's hands.
+  it("takes the zoom chords whenever the picture can be zoomed, not only while it is", function()
+    borrow({ lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" }, false, true)
+    for _, lhs in ipairs({ "<M-z>", "<M-Z>", "<M-R>" }) do
+      assert.is_true(mapped(lhs), lhs .. " was not borrowed for a zoomable picture")
+    end
+    assert.is_false(mapped("h"), "the nav keys are the narrow ones, and must stay narrow")
+  end)
+
+  it("takes no zoom chord when the picture cannot be zoomed", function()
+    borrow({ lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" }, false, false)
+    assert.is_false(mapped("<M-z>"))
+    assert.is_false(mapped("<M-R>"))
+  end)
+
+  it("asks for one step in, one out, and a step past any level for reset", function()
+    borrow({ lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" }, false, true)
+    for _, lhs in ipairs({ "<M-z>", "<M-Z>", "<M-R>" }) do
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(lhs, true, false, true), "x", false)
+    end
+    assert.equals(3, #asked, "one of the three chords did not reach the handler")
+    assert.equals(1, asked[1])
+    assert.equals(-1, asked[2])
+    -- `reset` is not a fourth entry point: `zoom` clamps at level 0, so any
+    -- step past the current one lands on the whole picture exactly.
+    assert.equals(-math.huge, asked[3])
+  end)
+
+  it("binds no zoom chord when the list is emptied", function()
+    config.setup({ zoom_keys = { into = {}, out = {}, reset = {} } })
+    borrow({ lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" }, false, true)
+    assert.is_false(mapped("<M-z>"))
+  end)
+
+  it("takes none when no zoom handler was handed over", function()
+    keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, { zoomable = true })
+    assert.is_false(mapped("<M-z>"))
+  end)
 end)
 
-describe("hover.zoom and hover.pan", function()
+-- `zoom_keys` has meant two different things, and the seam between them is the
+-- one place a silent reinterpretation would have been cheapest and worst: a
+-- config written for the old meaning would have bound a 258 ms crop to the key
+-- it chose for a free resize step.
+describe("the name zoom_keys, which used to mean resize_keys", function()
+  before_each(function()
+    config.reset()
+  end)
+
+  after_each(function()
+    config.reset()
+  end)
+
+  it("takes the new shape as the zoom keys it now is", function()
+    config.setup({ zoom_keys = { into = { "<M-x>" } } })
+    assert.same({ "<M-x>" }, config.get().zoom_keys.into)
+    assert.same({ "+" }, config.get().resize_keys.larger, "resize was not touched")
+  end)
+
+  it("ignores the old shape rather than rebinding it, and says so", function()
+    local said = {}
+    local notify = require("hover.notify")
+    local real = notify.warn
+    notify.warn = function(msg)
+      said[#said + 1] = msg
+    end
+    config.setup({ zoom_keys = { larger = { "<M-x>" }, smaller = { "<M-y>" } } })
+    notify.warn = real
+
+    assert.equals(1, #said, "the old shape was folded silently")
+    assert.is_truthy(said[1]:find("resize_keys", 1, true), "the message does not say where to go")
+    assert.same({ "+" }, config.get().resize_keys.larger, "the old shape reached resize_keys")
+    assert.same({ "<M-z>" }, config.get().zoom_keys.into, "the old shape reached zoom_keys")
+  end)
+end)
+
+describe("hover.zoom and hover.nav", function()
   local root, win, prev_buf, prev_isfname, prev_cols, prev_lines, buf
 
   before_each(function()
@@ -256,7 +344,7 @@ describe("hover.zoom and hover.pan", function()
 
   it("declines to pan when nothing is zoomed", function()
     assert.is_true(show_at("see ./pic.png here", 5))
-    assert.is_false(hover.pan(1, 0), "panning a whole picture has nowhere to go")
+    assert.is_false(hover.nav(1, 0), "panning a whole picture has nowhere to go")
   end)
 
   it("declines when no float is open, and hands the keys back doing it", function()
@@ -347,7 +435,7 @@ describe("hover.zoom and hover.pan", function()
     assert.is_truthy(float.win(), "the command closed the float it acts on")
     vim.cmd("Hover zoom reset")
     assert.is_truthy(float.win())
-    vim.cmd("Hover pan right")
+    vim.cmd("Hover nav right")
     assert.is_truthy(float.win())
   end)
 end)

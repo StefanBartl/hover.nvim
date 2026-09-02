@@ -74,7 +74,7 @@ local _suppressed = nil
 local RESIZE_STEP = 1.25
 
 ---@type number What one zoom step divides the visible rectangle by.
---- Mirrors `hover.preview.media`'s own constant, and is here only so `pan`
+--- Mirrors `hover.preview.media`'s own constant, and is here only so `nav`
 --- can size a step against the view rather than against the source: a quarter
 --- of what is on screen, whatever level that is.
 local ZOOM_VIEW_STEP = 1.5
@@ -444,6 +444,29 @@ local function build(target, bufnr, opts, emit)
 end
 
 ---@internal
+--- Whether the hover described by `open` is one a zoom could act on.
+---
+--- Pure, and separate from `zoomable` below for one reason: `present` needs
+--- the answer to decide whether to borrow the zoom keys, and `zoomable` needs
+--- it *plus* the "there is no float any more, tear down" branch that only a
+--- caller acting on a keypress wants. Written twice, the two would answer
+--- differently the first time either changed -- which is the failure mode
+--- this repository keeps meeting.
+---@param open Hover.Open|nil
+---@return boolean
+local function can_magnify(open)
+  local target = open and open.target
+  -- Images only. A PDF page is a picture too, but the file on screen is a
+  -- rasterization in this plugin's cache rather than at `target.path`, and
+  -- the sharp answer for a page is a second render at a higher DPI rather
+  -- than a crop -- measured at 3.3 s against 258 ms. See `docs/FEATURES/ZOOM.md`.
+  if not (target and target.type == "image" and target.path) then
+    return false
+  end
+  return require("hover.preview.media").can_zoom()
+end
+
+---@internal
 --- Put `content` on screen: open the float, draw a picture into it if there
 --- is one, and take the keys this hover borrows.
 ---@param content Hover.Content|nil
@@ -490,8 +513,10 @@ local function present(content)
   keys.borrow(content, {
     scroll = M.scroll,
     resize = M.resize,
-    pan = M.pan,
+    nav = M.nav,
+    zoom = M.zoom,
     zoomed = ((_open and _open.zoom) or 0) > 0,
+    zoomable = can_magnify(_open),
   })
 end
 
@@ -914,7 +939,7 @@ end
 --- Four things the configuration knows nothing about, and a re-render that
 --- forgets any of them silently undoes it: how far the reader has scrolled,
 --- which page they are on, how much the float has been resized, and which
---- detail is being magnified. Each of `scroll`, `resize`, `zoom` and `pan`
+--- detail is being magnified. Each of `scroll`, `resize`, `zoom` and `nav`
 --- used to build its own table, which is the hand-kept-copy shape this plugin
 --- has been bitten by four times -- and it was already wrong: **scrolling a
 --- resized hover reset it to the configured size**, because `scroll` never
@@ -1110,7 +1135,7 @@ end
 
 ---@internal
 --- Re-render the open hover with whatever `open` now says. The tail `zoom`
---- and `pan` both end in, and the same shape `resize` and `scroll` use: a
+--- and `nav` both end in, and the same shape `resize` and `scroll` use: a
 --- fresh generation so a slower answer cannot land afterwards, and the cache
 --- bypassed because it is keyed by what a target *is*, not by which part of
 --- it is on screen.
@@ -1154,16 +1179,13 @@ local function zoomable()
     return nil, nil
   end
   local target = open.target
-  -- Images only, and deliberately so. A PDF page is a picture too, but the
-  -- file on screen is a rasterization living in this plugin's own cache
-  -- rather than at `target.path` -- and the sharp answer for a page is a
-  -- second render at a higher DPI rather than a crop, measured at 3.3 s
-  -- against 258 ms. That is a different feature; see `docs/ROADMAP.md`.
+  -- The two halves of "can this be zoomed" are asked separately only so each
+  -- can name its own reason; `can_magnify` above is the same test without the
+  -- messages, for the borrow site that needs a boolean.
   if not (target and target.type == "image" and target.path) then
     return nil, "only a picture can be zoomed"
   end
-  local media = require("hover.preview.media")
-  if not media.can_zoom() then
+  if not require("hover.preview.media").can_zoom() then
     return nil, "zoom needs images.nvim with `images.convert.crop`, and ImageMagick on PATH"
   end
   return target.path, nil, open, target
@@ -1239,7 +1261,7 @@ end
 ---@param dx integer -1 left, 1 right
 ---@param dy integer -1 up, 1 down
 ---@return boolean asked
-function M.pan(dx, dy)
+function M.nav(dx, dy)
   local path, _, open, target = zoomable()
   if not (path and open and target) then
     return false

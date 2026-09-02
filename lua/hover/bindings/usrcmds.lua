@@ -232,11 +232,16 @@ function M.routes()
       end,
     },
     {
-      path = { "pan" },
-      -- The keyboard counterpart to `pan_keys`, which are borrowed only
+      path = { "nav" },
+      -- The keyboard counterpart to `nav_keys`, which are borrowed only
       -- while the hover is zoomed. This exists for the same reason the
       -- resize route does: the keys are a borrow, so someone who has never
       -- had a magnified picture up cannot discover them.
+      --
+      -- `nav` rather than `pan`: `pan` is the more precise word for the
+      -- operation and the wrong one for a verb someone types, and the name
+      -- was one day old. Renamed rather than aliased -- an alias for a
+      -- renamed operation is what produced `bd72836`.
       desc = "Move the magnified view",
       args = {
         {
@@ -258,7 +263,7 @@ function M.routes()
           require("hover.notify").warn("which way: left, right, up or down")
           return
         end
-        if not hover().pan(d[1], d[2]) then
+        if not hover().nav(d[1], d[2]) then
           require("hover.notify").info("nothing is zoomed, so there is nothing to move")
         end
       end,

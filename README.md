@@ -325,7 +325,7 @@ toggles.
 | `:Hover pin` | keep this float on screen while the cursor goes elsewhere; again releases it |
 | `:Hover resize [bigger\|smaller]` | make the hover on screen bigger or smaller. Omitted, bigger |
 | `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture on screen. Omitted, in |
-| `:Hover pan {left\|right\|up\|down}` | move the magnified view |
+| `:Hover nav {left\|right\|up\|down}` | move the magnified view |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |
@@ -560,14 +560,17 @@ than broken. `:checkhealth hover` says so, because from the outside those look i
 box and the picture is drawn larger. For text they come apart — the font size belongs to
 the terminal emulator and Neovim cannot change it, so a bigger box shows *more lines*, not
 larger ones. Only one of the two answers is magnification, and calling both of them zoom
-would be wrong about the other. A real zoom — a cropped detail you can pan around — is a
+would be wrong about the other. A real zoom — a cropped detail you can move around — is a
 separate feature; see [the roadmap](docs/ROADMAP.md). The whole reasoning, including the
 two measurements behind the pointer gate, is in
 [docs/FEATURES/RESIZE.md](docs/FEATURES/RESIZE.md).
 
-`zoom_keys` is still accepted as the old spelling of `resize_keys`. **`hover.zoom(delta)`
-is not an alias for it** — it is [the real zoom](#zoom), a different feature, and the name
-belongs to that. Anything that called the pre-rename spelling wants `hover.resize(delta)`.
+**`zoom_keys` is no longer the old spelling of this.** It briefly was, between the rename
+and the arrival of a real zoom, and it now configures
+[that](#zooming-into-a-picture) instead. A configuration still using the old shape
+(`zoom_keys.larger` / `.smaller`) is **reported on startup and ignored** rather than
+quietly rebound — those entries belong in `resize_keys`. `hover.zoom(delta)` is not an
+alias for `hover.resize(delta)` either, and has not been since the real zoom landed.
 
 **The ceiling is your terminal, and the plugin finds it rather than carrying a number.** A
 step multiplies the box the picture is fitted into by 1.25; the letterboxing and the clamp
@@ -607,25 +610,34 @@ plugin and cannot be asked again at a larger size.
 picture, larger. A zoom keeps the box and cuts the source, so you see a *smaller part* of
 the picture, larger. Only the second one is magnification.
 
-| Way in | Does | Available |
-| --- | --- | --- |
-| `:Hover zoom [in\|out\|reset]` | one step of magnification; omitted, in | over a picture |
-| `h` `j` `k` `l` | move the magnified view left, down, up, right | **only while zoomed in** |
-| `:Hover pan {left\|right\|up\|down}` | the same move, from the command line | only while zoomed in |
+| Way in | Does | Available | Option |
+| --- | --- | --- | --- |
+| `<M-z>` | one step of magnification | when the picture **can** be zoomed | `zoom_keys.into` |
+| `<M-Z>` | one step back out | as above | `zoom_keys.out` |
+| `<M-R>` | back to the whole picture | as above | `zoom_keys.reset` |
+| `:Hover zoom [in\|out\|reset]` | the same three, from the command line; omitted, in | over a picture | — |
+| `h` `j` `k` `l` | move the magnified view left, down, up, right | **only while zoomed in** | `nav_keys.*` |
+| `:Hover nav {left\|right\|up\|down}` | the same move, from the command line | only while zoomed in | — |
 
-**Why there is no key for zooming itself, and why panning has four.** A zoom step writes a
-cropped file, which costs about a quarter of a second (measured below). That is a
-deliberate operation, and deliberate operations live on `:Hover` here. Panning is the part
-you do repeatedly once you are already in — and `h`/`j`/`k`/`l` are worth borrowing there
-for a reason the other borrowed keys do not have: the thing they would otherwise do is
-*move the cursor*, and the hover dismisses itself on `CursorMoved`. Unbound, `h` at a
-magnified picture takes the picture away. Nobody means that.
+**Why the zoom keys are Alt chords, and why moving has four plain ones.** A zoom step
+writes a cropped file and costs about a quarter of a second (measured below), so it is a
+deliberate press rather than a dial. For a while there was no key at all, because the only
+candidates on the table were `+` and `-` — real motions, and displacing a motion for an
+operation that slow is a bad trade. `<M-z>` displaces nothing, so the trade that failed
+for `+` succeeds here. All three are bound whenever the picture *can* be zoomed rather
+than only while it is: `out` and `reset` simply decline at level 0, and a pair that
+appears only after a successful press would be worse than one that is always there.
 
-They are handed back the moment the hover is not zoomed, like every borrowed key here.
-`hover.zoom(delta)` and `hover.pan(dx, dy)` are public if you want keys of your own.
+Moving around, once you are in, is the part you do repeatedly — and `h`/`j`/`k`/`l` are
+worth borrowing for a reason the other borrowed keys do not have: the thing they would
+otherwise do is *move the cursor*, and the hover dismisses itself on `CursorMoved`.
+Unbound, `h` at a magnified picture takes the picture away. Nobody means that. They are
+the narrowest borrow here, handed back the moment the hover is not zoomed.
+
+`hover.zoom(delta)` and `hover.nav(dx, dy)` are public if you want keys of your own.
 
 **What one step is.** The visible rectangle is divided by 1.5 and centred on where you
-were looking, so going deeper keeps looking at the same place. A pan step is a quarter of
+were looking, so going deeper keeps looking at the same place. A move step is a quarter of
 what is currently visible, so four of them cross the view once. Stepping back out to a
 view you have already seen is instant — the crop is cached for the session.
 
@@ -691,10 +703,13 @@ require("hover").setup({
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | |
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | |
-| `pan_keys.left` | `{ "h" }` | Move the magnified view. Borrowed **only while a hover is zoomed in** — see [Zooming into a picture](#zooming-into-a-picture). |
-| `pan_keys.right` | `{ "l" }` | |
-| `pan_keys.up` | `{ "k" }` | |
-| `pan_keys.down` | `{ "j" }` | |
+| `nav_keys.left` | `{ "h" }` | Move the magnified view. Borrowed **only while a hover is zoomed in** — see [Zooming into a picture](#zooming-into-a-picture). |
+| `nav_keys.right` | `{ "l" }` | |
+| `nav_keys.up` | `{ "k" }` | |
+| `nav_keys.down` | `{ "j" }` | |
+| `zoom_keys.into` | `{ "<M-z>" }` | Magnify a detail of the picture. Borrowed whenever the hover on screen **can** be zoomed — see [Zooming into a picture](#zooming-into-a-picture). Alt chords, so no motion is displaced. |
+| `zoom_keys.out` | `{ "<M-Z>" }` | |
+| `zoom_keys.reset` | `{ "<M-R>" }` | |
 | `resize_keys.larger` | `{ "+" }` | Bound only for a hover with a picture in it — see [Resizing the hover](#resizing-the-hover). |
 | `resize_keys.smaller` | `{ "-" }` | |
 | `resize_keys.wheel_larger` | `{ "<M-ScrollWheelUp>" }` | Bound for **any** hover. The wheel acts on what it points at: these fire only while the pointer is over the float, its border included. Needs `'mouse'` set |

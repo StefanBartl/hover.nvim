@@ -262,8 +262,6 @@ describe("hover.set_mode", function()
   -- anything. A float telling someone to type a command that does not exist
   -- is worse than saying nothing.
   describe("the commands this plugin names in its own text", function()
-    local STATES = { on = true, off = true, toggle = true, auto = true, manual = true }
-
     --- Every `lua/**/*.lua` file, read.
     ---@return table<string, string>
     local function sources()
@@ -285,10 +283,23 @@ describe("hover.set_mode", function()
       require("hover.bindings.usrcmds").setup()
       local registry = require("lib.nvim.bindings.usercmd.composer.registry")
       local routes = {}
+      -- Every value a route declares for an argument, read off the same
+      -- routes rather than kept as a list here. This *was* a list, naming
+      -- five values, and it was already two short (`bigger`/`smaller`) before
+      -- `zoom` and `nav` arrived with seven more -- at which point a source
+      -- comment saying `:Hover zoom in` was reported as naming a command that
+      -- does not exist. `TESTS/docs_spec.lua` kept a second copy of the same
+      -- list and fell behind in exactly the same way on the same day.
+      local STATES = {}
       for _, handle in ipairs(registry.all()) do
         if handle:name() == "Hover" then
           for _, route in ipairs(handle:spec().routes or {}) do
             routes[table.concat(route.path or {}, " ")] = true
+            for _, arg in ipairs(route.args or {}) do
+              for _, value in ipairs(arg.enum or {}) do
+                STATES[value] = true
+              end
+            end
           end
         end
       end

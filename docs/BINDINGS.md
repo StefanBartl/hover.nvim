@@ -47,10 +47,13 @@ require("hover").setup({ keymaps = { show = false } })
 | `resize_keys.smaller` | `-` | hovers with a picture only | one step smaller |
 | `resize_keys.wheel_larger` | `<M-ScrollWheelUp>` | **any** hover, and only while the pointer is over the float | one step larger |
 | `resize_keys.wheel_smaller` | `<M-ScrollWheelDown>` | as above | one step smaller |
-| `pan_keys.left` | `h` | **only while zoomed in** | move the magnified view left |
-| `pan_keys.right` | `l` | as above | right |
-| `pan_keys.up` | `k` | as above | up |
-| `pan_keys.down` | `j` | as above | down |
+| `zoom_keys.into` | `<M-z>` | hovers whose picture **can** be zoomed | magnify a detail one step |
+| `zoom_keys.out` | `<M-Z>` | as above | step back out |
+| `zoom_keys.reset` | `<M-R>` | as above | back to the whole picture |
+| `nav_keys.left` | `h` | **only while zoomed in** | move the magnified view left |
+| `nav_keys.right` | `l` | as above | right |
+| `nav_keys.up` | `k` | as above | up |
+| `nav_keys.down` | `j` | as above | down |
 
 Three things follow from "borrowed", and each has been a bug at some point:
 
@@ -68,12 +71,20 @@ Three things follow from "borrowed", and each has been a bug at some point:
   read `content.canvas` instead: what a drawn hover has and a text one does
   not. Hanging them off the existing condition would have bound them for
   every case except the one they were built for.
-- **Panning has the narrowest condition of all, and the strongest case.**
-  `pan_keys` are bound only while the hover is *zoomed in* — not merely drawn.
+- **Navigating has the narrowest condition of all, and the strongest case.**
+  `nav_keys` are bound only while the hover is *zoomed in* — not merely drawn.
   They are motions, like `+` and `-`, but with one difference that settles it:
   what `h` would otherwise do over a float is move the cursor, and the
   dismissal hangs on `CursorMoved`, so the unbound key takes the picture away.
   Nobody presses `h` at a magnified picture meaning that.
+- **The zoom keys are Alt chords, and that is what makes them affordable.**
+  There were deliberately no zoom keys at first: a step costs ~258 ms, which
+  is the wrong shape for a key you hold, and the only candidates then on the
+  table were `+` and `-` — real motions. `<M-z>`, `<M-Z>` and `<M-R>` displace
+  no motion and no builtin, so the trade that failed for `+` succeeds here.
+  They are bound whenever the picture *can* be zoomed rather than only while
+  it is: `out` and `reset` decline at level 0 anyway, and a pair that appears
+  only after a successful press would be worse than one that is simply there.
 - **The wheel is bound for every hover, and gated on the pointer instead.**
   `+` is a motion in normal mode, and displacing a motion for every text
   float costs more than the feature is worth there; `<M-ScrollWheel>` costs
@@ -113,7 +124,7 @@ omitted, which toggles.
 | `:Hover pin` | take this float out of the cursor's hands. While pinned the trigger opens nothing; `:Hover show` replaces it, `q`/`<Esc>` take it away |
 | `:Hover resize [bigger\|smaller]` | make the hover on screen bigger or smaller -- a picture is drawn larger, a text preview shows more lines. Omitted, bigger. Declines for a *position* preview, which cannot be asked again at another size |
 | `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture on screen, or step back out. Omitted, in. Pictures only, and a step costs ~258 ms, which is why it is a route rather than a key |
-| `:Hover pan {left\|right\|up\|down}` | move the magnified view. The keyboard counterpart to `pan_keys`, which are a borrow and therefore undiscoverable until one has been seen |
+| `:Hover nav {left\|right\|up\|down}` | move the magnified view. The keyboard counterpart to `nav_keys`, which are a borrow and therefore undiscoverable until one has been seen |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |

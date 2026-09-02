@@ -32,9 +32,14 @@ several crops into one process saved only the start — the work is the work.
 key you hold down and watch respond, and fast enough that a deliberate press
 feels answered. That single number produced three decisions:
 
-1. **Zooming lives on a route, not a key pair.** `:Hover zoom [in|out|reset]`.
-   `+` and `-` stay with resize, which costs nothing and *is* a dial.
-   `hover.zoom(delta)` is public for anyone who disagrees and wants a key.
+1. **No key you hold down, and for a while no key at all.**
+   `:Hover zoom [in|out|reset]` was the only way in, because the keys on the
+   table then were `+` and `-` — real motions, and displacing a motion for an
+   operation this slow is a bad trade. **The keys exist now, and what changed
+   is the chord, not the reasoning:** `<M-z>`, `<M-Z>` and `<M-R>` are not
+   motions, not builtins, and cost a reader nothing while a float is up. The
+   objection was never "zooming is not worth a key" — it was "not worth *that*
+   key".
 2. **It goes through the placeholder machinery** that PDF pages have used all
    along — `build_async`, a generation counter, and a provisional frame that
    waits out the grace period. Measured, a zoom beats the page it borrowed the
@@ -61,7 +66,7 @@ is a different feature with a different price: measured at 3.3 s against
 258 ms. It stays on [ROADMAP.md](../ROADMAP.md) rather than being approximated
 here.
 
-## Panning: the narrowest borrow in the plugin, and the strongest case
+## Navigating: the narrowest borrow in the plugin, and the strongest case
 
 While a hover is zoomed in, `h` `j` `k` `l` move the magnified view. Every
 other borrowed key in this plugin is bound on a *content* condition — is there
@@ -69,14 +74,15 @@ something to scroll, is there a canvas. These are bound on a **state**: only
 while the hover is actually magnified, and handed straight back the moment it
 is not.
 
-That is narrower than anything else here, and it has the best argument of any
-of them. `+` and `-` are motions, and displacing a motion costs the reader
+That is narrower than anything else here — narrower even than the zoom keys
+above, which are bound whenever the picture *can* be zoomed — and it has the
+best argument of any of them. `+` and `-` are motions, and displacing a motion costs the reader
 something. `h` and `l` are motions too — but what they would otherwise do,
 *with a magnified picture on screen*, is **destroy the float**: the dismissal
 hangs on `CursorMoved`, so pressing `h` to look further left moves the cursor
 and takes the picture away instead. Nobody has ever meant that.
 
-`:Hover pan {left|right|up|down}` is the same thing without a borrow, and it
+`:Hover nav {left|right|up|down}` is the same thing without a borrow, and it
 exists because a borrowed key is undiscoverable until it has been seen once.
 
 **A step is a quarter of the visible rectangle**, so four of them cross the

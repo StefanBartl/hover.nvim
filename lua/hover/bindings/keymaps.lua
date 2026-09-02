@@ -127,8 +127,8 @@ end
 --- float, is meaningless, so those keys are left alone entirely and keep
 --- whatever they mean elsewhere.
 ---
---- **Panning is the narrowest condition of the three, and the best argued.**
---- `pan_keys` are bound only while the hover is *zoomed in* -- not merely
+--- **Navigating is the narrowest condition of them all, and the best argued.**
+--- `nav_keys` are bound only while the hover is *zoomed in* -- not merely
 --- drawn. They are motions, like `+` and `-`, but with one difference that
 --- settles it: the thing `h` would otherwise do over a float is move the
 --- cursor, and the dismissal hangs on `CursorMoved`, so the unbound key takes
@@ -145,11 +145,12 @@ end
 --- argument stops being readable -- `borrow(c, f, g, h, true)` says nothing
 --- about which of them pans. A fourth condition is one key here.
 ---@param content Hover.Content|nil
----@param handlers { scroll?: fun(delta: integer), resize?: fun(delta: integer), pan?: fun(dx: integer, dy: integer), zoomed?: boolean }
+---@param handlers { scroll?: fun(delta: integer), resize?: fun(delta: integer), nav?: fun(dx: integer, dy: integer), zoom?: fun(delta: integer), zoomed?: boolean, zoomable?: boolean }
 ---@return nil
 function M.borrow(content, handlers)
   handlers = handlers or {}
-  local rerender, resize, pan = handlers.scroll, handlers.resize, handlers.pan
+  local rerender, resize = handlers.scroll, handlers.resize
+  local nav, zoom = handlers.nav, handlers.zoom
   M.release()
 
   local cfg = require("hover.config").get()
@@ -175,7 +176,7 @@ function M.borrow(content, handlers)
   local s = content and content.scroll
   -- Nothing below and nothing above: not scrollable in either direction.
   local at_start = s and (s.offset or 0) == 0 and (s.page or 1) == 1
-  -- `rerender and` for the same reason `resize and` and `pan and` appear
+  -- `rerender and` for the same reason `resize and` and `nav and` appear
   -- below: every handler is optional, and this was the one branch that did
   -- not say so. A caller handing over `resize` but no `scroll` for scrollable
   -- content would have bound a key that calls nil.
@@ -232,20 +233,49 @@ function M.borrow(content, handlers)
     end
   end
 
-  -- Last, and on the narrowest condition there is: only while the hover is
-  -- actually magnified. Nothing to move towards otherwise.
-  if pan and handlers.zoomed then
-    local pk = type(cfg.pan_keys) == "table" and cfg.pan_keys or {}
+  -- The zoom, on "this hover *can* be zoomed" rather than "is zoomed".
+  --
+  -- Wider than the navigation borrow below on purpose, and the difference is
+  -- what the keys cost. These are Alt chords: they displace no motion and no
+  -- builtin, so binding `out` and `reset` while nothing is zoomed costs a
+  -- reader nothing and they simply decline. Binding them only *after* a
+  -- successful zoom would make the pair appear and disappear under the
+  -- reader's hands for no gain.
+  if zoom and handlers.zoomable then
+    local zk = type(cfg.zoom_keys) == "table" and cfg.zoom_keys or {}
     for _, spec in ipairs({
-      { pk.left, -1, 0, "left" },
-      { pk.right, 1, 0, "right" },
-      { pk.up, 0, -1, "up" },
-      { pk.down, 0, 1, "down" },
+      { zk.into, 1, "in" },
+      { zk.out, -1, "out" },
+      -- `zoom` clamps at level 0, so any step past the current one lands on
+      -- "the whole picture" exactly -- the same trick `:Hover zoom reset`
+      -- uses, rather than a second entry point.
+      { zk.reset, -math.huge, "back out entirely" },
+    }) do
+      local delta = spec[2]
+      for _, lhs in ipairs(M.keylist(spec[1])) do
+        take(seen, lhs, function()
+          zoom(delta)
+        end, "hover: zoom " .. spec[3])
+      end
+    end
+  end
+
+  -- Last, and on the narrowest condition there is: only while the hover is
+  -- actually magnified. Nothing to move towards otherwise, and unlike the
+  -- chords above these are motions -- the one kind of key worth handing back
+  -- the instant it stops earning its place.
+  if nav and handlers.zoomed then
+    local nk = type(cfg.nav_keys) == "table" and cfg.nav_keys or {}
+    for _, spec in ipairs({
+      { nk.left, -1, 0, "left" },
+      { nk.right, 1, 0, "right" },
+      { nk.up, 0, -1, "up" },
+      { nk.down, 0, 1, "down" },
     }) do
       local dx, dy = spec[2], spec[3]
       for _, lhs in ipairs(M.keylist(spec[1])) do
         take(seen, lhs, function()
-          pan(dx, dy)
+          nav(dx, dy)
         end, "hover: move the magnified view " .. spec[4])
       end
     end

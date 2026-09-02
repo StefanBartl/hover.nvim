@@ -287,12 +287,13 @@ return {
   --- this binding moves the cursor and takes the picture away. Nobody means
   --- that. The moment the hover is not zoomed they are handed straight back.
   ---
-  --- There is deliberately no key pair for zooming itself. A step costs about
-  --- a quarter of a second (see `hover.zoom`), which makes it a deliberate
-  --- operation rather than a dial, and deliberate operations live on
-  --- `:Hover zoom [in|out|reset]` here. `hover.zoom(delta)` is public for
-  --- anyone who wants a key of their own.
-  pan_keys = {
+  --- Called `nav` rather than `pan` since `9fba190`'s successor: the route it
+  --- belongs to reads `:Hover nav left`, and one word for one operation is
+  --- worth more here than the more precise term. `pan` was one day old and is
+  --- gone rather than aliased -- an alias for a renamed operation is exactly
+  --- what produced the `zoom`/`resize` collision this repository just paid
+  --- for.
+  nav_keys = {
     ---@type string|string[]
     left = { "h" },
     ---@type string|string[]
@@ -301,6 +302,40 @@ return {
     up = { "k" },
     ---@type string|string[]
     down = { "j" },
+  },
+
+  --- Zoom the picture on screen, borrowed while the hover *can* be zoomed.
+  ---
+  --- **These exist now and deliberately did not before, and the reason the
+  --- objection no longer applies is the chord, not a change of mind.** The
+  --- argument against zoom keys was never that zooming is not worth a key --
+  --- it was that a zoom step costs about a quarter of a second (measured:
+  --- 258 ms, see `hover.zoom`), and a key that is *held down* is the wrong
+  --- shape for that. What made it worse was the only keys on offer at the
+  --- time: `+` and `-` are real motions, and displacing a motion for an
+  --- operation that slow is a bad trade.
+  ---
+  --- An Alt chord displaces nothing. `<M-z>`, `<M-Z>` and `<M-R>` are not
+  --- motions, are not Neovim builtins, and cost a reader nothing while a
+  --- float is up -- so the trade that failed for `+` succeeds here, and the
+  --- route stays for anyone who wants no borrow at all.
+  ---
+  --- **`into`, not `in`.** `in` is a Lua keyword, so the field could only be
+  --- written `["in"]` -- here and in every user's config. The route argument
+  --- is still `:Hover zoom in`, where no such rule applies.
+  ---
+  --- All three are bound on "this hover can be zoomed" rather than on "is
+  --- zoomed": `out` and `reset` decline at level 0 anyway, and the narrower
+  --- condition would buy nothing while making `<M-Z>` appear only after a
+  --- successful `<M-z>`. That is the opposite trade from `nav_keys`, and for
+  --- the opposite reason -- there, the keys are motions.
+  zoom_keys = {
+    ---@type string|string[]
+    into = { "<M-z>" },
+    ---@type string|string[]
+    out = { "<M-Z>" },
+    ---@type string|string[]
+    reset = { "<M-R>" },
   },
 
   --- Keymaps this plugin sets in the user's namespace. Every entry is a
