@@ -158,3 +158,26 @@ a real picture with the ImageMagick its own guard has already confirmed.
 **The lesson is about the word *pending*.** All three defects were invisible
 because the spec announced a reason for skipping that sounded plausible. A skip
 with a good explanation is the easiest kind of missing coverage to keep.
+
+Which is why the runner now counts them. Measured on 2026-09-03, because the
+summary is worse than it looks and in two different ways:
+
+| Shape | Printed | Counted |
+| --- | --- | --- |
+| `pending("…")` at describe level | `Pending \|\| …` | in nothing — the Success total merely gets *smaller* |
+| `pending("…")` inside an `it` | `Pending \|\| …` | **as a Success** |
+
+The second is the shape a guarded spec has, and it is the one that hid here:
+`zoom_spec` has 24 `it` blocks and reported "Success: 24" while one of them
+asserted nothing. Neither shape touches the exit code, so no amount of reading
+the totals would have caught it.
+
+`scripts/test.sh` now names every pending spec after the run and fails unless
+`HOVER_ALLOW_PENDING=1` is set. CI sets it, because the crop check is
+legitimately pending on a runner with no ImageMagick — but the names are
+printed there too, so a *new* one is visible where it cannot be fatal.
+
+**The most likely reason to see it locally is a worktree.** `minimal_init`
+finds images.nvim through `IMAGES_NVIM_DIR`, a `.deps/` checkout, or the
+sibling directory — and from `.claude/worktrees/<name>/` the sibling is the
+worktree pool, not `E:/repos`. Set `IMAGES_NVIM_DIR` there.

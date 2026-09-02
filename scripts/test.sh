@@ -49,4 +49,52 @@ else
   cmd="PlenaryBustedDirectory $target { minimal_init = 'scripts/minimal_init.lua', sequential = true }"
 fi
 
-exec nvim --clean --headless -u scripts/minimal_init.lua -c "$cmd"
+# A pending spec is invisible in the summary, and there are two shapes of it.
+# Both measured here on 2026-09-03 rather than assumed:
+#
+#   `pending("...")` at describe level -- prints a Pending line and is *not*
+#   counted anywhere. The only trace is a Success total that got smaller,
+#   which reads as "nobody added a spec", not as "one stopped running".
+#
+#   `pending("...")` *inside* an `it`, which is what a guarded spec does --
+#   prints a Pending line **and still counts the `it` as a Success**. Measured
+#   on zoom_spec: 24 `it` blocks, "Success: 24", one of which asserted
+#   nothing. So the summary does not merely omit a skipped spec, it reports it
+#   as green.
+#
+# Neither shape touches the exit code. That is how the zoom crop check stayed
+# invisible for as long as it did, and no amount of reading the totals would
+# have caught it.
+#
+# So the runner counts them itself. `tee` rather than a capture-then-print,
+# because a suite that only speaks at the end is worse to wait on, and
+# PIPESTATUS rather than $? because the pipeline's status is `tee`'s.
+#
+# HOVER_ALLOW_PENDING=1 is the way to have a deliberate `pending()` marker: it
+# stays visible in the output and stops failing the run. Silence was never the
+# problem; unnoticed silence was.
+log="$(mktemp)"
+trap 'rm -f "$log"' EXIT
+
+nvim --clean --headless -u scripts/minimal_init.lua -c "$cmd" 2>&1 | tee "$log"
+status=${PIPESTATUS[0]}
+
+# Strip the colour codes before counting: plenary writes "Pending" in yellow.
+pending=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -c '^Pending' || true)
+
+# Named always, fatal only where it can be. On a CI runner the crop check is
+# *deliberately* pending -- there is no images.nvim and no ImageMagick to prove
+# it with -- so failing there would only teach everyone to ignore the message.
+# Printing there still costs nothing and is the whole point: a *new* pending
+# shows up in the log even where it cannot stop the build.
+if [[ "$pending" -gt 0 ]]; then
+  printf '\033[31m%s\033[0m\n' "$pending pending spec(s) -- a guarded one still counts as green above:" >&2
+  sed 's/\x1b\[[0-9;]*m//g' "$log" | grep '^Pending' | sed 's/^/  /' >&2
+  if [[ -z "${HOVER_ALLOW_PENDING:-}" ]]; then
+    printf '%s\n' "Set HOVER_ALLOW_PENDING=1 where one is expected (CI does)." >&2
+    printf '%s\n' "Locally this usually means images.nvim was not found: set IMAGES_NVIM_DIR." >&2
+    exit 1
+  fi
+fi
+
+exit "$status"
