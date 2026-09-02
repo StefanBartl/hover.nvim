@@ -76,9 +76,14 @@ function M.set_pinned(pinned)
   -- string it was given.
   local text = ""
   if type(cfg.title) == "table" then
+    -- Collected and joined rather than concatenated in the loop (`PERF-03`),
+    -- which also keeps the result a string for certain -- a chunk whose first
+    -- element is missing would otherwise poison it.
+    local parts = {}
     for _, chunk in ipairs(cfg.title) do
-      text = text .. (type(chunk) == "table" and chunk[1] or tostring(chunk))
+      parts[#parts + 1] = type(chunk) == "table" and tostring(chunk[1] or "") or tostring(chunk)
     end
+    text = table.concat(parts)
   elseif type(cfg.title) == "string" then
     text = cfg.title
   end
