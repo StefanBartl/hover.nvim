@@ -873,6 +873,9 @@ When a hover fails to appear for one specific thing rather than for everything,
 
 ## Documentation
 
+- [Features](docs/FEATURES/README.md) — **why** each feature has the shape it has: the
+  measurements it was built against, the alternatives that were rejected, and the bugs
+  that changed the design. Everything else here says *what*; that directory says *why*.
 - [Installation](docs/installation.md) — requirements, every plugin manager, and the two
   rules that decide whether the hover works at all: `enable()` rather than `setup()`, and
   not lazy-loading it.

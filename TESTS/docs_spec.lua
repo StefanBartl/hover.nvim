@@ -248,7 +248,10 @@ end
 ---@return table<string, boolean>
 local function all_documents()
   local out = { ["README.md"] = false, ["doc/hover.txt"] = true }
-  for _, file in ipairs(vim.fn.glob(vim.fn.getcwd() .. "/docs/*.md", false, true)) do
+  -- Recursive: `docs/FEATURES/` arrived after this file did, and a document
+  -- outside the glob is exactly how `MANUAL-EVIDENCE.md` came to say "three"
+  -- while there were four.
+  for _, file in ipairs(vim.fn.glob(vim.fn.getcwd() .. "/docs/**/*.md", false, true)) do
     out[(vim.fn.fnamemodify(file, ":."):gsub("\\", "/"))] = false
   end
   return out
