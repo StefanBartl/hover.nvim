@@ -127,11 +127,28 @@ One call, from [`bare_path.lua`](../lua/hover/bare_path.lua):
 require("gopath.resolve").resolve_at_cursor()  --> { kind, path, exists, … }
 ```
 
-It is tried **before** `<cfile>`, because it handles what `<cfile>` cannot: a
-truncated path (`...nvim/init.lua`, `…/lua/config/init.lua`), a `:line:col`
-suffix, a path findable only through `&path` / `rtp` / a tail search. That is
-precisely the "a path in `:messages` should hover too" case, and it is
-gopath's whole subject matter.
+It handles what `<cfile>` cannot: a truncated path (`...nvim/init.lua`,
+`…/lua/config/init.lua`), a `:line:col` suffix, a path findable only through
+`&path` / `rtp` / a tail search. That is precisely the "a path in `:messages`
+should hover too" case, and it is gopath's whole subject matter.
+
+**Which of the two is asked first depends on how the hover was asked**, and
+that is a measurement rather than a preference:
+
+- **On an explicit `:Hover show`**, gopath goes first and `<cfile>` second —
+  the full pipeline, because the cost is the point of asking.
+- **On the automatic trigger**, `<cfile>` goes first, and gopath is consulted
+  only when `<cfile>` declined *and* the token is one gopath could plausibly
+  help with: it contains `...` or `…`, or it has no slash at all.
+
+The gate exists because a *failing* resolve cost **13.2 ms per trigger** in
+exactly the population an automatic hover produces — prose that is not a path
+at all. gopath answers everything it can well under 500 µs; only the misses
+are expensive, which is why the gate sits on the token rather than on gopath.
+What it gives up is stated where it is implemented (`gopath_can_help` in
+`bare_path.lua`): a relative path that exists somewhere else in the project —
+not beside the buffer, not under the cwd — stops resolving on the timer.
+`:Hover show` still finds it.
 
 Two things the hover does with the answer, both worth knowing when a result
 surprises you:

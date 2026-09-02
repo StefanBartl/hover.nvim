@@ -388,8 +388,8 @@ local function remember_page(key, png)
       end
       _pages = {}
     end, {
-      group = "MarkdownNvimHoverMedia",
-      desc = "markdown.nvim: delete rasterized PDF hover pages",
+      group = "HoverMedia",
+      desc = "hover: delete rasterized PDF pages at exit",
     })
   end
 
