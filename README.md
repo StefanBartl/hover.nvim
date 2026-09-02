@@ -621,8 +621,10 @@ Two traps, both of which cost days:
 - [Bindings cheatsheet](docs/BINDINGS.md) — every keymap, user command, autocmd,
   highlight group and global variable this plugin installs, and which keys are borrowed
   rather than owned.
-- [Roadmap](docs/ROADMAP.md) — what is deliberately not built yet, what would have to be
-  settled first, and what was considered and rejected.
+- [Roadmap](docs/ROADMAP.md) — what is deliberately not built yet and what would have to
+  be settled first: which sibling plugin could contribute a preview and through which
+  entry point, which features are missing, which of the things this plugin already does
+  it does worse than it could — and what was considered and rejected.
 - `:help hover` — the vimdoc: the same ground, offline.
 
 ### References
