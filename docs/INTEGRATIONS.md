@@ -61,6 +61,7 @@ ran.
 | [migrate.nvim](https://github.com/StefanBartl/migrate.nvim) | registry | a *position* preview: this line uses a deprecated API, and what replaces it | no deprecation notice in the float |
 | [documentation.nvim](https://github.com/StefanBartl/documentation.nvim) | registry | a *position* preview: what the dotted module under the cursor is, out of the generated map | no module summary |
 | [spotlight.nvim](https://github.com/StefanBartl/spotlight.nvim) | registry | a *position* preview: how often a spotlighted token occurs in this buffer | no occurrence count |
+| [sandbox.nvim](https://github.com/StefanBartl/sandbox.nvim) | registry | a *position* preview, **request-only**: whether the container image under the cursor is pulled, how big it is, and what runs from it | no image hover |
 
 All of them are optional and **none is required**. With none installed the
 hover still gives file heads, directory listings, image and PDF metadata, a
@@ -207,12 +208,18 @@ Each is documented on its own side, because that is where the code is:
 | migrate.nvim | position | this line uses a deprecated API, and what replaces it | [docs/hover.md](https://github.com/StefanBartl/migrate.nvim/blob/main/docs/hover.md) |
 | documentation.nvim | position | what the dotted module under the cursor is | [docs/hover.md](https://github.com/StefanBartl/documentation.nvim/blob/main/docs/hover.md) |
 | spotlight.nvim | position | how often a spotlighted token occurs in this buffer | [docs/hover.md](https://github.com/StefanBartl/spotlight.nvim/blob/main/docs/hover.md) |
+| sandbox.nvim | position (`on_request`) | is this container image pulled, how big, what runs from it | [docs/FEATURES/HOVER.md](https://github.com/StefanBartl/sandbox.nvim/blob/main/docs/FEATURES/HOVER.md) |
 
-Three of those five are **position** previews, and that is not a coincidence:
+Four of those six are **position** previews, and that is not a coincidence:
 until the kind existed, "no target" meant "no hover", and a fact *about* a
 line — it is deprecated, this token occurs fourteen times, this module does X
-— was not expressible at all. Three plugins were waiting on the same missing
+— was not expressible at all. Four plugins were waiting on the same missing
 piece.
+
+sandbox.nvim was waiting on a second one. Its answer costs an engine start,
+measured at 286–754 ms, so it could not be built at all until a contribution
+could declare its own answer expensive — see
+[when your answer is expensive](../README.md#when-your-answer-is-expensive).
 
 **Each answers only where it has something to say**, and each enforces that
 itself rather than relying on a switch here:
@@ -226,6 +233,9 @@ itself rather than relying on a switch here:
 - spotlight.nvim answers only for tokens that are already spotlighted, because
   a spotlight is the only available signal that this token matters to the
   reader.
+- sandbox.nvim declines a name whose last component carries an extension, so
+  `init.lua:42` never reaches the engine — the same shape as `nginx:1.27`, and
+  the test runs before any process starts rather than after.
 
 That distribution of responsibility is deliberate. The framework has no way to
 judge whether a contribution is noisy — it cannot know what the answer is

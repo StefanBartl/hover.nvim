@@ -58,6 +58,7 @@ See ./docs/architecture.md#modules for details.
 - [Configuration](#configuration)
 - [Contributing from a plugin](#contributing-from-a-plugin)
 - [Two things that must not be changed casually](#two-things-that-must-not-be-changed-casually)
+- [Health](#health)
 - [Modules](#modules)
 - [Documentation](#documentation)
 
@@ -152,6 +153,28 @@ below. With none of them installed the hover still gives file heads, directory l
 image and PDF metadata, a badge for files that hold no text, URL details once the web
 hover is switched on, and the "this target does not exist" answer.
 
+### Worth installing alongside it
+
+The last column of the table below says what you lose without each plugin, which is the
+honest way to read a soft dependency. But it undersells the point, so here it is
+plainly: **hover.nvim is a frame, and these are the pictures.** Four of them are worth
+installing for the hover alone.
+
+- **[markdown.nvim]** — the single biggest upgrade this plugin can receive. Without it
+  only bare paths start a hover; with it, `[text](target)`, an `<img src>`, a whole
+  captioned `<figure>`, and `file.md#heading` opening on *that section*.
+- **[images.nvim]** — turns "1920×1080, 340 KB" into the actual picture, and is what
+  makes a rasterized PDF page visible at all. The only provider that draws on native
+  Windows Neovim in WezTerm.
+- **[pdfport.nvim]** — page 1 of a PDF as an image, every further page scrollable, and
+  after `:Hover office on` a `.docx`/`.xlsx`/`.pptx` too.
+- **[gopath.nvim]** — the reason a truncated `…nvim/init.lua` in `:messages` still
+  resolves.
+
+The rest each answer one question the file in front of you cannot: what replaced this
+deprecated call, what is this module, how many of this token are there, is this image
+pulled, what is in that repository's README.
+
 ### What each plugin brings
 
 | Plugin | What it is on its own | What it adds to the hover | Without it |
@@ -162,7 +185,11 @@ hover is switched on, and the "this target does not exist" answer.
 | [pdfport.nvim] | PDFs in both directions: seven extraction backends, plus nine producers for creating, merging and rasterizing | `render_page()` — page 1 of a PDF as a PNG, and every further page scrolled to. And, once `:Hover office on`, `create()` runs LibreOffice headless so a `.docx`/`.xlsx`/`.pptx` becomes a page too | A PDF shows its size and why there is no page; an office document shows a badge naming the format |
 | [gopath.nvim] | Multi-phase navigation from the cursor: LSP → Treesitter → whole-line extraction → suffix search → fuzzy alternate | `resolve_at_cursor()`, asked *before* Vim's own `<cfile>`: a truncated `...nvim/init.lua`, a `:line:col` suffix, a file findable only through `&path`/`rtp`. That is the "a path in `:messages` should hover too" case | Ordinary relative and absolute paths still resolve; truncated ones do not |
 | [snacks.nvim] / [image.nvim] | Image providers speaking the Kitty graphics protocol | Recognised as providers, but neither can draw into an arbitrary existing window, so a picture still falls back to text. images.nvim wins whenever several are installed | Nothing changes |
-| [reposcope.nvim] — *planned* | Search, preview and clone repositories from GitHub / GitLab / Codeberg, keeping every README it fetched in a cache keyed `owner/repo` | Nothing yet. The natural feature — cursor on `owner/repo`, that README's head in the float — needs no change here at all: it is a registry source plus a preview | No repository hover. Two questions have to be settled first — see [the roadmap](docs/ROADMAP.md) |
+| [reposcope.nvim] | Search, preview and clone repositories from GitHub / GitLab / Codeberg, keeping every README it fetched in a cache keyed `owner/repo` | Cursor on `owner/repo` — in a `lazy.nvim` spec, a dependency list, a note — and the head of that repository's README is in the float, out of the cache reposcope already keeps | `owner/repo` is just text |
+| [migrate.nvim] | Finds and rewrites deprecated Neovim API calls, with a rule set that knows what replaced what | A deprecated call on the line under the cursor names itself, and says what replaced it, before you run anything | You find out when the migration runs, or when it breaks |
+| [documentation.nvim] | Generates a module map of a Lua codebase — what each module is, what it exports, who requires it | Cursor on `require("lib.nvim.notify")` and the float says what that module *is*, read out of the `module_map.json` this plugin already writes | A module path is a string |
+| [spotlight.nvim] | Persistent highlighting of tokens across a buffer | The colours say *where*; the hover says **how many**, and whether there is another one below the fold | You scroll to find out |
+| [sandbox.nvim] | One plugin for Docker, Podman and nerdctl: containers, images, volumes, compose | On `:Hover show` over `nginx:1.27-alpine` in a `Dockerfile`: pulled or not, how big, which containers run from it. Request-only — an engine call costs 300–750 ms and must not ride the automatic trigger | An image reference is just text |
 
 ### The two doors
 
@@ -171,7 +198,7 @@ interchangeable.
 
 | Door | How it works | Who arrives through it |
 | --- | --- | --- |
-| **Registry** (inbound) | The plugin calls `hover.registry.register(name, …)` and hands over a *source* ("what is under the cursor?") or a *preview* ("how do I render a target of this type?"). hover.nvim never says its name, and a sixth contributor needs no change here | markdown.nvim |
+| **Registry** (inbound) | The plugin calls `hover.registry.register(name, …)` and hands over a *source* ("what is under the cursor?"), a *preview* ("how do I render a target of this type?"), or a *position* ("is there anything to say about this **place**?"). hover.nvim never says its name, and the next contributor needs no change here | markdown.nvim, migrate.nvim, reposcope.nvim, documentation.nvim, spotlight.nvim, sandbox.nvim |
 | **Named soft dependency** (outbound) | hover.nvim `pcall(require, …)`s the plugin by name from inside its own preview code, guarded so a missing plugin is a `nil` rather than an error | images.nvim, pdfport.nvim, gopath.nvim |
 
 Door 1 is the better shape; door 2 is the honest one. A *capability* can be registered —
@@ -196,6 +223,10 @@ a table reading each symptom back to the plugin that owns it.
 [pdfport.nvim]: https://github.com/StefanBartl/pdfport.nvim
 [gopath.nvim]: https://github.com/StefanBartl/gopath.nvim
 [reposcope.nvim]: https://github.com/StefanBartl/reposcope.nvim
+[migrate.nvim]: https://github.com/StefanBartl/migrate.nvim
+[documentation.nvim]: https://github.com/StefanBartl/documentation.nvim
+[spotlight.nvim]: https://github.com/StefanBartl/spotlight.nvim
+[sandbox.nvim]: https://github.com/StefanBartl/sandbox.nvim
 [snacks.nvim]: https://github.com/folke/snacks.nvim
 [image.nvim]: https://github.com/3rd/image.nvim
 
@@ -658,6 +689,27 @@ Two traps, both of which cost days:
   exactly that.
 - **A generated test card cannot reveal an aspect-ratio problem**, because
   `images.testcard` builds it to whatever box it is handed. Reproduce with a real image.
+
+## Health
+
+```
+:checkhealth hover
+```
+
+Four sections, and the reason there are four is that "the hover does nothing" has four
+completely different causes that look identical from the outside.
+
+| Section | What it answers |
+| --- | --- |
+| **hover.nvim** | Is `lib.nvim` there, and is it new enough — the one dependency with no fallback |
+| **configuration** | Which mode is set, and every switch with its current state. Two warnings catch the silent cases: `mode: off`, and `manual` mode with no key bound to show anything — both leave a correctly installed plugin doing nothing |
+| **optional contributors** | Which sibling plugins are installed, what each absent one is not doing, and whether a link source is registered at all |
+| **external tools** | `soffice` and `pdftoppm` on `PATH`, and — the part worth the section — *whether they are even needed*: with office rendering off, a missing `soffice` is information rather than a warning |
+
+When a hover fails to appear for one specific thing rather than for everything,
+[`:Hover why`](#the-hover-command) is the sharper tool: it names which gate declined.
+
+---
 
 ## Modules
 
