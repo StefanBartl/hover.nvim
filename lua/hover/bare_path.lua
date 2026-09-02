@@ -209,7 +209,8 @@ end
 ---@internal
 --- gopath.nvim's answer for the cursor position, when it is installed, is
 --- enabled, and confirms the path exists.
----@return string|nil absolute path
+---@return string|nil path absolute path
+---@return integer|nil line 1-based line the target named, if any
 local function via_gopath()
   local ok, gopath = pcall(require, "gopath.resolve")
   if not ok or type(gopath.resolve_at_cursor) ~= "function" then
@@ -230,7 +231,45 @@ local function via_gopath()
   if not (res.exists and type(res.path) == "string" and res.path ~= "") then
     return nil
   end
-  return res.path
+  -- gopath resolves `:line:col` suffixes as part of its job, so the line is
+  -- already known here. It used to be thrown away.
+  return res.path, type(res.line) == "number" and res.line or nil
+end
+
+---@internal
+--- Whether gopath is worth asking, once `<cfile>` has already failed.
+---
+--- **Measured, and the reason this gate exists.** gopath answers every case
+--- it can answer in under 500 us -- 128 us for a relative path, 368 us for a
+--- truncated one, 469 us for a bare name found through `&path`/`rtp`. Its
+--- *failures* are the expensive half: 1.4 ms for a bare name that does not
+--- exist, and **12.7 ms** for a token with a separator that does not. That
+--- last population is exactly what a log, a diff or a stack trace is full
+--- of, and it was being paid on every trigger.
+---
+--- None of that is gopath behaving badly. Running `&path`, `rtp` and a tail
+--- search that may shell out to `fd`/`rg` is right for `gP`, where a human
+--- asked and is waiting. It is wrong for something that fires on a timer.
+---
+--- So on the automatic trigger gopath is asked only where it can contribute
+--- something `<cfile>` cannot: a truncation, which is its whole subject
+--- matter, or a name with no separator, which is the `&path`/`rtp` case.
+--- A separator-carrying token that `<cfile>` could not resolve against the
+--- buffer's directory or the cwd is skipped.
+---
+--- **What that gives up**, so it is a decision and not a discovery: a
+--- relative path that exists somewhere else in the project -- not beside the
+--- buffer, not under the cwd -- stops resolving automatically. gopath's tail
+--- search would have found it. `:Hover show` still runs the full resolver,
+--- which is this plugin's standing answer for an expensive result: on
+--- explicit request, never on a timer.
+---@param token string
+---@return boolean
+local function gopath_can_help(token)
+  if token:find("...", 1, true) or token:find("…", 1, true) then
+    return true
+  end
+  return not token:find("[/\\]")
 end
 
 ---@internal
@@ -238,7 +277,8 @@ end
 --- the cwd second — the same order `classify.resolve_path` uses for a link,
 --- so a bare `./a.png` and a linked `./a.png` resolve identically.
 ---@param bufnr integer
----@return string|nil raw target as written
+---@return string|nil path raw target as written
+---@return integer|nil line 1-based line the target named, if any
 local function via_cfile(bufnr)
   local cfile = vim.fn.expand("<cfile>")
   if type(cfile) ~= "string" or cfile == "" then
@@ -246,17 +286,23 @@ local function via_cfile(bufnr)
   end
 
   cfile = trim_delimiters(cfile)
-  local path = split_location(cfile)
+  local path, location = split_location(cfile)
   if not looks_like_path(path) then
     return nil
   end
+  -- `:42` and `:42:7` both yield 42; the column is not something a preview
+  -- of twenty lines can use.
+  local line = location and tonumber(location:match("^:(%d+)")) or nil
 
   local uv = vim.uv or vim.loop
   local expanded = vim.fn.expand(path)
 
   -- Absolute already: hand it back untouched.
   if expanded:match("^/") or expanded:match("^%a:[\\/]") or expanded:match("^[\\/][\\/]") then
-    return uv.fs_stat(expanded) and path or nil
+    if uv.fs_stat(expanded) then
+      return path, line
+    end
+    return nil
   end
 
   local bases = {}
@@ -269,7 +315,7 @@ local function via_cfile(bufnr)
   for _, base in ipairs(bases) do
     if base and base ~= "" then
       if uv.fs_stat(base .. "/" .. expanded) then
-        return path
+        return path, line
       end
     end
   end
@@ -310,7 +356,7 @@ end
 --- reaching the resolver. See `hover.scope` for what counts as code and for
 --- the five ways it declines to decide.
 ---@param bufnr? integer
----@param opts? { missing?: boolean, code?: boolean } Both default to true.
+---@param opts? { missing?: boolean, code?: boolean, force?: boolean } `missing` and `code` default to true; `force` runs the full resolver.
 ---@return Hover.Source|nil
 function M.under_cursor(bufnr, opts)
   opts = opts or {}
@@ -357,9 +403,24 @@ function M.under_cursor(bufnr, opts)
     return nil
   end
 
-  -- gopath first: it is the one that handles truncated paths and `:line`
-  -- suffixes, which is the case `<cfile>` cannot resolve on its own.
-  local resolved = via_gopath() or via_cfile(bufnr)
+  -- `<cfile>` first, gopath second, and only where gopath can contribute --
+  -- see `gopath_can_help` for the measurements that decided the order. An
+  -- explicit request gets the old order and the full pipeline: the cost is
+  -- the point of asking.
+  -- `target_line`, not `line`: `line` is already the buffer line's *text*
+  -- above, and this is a line *number* the target named.
+  local resolved, target_line
+  if opts.force then
+    resolved, target_line = via_gopath()
+    if not resolved then
+      resolved, target_line = via_cfile(bufnr)
+    end
+  else
+    resolved, target_line = via_cfile(bufnr)
+    if not resolved and gopath_can_help(token) then
+      resolved, target_line = via_gopath()
+    end
+  end
 
   -- Nothing on disk. Worth reporting only when the text cannot have been
   -- anything but a path -- see `is_unambiguous_path`. `classify` then turns
@@ -384,6 +445,7 @@ function M.under_cursor(bufnr, opts)
     col = col,
     col_end = col,
     lnum = row,
+    line = target_line,
     kind = "bare_path",
   }
 end

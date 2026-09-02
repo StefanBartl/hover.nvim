@@ -88,6 +88,17 @@ function M.file(target, opts)
 
   local limit = opts.max_lines or 20
   local offset = math.max(0, opts.offset or 0)
+
+  -- A target that named a line (`init.lua:42`) starts there rather than at
+  -- the top -- with a few lines of lead-in, because a line with no context
+  -- above it is harder to place than one with three. Only on the first view:
+  -- once the reader scrolls, `opts.offset` is what they asked for and this
+  -- must not drag them back.
+  local LEAD = 3
+  if offset == 0 and type(opts.line) == "number" and opts.line > LEAD + 1 then
+    offset = opts.line - 1 - LEAD
+  end
+
   local lines, truncated, skipped = head(target.path, limit, offset)
 
   -- Scrolled past the end (the file shrank, or the offset overshot): fall
@@ -109,7 +120,12 @@ function M.file(target, opts)
   end
 
   local title = vim.fs.basename(target.path)
-  if offset > 0 then
+  if type(opts.line) == "number" then
+    -- The line asked for, not the offset: `:42` is what the reader typed or
+    -- read, and the offset is an implementation detail three lines away
+    -- from it.
+    title = ("%s:%d"):format(title, opts.line)
+  elseif offset > 0 then
     title = ("%s  ↓%d"):format(title, offset)
   end
 

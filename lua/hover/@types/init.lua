@@ -137,6 +137,7 @@
 ---@field lnum integer # 1-based line it was found on.
 ---@field col integer # 0-based start column.
 ---@field col_end integer # 0-based end column.
+---@field line? integer # 1-based line the target named (`init.lua:42`), when it named one.
 ---@field kind? string # Free-form label from the source ("mdlink", "bare_path", ...).
 
 --- One plugin's contribution, keyed by plugin name so a second `setup()`
@@ -175,6 +176,7 @@
 ---@field url_timeout_ms? integer
 ---@field office_convert? boolean # Convert an office document to a PDF for a real page preview, instead of showing a badge.
 ---@field office_timeout_ms? integer # Conversion timeout, passed to pdfport.
+---@field line? integer # Text previews: 1-based line the target named (`init.lua:42`); the first view starts near it.
 ---@field offset? integer # Text previews: lines to skip. Set by `hover.scroll`.
 ---@field page? integer # PDF previews: 1-based page to render. Set by `hover.scroll`. Office documents page through their converted PDF the same way.
 

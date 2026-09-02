@@ -268,56 +268,6 @@ thing worth showing is how little it interrupts reading, and a still cannot.
 
 ## Optimizations
 
-### A bare path that does not exist costs 13 milliseconds
-
-**Measured, and the worst thing on this page.** The earlier figure for
-`bare_path.under_cursor` — ~3 µs median, ~100 µs mean — was taken over a Lua
-source file, where almost every cursor position is prose and never reaches
-the resolver. Split by what the cursor is actually on, per call:
-
-    prose, nothing path-shaped            1.9 µs median
-    a path that resolves                117.5 µs median
-    a path that does NOT resolve      13 201.4 µs median
-
-Thirteen milliseconds, on every trigger, for text that looks like a path and
-is not on disk. That is not a tail — it is a wall, and it is squarely in the
-population this plugin invites: a log full of `foo/bar` tokens, a diff, a
-stack trace.
-
-Where it goes is no longer a guess either:
-
-    expand("<cfile>")                     0.5 µs
-    uv.fs_stat on a file that exists     30.6 µs
-    classify (one stat + typing)         69.7 µs
-    gopath.resolve_at_cursor            107.6 µs   -- when it succeeds
-
-gopath is 108 µs when it finds something and two orders of magnitude worse
-when it does not: a miss runs the whole pipeline — `&path`, `rtp`, a tail
-search that may shell out to `fd`/`rg`. That is the right behaviour for
-`gP`, where a human asked and is waiting. It is the wrong behaviour for
-something that fires on a timer.
-
-Two things to settle, and they are a genuine trade-off rather than a
-detail:
-
-- **Cheap resolver first.** `<cfile>` plus a stat answers the common case for
-  ~30 µs; gopath adds the awkward forms. Trying the cheap one first and
-  gopath only on evidence that it is needed (a `...` truncation, a `:line`
-  suffix) would take the miss case down by orders of magnitude — but it also
-  gives up gopath's `&path`/`rtp` lookup for ordinary names, which today
-  finds files nothing else would. That loss has to be named and accepted,
-  not discovered.
-- **Or a negative cache.** Remember, per buffer and changedtick, which tokens
-  did not resolve, so the 13 ms is paid once per token rather than per
-  trigger. Cheaper to reason about, and it does not change what resolves —
-  but a cache that remembers absence is wrong the moment a file appears, and
-  the mtime trick that makes the office cache safe has nothing to key on
-  here.
-
-Whichever way: measure again afterwards. The last three measurements on this
-plugin all contradicted the intuition they were testing (see `hover.scope`'s
-header, and this entry).
-
 ### Cache the position gate per line
 
 `scope.allows_path` parses the line it is asked about, every time. Within one

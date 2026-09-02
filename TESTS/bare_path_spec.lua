@@ -184,3 +184,191 @@ describe("bare_path.under_cursor", function()
     assert.is_nil(target("word    tail", "    "))
   end)
 end)
+
+-- `init.lua:42` out of a log or a stack trace. Two separate things had to
+-- change for this: the line number was extracted by `split_location` and then
+-- discarded at both call sites, and the text preview started at the top
+-- regardless. Neither is visible from the outside except as "the wrong twenty
+-- lines".
+describe("bare_path, a target that names a line", function()
+  local api = vim.api
+  local bare = require("hover.bare_path")
+  local text = require("hover.preview.text")
+  local classify = require("hover.classify")
+  local root, win, prev_buf, prev_isfname, buf
+
+  before_each(function()
+    root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    -- Sixty numbered lines, so which window was picked is unambiguous.
+    local body = {}
+    for i = 1, 60 do
+      body[i] = ("line %d"):format(i)
+    end
+    vim.fn.writefile(body, root .. "/big.txt")
+
+    win = api.nvim_get_current_win()
+    prev_buf = api.nvim_win_get_buf(win)
+    prev_isfname = vim.o.isfname
+    vim.o.isfname = "@,48-57,/,.,-,_,+,,,#,$,%,~,=,:"
+
+    buf = api.nvim_create_buf(false, true)
+    api.nvim_buf_set_name(buf, root .. "/notes.md")
+    api.nvim_win_set_buf(win, buf)
+  end)
+
+  after_each(function()
+    pcall(api.nvim_win_set_buf, win, prev_buf)
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    vim.o.isfname = prev_isfname
+    vim.fn.delete(root, "rf")
+  end)
+
+  ---@param line string
+  ---@param marker string
+  ---@return Hover.Source|nil
+  local function source_for(line, marker)
+    api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+    local at = line:find(marker, 1, true)
+    api.nvim_win_set_cursor(win, { 1, at - 1 })
+    return bare.under_cursor(buf, { missing = true, code = false })
+  end
+
+  it("carries the line number instead of discarding it", function()
+    local src = source_for("at ./big.txt:42 it breaks", "./big.txt")
+    assert.equals("./big.txt", src.target)
+    assert.equals(42, src.line)
+  end)
+
+  it("reads a :line:col suffix as the line, ignoring the column", function()
+    local src = source_for("at ./big.txt:42:7 it breaks", "./big.txt")
+    assert.equals(42, src.line)
+  end)
+
+  it("leaves the line nil when the target names none", function()
+    local src = source_for("see ./big.txt for it", "./big.txt")
+    assert.is_nil(src.line)
+  end)
+
+  it("previews the named line, with a few lines of lead-in", function()
+    local target = classify.classify(root .. "/big.txt", root .. "/notes.md")
+    local content = text.file(target, { max_lines = 10, line = 42 })
+    -- Line 42 has to be in the window, and not as its first line: context
+    -- above is what makes it placeable.
+    local body = table.concat(content.lines, "\n")
+    assert.is_truthy(body:find("line 42", 1, true))
+    assert.is_not.equals("line 42", content.lines[1])
+    assert.is_truthy(content.title:find(":42", 1, true))
+  end)
+
+  it("starts at the top when no line was named", function()
+    local target = classify.classify(root .. "/big.txt", root .. "/notes.md")
+    local content = text.file(target, { max_lines = 10 })
+    assert.equals("line 1", content.lines[1])
+  end)
+
+  it("lets an explicit scroll offset win over the named line", function()
+    -- Once the reader has scrolled, the line they asked about must not drag
+    -- them back to it on the next render.
+    local target = classify.classify(root .. "/big.txt", root .. "/notes.md")
+    local content = text.file(target, { max_lines = 10, line = 42, offset = 0 })
+    assert.is_truthy(table.concat(content.lines, "\n"):find("line 42", 1, true))
+    local scrolled = text.file(target, { max_lines = 10, line = 42, offset = 5 })
+    assert.equals("line 6", scrolled.lines[1])
+  end)
+
+  it("does not run off the top for a line near the start", function()
+    local target = classify.classify(root .. "/big.txt", root .. "/notes.md")
+    local content = text.file(target, { max_lines = 10, line = 2 })
+    assert.equals("line 1", content.lines[1])
+  end)
+end)
+
+-- When gopath is asked, and when it is not. This is the 13-millisecond
+-- problem, pinned: gopath answers everything it can answer in under 500 us
+-- and *fails* in 1.4 ms for a bare name and 12.7 ms for a token with a
+-- separator. A log, a diff or a stack trace is full of the second kind, and
+-- it was being paid on every trigger.
+--
+-- gopath is stubbed through `package.loaded` rather than measured, because
+-- "was it asked" is the property that matters and a timing assertion in a
+-- spec is a flaky test waiting to happen.
+describe("bare_path, when gopath is asked at all", function()
+  local api = vim.api
+  local bare = require("hover.bare_path")
+  local root, win, prev_buf, prev_isfname, buf, real_gopath, asked
+
+  before_each(function()
+    root = vim.fn.tempname()
+    vim.fn.mkdir(root .. "/docs", "p")
+    vim.fn.writefile({ "# real" }, root .. "/docs/real.md")
+
+    win = api.nvim_get_current_win()
+    prev_buf = api.nvim_win_get_buf(win)
+    prev_isfname = vim.o.isfname
+    vim.o.isfname = "@,48-57,/,.,-,_,+,,,#,$,%,~,=,:"
+
+    buf = api.nvim_create_buf(false, true)
+    api.nvim_buf_set_name(buf, root .. "/notes.md")
+    api.nvim_win_set_buf(win, buf)
+
+    asked = 0
+    real_gopath = package.loaded["gopath.resolve"]
+    package.loaded["gopath.resolve"] = {
+      resolve_at_cursor = function()
+        asked = asked + 1
+        return nil
+      end,
+    }
+  end)
+
+  after_each(function()
+    package.loaded["gopath.resolve"] = real_gopath
+    pcall(api.nvim_win_set_buf, win, prev_buf)
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    vim.o.isfname = prev_isfname
+    vim.fn.delete(root, "rf")
+  end)
+
+  ---@param line string
+  ---@param marker string
+  ---@param opts table|nil
+  local function resolve(line, marker, opts)
+    api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+    local at = line:find(marker, 1, true)
+    api.nvim_win_set_cursor(win, { 1, at - 1 })
+    return bare.under_cursor(
+      buf,
+      vim.tbl_extend("force", { missing = true, code = false }, opts or {})
+    )
+  end
+
+  it("does not ask for a separator token that does not resolve", function()
+    -- The expensive case: `<cfile>` already failed against the buffer's
+    -- directory and the cwd, and gopath can only fail too -- for 12.7 ms.
+    resolve("see docs/nope-not-here.md ok", "docs/nope")
+    assert.equals(0, asked)
+  end)
+
+  it("does not ask for a path that already resolved", function()
+    local src = resolve("see ./docs/real.md ok", "./docs")
+    assert.equals("./docs/real.md", src.target)
+    assert.equals(0, asked)
+  end)
+
+  it("asks for a truncated path, which is its whole subject matter", function()
+    resolve("at ...somewhere/init.lua:42 it broke", "...somewhere")
+    assert.equals(1, asked)
+  end)
+
+  it("asks for a bare name, which is the &path/rtp case", function()
+    resolve("in someplace.lua somewhere", "someplace.lua")
+    assert.equals(1, asked)
+  end)
+
+  it("asks for everything once the request is explicit", function()
+    -- `:Hover show` gets the full pipeline: the cost is the point of asking.
+    resolve("see docs/nope-not-here.md ok", "docs/nope", { force = true })
+    assert.equals(1, asked)
+  end)
+end)

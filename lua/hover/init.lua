@@ -216,6 +216,9 @@ function M.target_under_cursor(bufnr, opts)
     -- "no" because the cursor is inside an expression would be answering a
     -- question nobody asked.
     code = force or config.paths_code_enabled(),
+    -- Forced, the resolver runs its full pipeline: the cost is the point of
+    -- asking. See `bare_path.gopath_can_help`.
+    force = force,
   })
 end
 
@@ -474,6 +477,10 @@ function M.show(opts)
   -- request; the fetch does not, because a keypress asking "what is this"
   -- is not consent to tell the link's host about it.
   local preview_opts = config.preview_opts()
+  -- `init.lua:42` out of a log or a stack trace: show line 42, not the
+  -- file's first twenty lines, which are almost never the ones being asked
+  -- about. Sources that name no line leave this nil and nothing changes.
+  preview_opts.line = found.line
 
   local key = cache.key(target)
   local cached = cache.get(key)
