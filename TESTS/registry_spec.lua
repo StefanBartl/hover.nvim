@@ -383,6 +383,11 @@ describe("hover.registry position previews", function()
       registry.reset()
       registry.register("p", {
         positions = {
+          -- The wrong types are the point of the test: the registry
+          -- promising to decline them is what is under test, so the
+          -- suppression is the honest answer rather than a workaround
+          -- (`LLS-40`).
+          ---@diagnostic disable-next-line: return-type-mismatch
           function()
             return answer
           end,
@@ -527,6 +532,9 @@ describe("a position preview, end to end", function()
     -- content is in it.
     assert.is_true(float.is_open())
     local win_id = float.win()
+    if not win_id then
+      error("the float reports open but has no window")
+    end
     local lines = api.nvim_buf_get_lines(api.nvim_win_get_buf(win_id), 0, -1, false)
     assert.is_nil(
       vim.iter(lines):find(function(l)
