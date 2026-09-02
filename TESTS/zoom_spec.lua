@@ -277,6 +277,31 @@ describe("hover.zoom and hover.pan", function()
       return
     end
 
+    -- `fake_png` writes a PNG *header* and no image data. That is exactly
+    -- right for every other test here -- `pixel_size` reads IHDR and never
+    -- opens the pixels -- and useless for this one: ImageMagick cannot crop a
+    -- file with nothing in it, so the step below would write no file and this
+    -- assertion could never have passed on a machine that has magick.
+    --
+    -- It went unnoticed because it never ran. `scripts/minimal_init.lua` had a
+    -- `nil` hole at index 1 of its candidate list, `ipairs` stopped there, and
+    -- images.nvim was found only by someone who had IMAGES_NVIM_DIR exported
+    -- -- so this test reported *pending* on the machine it was written on.
+    --
+    -- A real picture, made by the same ImageMagick the branch already
+    -- requires: no binary fixture in the repository, and nothing to install
+    -- that `can_zoom()` has not already confirmed.
+    vim.fn.system({
+      "magick",
+      "-size",
+      "1200x800",
+      "gradient:red-blue",
+      root .. "/pic.png",
+    })
+    assert.equals(0, vim.v.shell_error, "could not build a real picture to crop")
+    local source = media.pixel_size(root .. "/pic.png")
+    assert.same({ 1200, 800 }, { source and source.width, source and source.height })
+
     local dir = vim.fn.stdpath("cache") .. "/hover.nvim/zoom"
     vim.fn.delete(dir, "rf")
 

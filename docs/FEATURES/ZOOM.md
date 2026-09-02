@@ -131,7 +131,24 @@ What nobody has seen yet is the result **in a terminal**, and whether `h/j/k/l`
 feel right while panning is not a question a spec can be asked at all. Both are
 tracked in [MANUAL-EVIDENCE.md](../MANUAL-EVIDENCE.md).
 
-**And one gap that is a defect rather than a limit:** `scripts/minimal_init.lua`
-does not get images.nvim onto the runtimepath *inside* a spec, though it does
-when invoked directly. The one spec that would check the crop itself therefore
-runs as *pending* rather than passing. See the handover.
+**The crop itself is covered now, and was not for a while.** That check
+reported *pending* everywhere, which read as "no ImageMagick here" and was
+nothing of the sort. Two bootstrap defects, both fixed on 2026-09-02:
+
+- `scripts/minimal_init.lua` built its images.nvim candidate list as a literal
+  whose first entry was an unset environment variable. A `nil` at index 1 is a
+  hole, `ipairs` stops there, and the loop ran **zero** times — so the `.deps/`
+  and sibling fallbacks were never tried, and only someone with
+  `IMAGES_NVIM_DIR` exported ever had images.nvim in a spec.
+- `scripts/test.sh` ran a single file through `PlenaryBustedFile`, which
+  reaches a runner that spawns its child with no options at all — no `-u`, and
+  therefore not this repository's bootstrap. A directory run and a single-file
+  run of the same spec were two different environments.
+
+The fixture was the third layer: `fake_png` writes a PNG *header* and no pixels,
+which is right for `pixel_size` and impossible to crop. The crop test now builds
+a real picture with the ImageMagick its own guard has already confirmed.
+
+**The lesson is about the word *pending*.** All three defects were invisible
+because the spec announced a reason for skipping that sounded plausible. A skip
+with a good explanation is the easiest kind of missing coverage to keep.

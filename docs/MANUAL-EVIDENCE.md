@@ -83,11 +83,13 @@ nothing else — the same gap as the resize row above, one layer further along.
 And whether `h/j/k/l` feel right while panning is not a question a spec can be
 asked at all.
 
-**One reason it may not be checkable from the suite either.**
-`scripts/minimal_init.lua` does not put images.nvim on the runtimepath *inside*
-a spec, though it does when invoked directly, so the one spec that would check
-the crop itself runs as pending. Until that is fixed, this row is the only
-coverage the crop has.
+**What the suite covers since 2026-09-02.** The crop check used to report
+*pending* on every machine, for two bootstrap defects rather than a missing
+tool: `scripts/minimal_init.lua` never reached its images.nvim fallbacks, and a
+single-file run got a different environment from a directory run. Both are
+fixed, and the spec now writes a real cropped file with ImageMagick and
+compares its pixel size against the rectangle the arithmetic asked for. What is
+left for this row is the part after the file exists: whether it is *drawn*.
 
 ### The resize wheel, where it points
 

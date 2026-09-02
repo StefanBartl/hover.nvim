@@ -67,6 +67,17 @@ end
 --- say so, the same stance images.nvim takes in its own `convert_spec`. A
 --- missing optional dependency must not fail a run the way a missing harness
 --- does (`NEW-40` is about the harness).
+--- **The candidate list is built rather than written as a literal, and that is
+--- not a style choice.** It was a literal whose first entry was
+--- `vim.env[env_var]`, and with the variable unset that is a `nil` at index 1
+--- -- a hole, which `ipairs` stops at immediately. The loop below ran **zero**
+--- times, so neither the `.deps/` checkout nor the sibling was ever tried, and
+--- images.nvim was found only by anyone who happened to have the environment
+--- variable exported. `#t` reports 3 for `{ nil, "a", "b" }` while `ipairs`
+--- yields nothing, which is why it reads as a three-element list.
+---
+--- `add_dep` above builds its list the careful way and always did. This one
+--- did not, and the two were written the same afternoon.
 ---@param env_var string
 ---@param deps_name string
 ---@param marker string
@@ -74,11 +85,14 @@ local function add_optional(env_var, deps_name, marker)
   if pcall(require, marker) then
     return
   end
-  local candidates = {
-    vim.env[env_var],
-    vim.fn.getcwd() .. "/.deps/" .. deps_name,
-    vim.fs.dirname(vim.fn.getcwd()) .. "/" .. deps_name,
-  }
+  local candidates = {}
+  local env_val = vim.env[env_var]
+  if env_val and env_val ~= "" then
+    candidates[#candidates + 1] = env_val
+  end
+  candidates[#candidates + 1] = vim.fn.getcwd() .. "/.deps/" .. deps_name
+  candidates[#candidates + 1] = vim.fs.dirname(vim.fn.getcwd()) .. "/" .. deps_name
+
   for _, dir in ipairs(candidates) do
     if dir and dir ~= "" and vim.fn.isdirectory(dir) == 1 then
       vim.opt.rtp:append(dir)
