@@ -73,6 +73,12 @@ local _suppressed = nil
 --- is a dial; two is a switch with an awkward middle.
 local RESIZE_STEP = 1.25
 
+---@type number What one zoom step divides the visible rectangle by.
+--- Mirrors `hover.preview.media`'s own constant, and is here only so `pan`
+--- can size a step against the view rather than against the source: a quarter
+--- of what is on screen, whatever level that is.
+local ZOOM_VIEW_STEP = 1.5
+
 ---@internal
 --- The multiplier the hover on screen is currently asking for.
 ---
@@ -380,7 +386,17 @@ local function build(target, bufnr, opts, emit)
     -- be resolved, and its first lines beat an error.
     emit(text.file(target, opts))
   elseif target.type == "image" then
-    emit(require("hover.preview.media").image(target, opts))
+    local media = require("hover.preview.media")
+    if (opts.zoom or 0) > 0 then
+      -- A magnified detail is a `magick` run and a file on disk, so it takes
+      -- the route a PDF page takes -- and measured, it is the faster of the
+      -- two: ~258 ms against ~1150 ms for one rasterized page.
+      build_async(function(on_result)
+        return media.zoomed(target.path, opts, on_result)
+      end, emit)
+    else
+      emit(media.image(target, opts))
+    end
   elseif target.type == "pdf" then
     build_async(function(on_result)
       return require("hover.preview.media").pdf(target, opts, on_result)
@@ -466,7 +482,12 @@ local function present(content)
     end
   end
 
-  keys.borrow(content, M.scroll, M.resize)
+  keys.borrow(content, {
+    scroll = M.scroll,
+    resize = M.resize,
+    pan = M.pan,
+    zoomed = ((_open and _open.zoom) or 0) > 0,
+  })
 end
 
 -- ---------------------------------------------------------------------------
@@ -882,6 +903,34 @@ function M.open()
   return false
 end
 
+---@internal
+--- `config.preview_opts()` brought up to where this hover actually is.
+---
+--- Four things the configuration knows nothing about, and a re-render that
+--- forgets any of them silently undoes it: how far the reader has scrolled,
+--- which page they are on, how much the float has been resized, and which
+--- detail is being magnified. Each of `scroll`, `resize`, `zoom` and `pan`
+--- used to build its own table, which is the hand-kept-copy shape this plugin
+--- has been bitten by four times -- and it was already wrong: **scrolling a
+--- resized hover reset it to the configured size**, because `scroll` never
+--- knew about the resize level. One place now, and adding a fifth piece of
+--- state is one line rather than four.
+---@return Hover.PreviewOpts
+local function current_preview_opts()
+  local opts = config.preview_opts()
+  local factor = RESIZE_STEP ^ ((_open and _open.resize) or 0)
+  opts.max_width = math.max(1, math.floor((opts.max_width or 80) * factor + 0.5))
+  opts.max_lines = math.max(1, math.floor((opts.max_lines or 20) * factor + 0.5))
+  if _open then
+    opts.page = _open.page
+    opts.offset = _open.offset
+    opts.zoom = _open.zoom
+    opts.zoom_cx = _open.zoom_cx
+    opts.zoom_cy = _open.zoom_cy
+  end
+  return opts
+end
+
 --- Scroll the open hover's content by `delta` steps.
 ---
 --- A page for a PDF (and for an office document, which has become one by the
@@ -916,7 +965,7 @@ function M.scroll(delta)
   end
 
   local c = config.get()
-  local preview_opts = config.preview_opts()
+  local preview_opts = current_preview_opts()
 
   -- Paged, not scrolled: a PDF, and an office document, which *is* a PDF by
   -- the time anything is drawn -- the conversion is cached, so paging
@@ -1015,15 +1064,9 @@ function M.resize(delta)
   local level = (_open.resize or 0) + delta
   _open.resize = level
 
-  local preview_opts = config.preview_opts()
-  local factor = RESIZE_STEP ^ level
-  preview_opts.max_width = math.max(1, math.floor(preview_opts.max_width * factor + 0.5))
-  preview_opts.max_lines = math.max(1, math.floor(preview_opts.max_lines * factor + 0.5))
-  -- Where the hover already is. Resizing a PDF open on page 3 has to stay on
-  -- page 3; `preview_opts` is built fresh from the configuration and knows
-  -- nothing about either.
-  preview_opts.page = _open.page
-  preview_opts.offset = _open.offset
+  -- `_open.resize` is already the new level, so this carries it -- along with
+  -- the page, the offset and any magnified detail.
+  local preview_opts = current_preview_opts()
 
   -- Bypass the cache, for the same reason `scroll` does: it is keyed by what
   -- a target is, not by how large it is being shown.
@@ -1058,6 +1101,148 @@ end
 ---@return boolean
 function M.zoom(delta)
   return M.resize(delta)
+end
+
+---@internal
+--- Re-render the open hover with whatever `_open` now says. The tail `zoom`
+--- and `pan` both end in, and the same shape `resize` and `scroll` use: a
+--- fresh generation so a slower answer cannot land afterwards, and the cache
+--- bypassed because it is keyed by what a target *is*, not by which part of
+--- it is on screen.
+---@return boolean
+local function rerender()
+  _generation = _generation + 1
+  local generation = _generation
+  local target = _open.target
+  build(target, _open.bufnr, current_preview_opts(), function(content)
+    if generation ~= _generation or not content then
+      return
+    end
+    present(content)
+  end)
+  return true
+end
+
+---@internal
+--- The image a zoom would act on, or nil plus the reason it cannot.
+---@return string|nil path
+---@return string|nil why
+local function zoomable()
+  if not (_open and float.win()) then
+    keys.release()
+    _open = nil
+    return nil, nil
+  end
+  local target = _open.target
+  -- Images only, and deliberately so. A PDF page is a picture too, but the
+  -- file on screen is a rasterization living in this plugin's own cache
+  -- rather than at `target.path` -- and the sharp answer for a page is a
+  -- second render at a higher DPI rather than a crop, measured at 3.3 s
+  -- against 258 ms. That is a different feature; see `docs/ROADMAP.md`.
+  if not (target and target.type == "image" and target.path) then
+    return nil, "only a picture can be zoomed"
+  end
+  local media = require("hover.preview.media")
+  if not media.can_zoom() then
+    return nil, "zoom needs images.nvim with `images.convert.crop`, and ImageMagick on PATH"
+  end
+  return target.path, nil
+end
+
+--- Magnify a detail of the picture on screen, or step back out.
+---
+--- **This is not `resize`, and the difference is the whole point.** `resize`
+--- changes the box and letterboxes the *whole* picture into it: the framing
+--- never changes, and it costs no process at all. A zoom keeps the box and
+--- cuts the source, so what is on screen is a smaller part of the picture,
+--- larger. That needs a cropped file.
+---
+--- **Measured before it was built, and the number decided the shape.** On
+--- Windows, 2026-09-02: a `magick` start is 71 ms, and cropping a 1920x1080
+--- screenshot and fitting it costs **258 ms** -- a dense image of that size
+--- 502 ms, a 4K source ~900 ms. No format or compression setting brought it
+--- under ~150 ms, and batching crops into one process saved only the start.
+--- So a zoom step is not a dial to hold down; it is a deliberate press,
+--- answered through the same placeholder machinery as a PDF page, which it
+--- happens to beat (1150 ms for one page, measured the same day).
+---
+--- The ceiling is capped rather than discovered, which is the opposite of how
+--- `resize` finds its own: there only the terminal knows where the room ends,
+--- here the limit is the source's own pixels and can be answered without
+--- spending a `magick` run to find out.
+---@param delta integer positive magnifies, negative steps back out
+---@return boolean asked
+function M.zoom(delta)
+  local path, why = zoomable()
+  if not path then
+    if why then
+      require("hover.notify").info(why)
+    end
+    return false
+  end
+
+  local media = require("hover.preview.media")
+  local px = _open.zoom_px or media.pixel_size(path)
+  if not px then
+    require("hover.notify").info("cannot read this picture's size, so cannot zoom it")
+    return false
+  end
+  _open.zoom_px = px
+
+  local was = _open.zoom or 0
+  local level = math.max(0, was + delta)
+  if level == was then
+    return false
+  end
+  if level > was and not media.zoom_possible(px, level) then
+    require("hover.notify").info("no more detail in this picture")
+    return false
+  end
+
+  _open.zoom = level
+  if level == 0 then
+    -- Back to the whole picture, and back to the middle: a centre kept from a
+    -- zoomed view means nothing once the whole picture is on screen, and
+    -- keeping it would make the next zoom start somewhere nobody chose.
+    _open.zoom_cx, _open.zoom_cy = nil, nil
+  end
+  return rerender()
+end
+
+--- Move the magnified view, in fractions of what is currently visible.
+---
+--- A step is a quarter of the visible rectangle, so four of them cross the
+--- view once: far enough to be worth a press at 258 ms, near enough that
+--- nothing is skipped over. The centre is kept as a fraction of the source
+--- rather than in pixels, so it survives a zoom step -- going deeper keeps
+--- looking at the same place.
+---@param dx integer -1 left, 1 right
+---@param dy integer -1 up, 1 down
+---@return boolean asked
+function M.pan(dx, dy)
+  local path = zoomable()
+  if not path then
+    return false
+  end
+  if (_open.zoom or 0) <= 0 then
+    -- The whole picture is on screen; there is nothing outside the view to
+    -- move towards. Declining is honest, and the keys are not bound in that
+    -- state anyway.
+    return false
+  end
+
+  local step = 0.25 / (ZOOM_VIEW_STEP ^ (_open.zoom or 0))
+  local cx = math.max(0, math.min(1, (_open.zoom_cx or 0.5) + dx * step))
+  local cy = math.max(0, math.min(1, (_open.zoom_cy or 0.5) + dy * step))
+  if cx == (_open.zoom_cx or 0.5) and cy == (_open.zoom_cy or 0.5) then
+    -- Already against that edge. `zoom_rect` clamps the rectangle inside the
+    -- source anyway, so this only saves a `magick` run that would produce the
+    -- picture already on screen.
+    return false
+  end
+
+  _open.zoom_cx, _open.zoom_cy = cx, cy
+  return rerender()
 end
 
 --- Close any open hover.

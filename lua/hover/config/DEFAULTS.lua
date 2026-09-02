@@ -278,6 +278,31 @@ return {
   ---@type string|string[]
   open_keys = { "gf" },
 
+  --- Move the magnified view, borrowed ONLY while a hover is zoomed in.
+  ---
+  --- The narrowest borrow condition in this plugin, and the one with the
+  --- strongest case. These are motions, like `+` and `-` -- but unlike those,
+  --- the thing they would otherwise do is *destroy the float*: the dismissal
+  --- hangs on `CursorMoved`, so pressing `h` over a magnified picture without
+  --- this binding moves the cursor and takes the picture away. Nobody means
+  --- that. The moment the hover is not zoomed they are handed straight back.
+  ---
+  --- There is deliberately no key pair for zooming itself. A step costs about
+  --- a quarter of a second (see `hover.zoom`), which makes it a deliberate
+  --- operation rather than a dial, and deliberate operations live on
+  --- `:Hover zoom [in|out|reset]` here. `hover.zoom(delta)` is public for
+  --- anyone who wants a key of their own.
+  pan_keys = {
+    ---@type string|string[]
+    left = { "h" },
+    ---@type string|string[]
+    right = { "l" },
+    ---@type string|string[]
+    up = { "k" },
+    ---@type string|string[]
+    down = { "j" },
+  },
+
   --- Keymaps this plugin sets in the user's namespace. Every entry is a
   --- single key, a list of keys, or `false` for "bind nothing".
   ---

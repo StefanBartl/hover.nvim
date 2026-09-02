@@ -55,6 +55,7 @@ See ./docs/architecture.md#modules for details.
 - [Where a bare path is looked for](#where-a-bare-path-is-looked-for)
 - [Waving one hover away](#waving-one-hover-away)
 - [Resizing the hover](#resizing-the-hover)
+- [Zooming into a picture](#zooming-into-a-picture)
 - [Scrolling a preview](#scrolling-a-preview)
 - [Configuration](#configuration)
 - [Contributing from your own config](#contributing-from-your-own-config)
@@ -80,6 +81,7 @@ See ./docs/architecture.md#modules for details.
 | Bare-path resolution | A path in prose, a code comment or a `:messages` dump is a target too — truncated ones included | [Bare paths](#bare-paths) |
 | `hover.scroll(1)` / `scroll(-1)` | Page through a file's head or a PDF's pages without leaving the document | [Scrolling a preview](#scrolling-a-preview) |
 | `hover.resize(1)` / `resize(-1)` | make the float bigger or smaller: a picture is drawn larger, a text preview shows more lines | [Resizing the hover](#resizing-the-hover) |
+| `:Hover zoom` / `hover.zoom(1)` | magnify a *detail* of a picture, and `h`/`j`/`k`/`l` to move around in it | [Zooming into a picture](#zooming-into-a-picture) |
 | `hover.dismiss()` | Wave one float away and keep it away, until the cursor reaches another target | [Waving one hover away](#waving-one-hover-away) |
 | `hover.pin()` | Keep one float on screen while the cursor goes elsewhere — for comparing rather than reading. One float, so the trigger opens nothing while it is up | [The `:Hover` command](#the-hover-command) |
 | `hover.registry.register()` | Another plugin contributes a *source* or a *preview*; hover.nvim never says its name | [Contributing from a plugin](#contributing-from-a-plugin) |
@@ -322,6 +324,8 @@ toggles.
 | `:Hover why` | why nothing hovered *here* — which of the gates refused, and what to type about it |
 | `:Hover pin` | keep this float on screen while the cursor goes elsewhere; again releases it |
 | `:Hover resize [bigger\|smaller]` | make the hover on screen bigger or smaller. Omitted, bigger |
+| `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture on screen. Omitted, in |
+| `:Hover pan {left\|right\|up\|down}` | move the magnified view |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |
@@ -595,6 +599,62 @@ require("hover").setup({
 to resize — which today includes a *position* preview, whose content came from another
 plugin and cannot be asked again at a larger size.
 
+## Zooming into a picture
+
+**Resize and zoom are different operations, and the difference is the framing.**
+`resize` changes the box and letterboxes the *whole* picture into it — you see the same
+picture, larger. A zoom keeps the box and cuts the source, so you see a *smaller part* of
+the picture, larger. Only the second one is magnification.
+
+| Way in | Does | Available |
+| --- | --- | --- |
+| `:Hover zoom [in\|out\|reset]` | one step of magnification; omitted, in | over a picture |
+| `h` `j` `k` `l` | move the magnified view left, down, up, right | **only while zoomed in** |
+| `:Hover pan {left\|right\|up\|down}` | the same move, from the command line | only while zoomed in |
+
+**Why there is no key for zooming itself, and why panning has four.** A zoom step writes a
+cropped file, which costs about a quarter of a second (measured below). That is a
+deliberate operation, and deliberate operations live on `:Hover` here. Panning is the part
+you do repeatedly once you are already in — and `h`/`j`/`k`/`l` are worth borrowing there
+for a reason the other borrowed keys do not have: the thing they would otherwise do is
+*move the cursor*, and the hover dismisses itself on `CursorMoved`. Unbound, `h` at a
+magnified picture takes the picture away. Nobody means that.
+
+They are handed back the moment the hover is not zoomed, like every borrowed key here.
+`hover.zoom(delta)` and `hover.pan(dx, dy)` are public if you want keys of your own.
+
+**What one step is.** The visible rectangle is divided by 1.5 and centred on where you
+were looking, so going deeper keeps looking at the same place. A pan step is a quarter of
+what is currently visible, so four of them cross the view once. Stepping back out to a
+view you have already seen is instant — the crop is cached for the session.
+
+**The cost, measured before this was built.** On Windows, 2026-09-02:
+
+| Operation | Cost |
+| --- | --- |
+| `magick` process start alone | 71 ms |
+| crop + fit, 1920×1080 screenshot | **258 ms** |
+| crop + fit, dense image of the same size | 502 ms |
+| crop + fit, 4K source | ~900 ms |
+| *for comparison:* one rasterized PDF page | 1150 ms |
+
+No format or compression setting brought it under ~150 ms, and batching several crops into
+one process saved only the process start. That number is what decided the shape: a zoom
+step is not a dial you hold down, and it runs behind the same placeholder machinery as a
+PDF page — which it is in fact faster than.
+
+**The ceiling is the picture, not the terminal** — the opposite of `resize`, where only the
+terminal knows where the room ends. Zoom stops when the rectangle would fall below 32
+source pixels, and it says so rather than spending a `magick` run to find out.
+
+**Pictures only, and PDF pages deliberately not.** A page is a picture too, but the file on
+screen is a rasterization in this plugin's own cache rather than the target — and the sharp
+answer for a page is a second render at a higher DPI, not a crop. Measured the same day:
+3.3 s against 258 ms. That is a different feature; see [the roadmap](docs/ROADMAP.md).
+
+Needs images.nvim carrying `images.convert.crop`, and ImageMagick on `PATH`. Without either
+`:Hover zoom` says so instead of doing nothing.
+
 ## Configuration
 
 ```lua
@@ -630,6 +690,10 @@ require("hover").setup({
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | |
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | |
+| `pan_keys.left` | `{ "h" }` | Move the magnified view. Borrowed **only while a hover is zoomed in** — see [Zooming into a picture](#zooming-into-a-picture). |
+| `pan_keys.right` | `{ "l" }` | |
+| `pan_keys.up` | `{ "k" }` | |
+| `pan_keys.down` | `{ "j" }` | |
 | `resize_keys.larger` | `{ "+" }` | Bound only for a hover with a picture in it — see [Resizing the hover](#resizing-the-hover). |
 | `resize_keys.smaller` | `{ "-" }` | |
 | `resize_keys.wheel_larger` | `{ "<M-ScrollWheelUp>" }` | Bound for **any** hover. The wheel acts on what it points at: these fire only while the pointer is over the float, its border included. Needs `'mouse'` set |

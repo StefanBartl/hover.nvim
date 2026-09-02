@@ -127,17 +127,29 @@ end
 --- float, is meaningless, so those keys are left alone entirely and keep
 --- whatever they mean elsewhere.
 ---
+--- **Panning is the narrowest condition of the three, and the best argued.**
+--- `pan_keys` are bound only while the hover is *zoomed in* -- not merely
+--- drawn. They are motions, like `+` and `-`, but with one difference that
+--- settles it: the thing `h` would otherwise do over a float is move the
+--- cursor, and the dismissal hangs on `CursorMoved`, so the unbound key takes
+--- the picture away. Nobody presses `h` at a magnified picture meaning that.
+---
 --- **Resize is bound on two different conditions, and the split is about
 --- what a key costs.** `+` and `-` are real motions in normal mode; taking
 --- them over a picture is worth it, taking them over every float that happens
 --- to be up is not. So they stay on `content.canvas` -- what a drawn hover has
 --- and a text one does not. The wheel costs nobody anything and applies to any
 --- hover, and `:Hover resize` costs no key at all.
+--- **Why the handlers arrive in a table.** This started with one condition
+--- and one callback, grew a second, and the third is where a positional
+--- argument stops being readable -- `borrow(c, f, g, h, true)` says nothing
+--- about which of them pans. A fourth condition is one key here.
 ---@param content Hover.Content|nil
----@param rerender fun(delta: integer)
----@param resize? fun(delta: integer)
+---@param handlers { scroll?: fun(delta: integer), resize?: fun(delta: integer), pan?: fun(dx: integer, dy: integer), zoomed?: boolean }
 ---@return nil
-function M.borrow(content, rerender, resize)
+function M.borrow(content, handlers)
+  handlers = handlers or {}
+  local rerender, resize, pan = handlers.scroll, handlers.resize, handlers.pan
   M.release()
 
   local cfg = require("hover.config").get()
@@ -213,6 +225,25 @@ function M.borrow(content, rerender, resize)
           resize(-1)
         end
       end, "hover: smaller, where the pointer is")
+    end
+  end
+
+  -- Last, and on the narrowest condition there is: only while the hover is
+  -- actually magnified. Nothing to move towards otherwise.
+  if pan and handlers.zoomed then
+    local pk = type(cfg.pan_keys) == "table" and cfg.pan_keys or {}
+    for _, spec in ipairs({
+      { pk.left, -1, 0, "left" },
+      { pk.right, 1, 0, "right" },
+      { pk.up, 0, -1, "up" },
+      { pk.down, 0, 1, "down" },
+    }) do
+      local dx, dy = spec[2], spec[3]
+      for _, lhs in ipairs(M.keylist(spec[1])) do
+        take(seen, lhs, function()
+          pan(dx, dy)
+        end, "hover: move the magnified view " .. spec[4])
+      end
     end
   end
 end

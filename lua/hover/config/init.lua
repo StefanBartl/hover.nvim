@@ -104,7 +104,7 @@ end
 local function replace_key_lists(opts)
   -- Tables of key lists: whatever direction the user named is replaced, and
   -- the ones they did not name keep their default.
-  for _, name in ipairs({ "scroll_keys", "resize_keys", "keymaps" }) do
+  for _, name in ipairs({ "scroll_keys", "resize_keys", "pan_keys", "keymaps" }) do
     if type(opts[name]) == "table" and type(_options[name]) == "table" then
       for key, value in pairs(opts[name]) do
         _options[name][key] = vim.deepcopy(value)

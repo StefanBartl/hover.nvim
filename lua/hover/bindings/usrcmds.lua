@@ -194,6 +194,76 @@ function M.routes()
       end,
     },
     {
+      path = { "zoom" },
+      -- The primary way in, and deliberately the *only* one by default: a
+      -- step costs about a quarter of a second (see `hover.zoom`), which
+      -- makes it a deliberate operation rather than a dial, and deliberate
+      -- operations live on this verb. `hover.zoom(delta)` is public for
+      -- anyone who wants a key of their own.
+      --
+      -- Not to be confused with `:Hover resize`, which was called `zoom`
+      -- until `8ec5b40`: resize changes the *box* and letterboxes the whole
+      -- picture into it, this cuts the source. The rename is what made the
+      -- word free for the operation it actually describes.
+      desc = "Magnify a detail of the picture on screen, or step back out",
+      args = {
+        {
+          name = "direction",
+          enum = { "in", "out", "reset" },
+          optional = true,
+          -- Bare `:Hover zoom` goes in. A step has no "toggle" reading, and
+          -- `out` undoes a wrong guess in one press.
+          default = "in",
+        },
+      },
+      ---@param ctx table
+      run = function(ctx)
+        local direction = (ctx and ctx.args and ctx.args.direction) or "in"
+        local h = hover()
+        if direction == "reset" then
+          -- A single large step out. `zoom` clamps at 0, so any number past
+          -- the current level lands on "the whole picture" exactly.
+          if not h.zoom(-math.huge) then
+            require("hover.notify").info("nothing is zoomed")
+          end
+          return
+        end
+        h.zoom(direction == "out" and -1 or 1)
+      end,
+    },
+    {
+      path = { "pan" },
+      -- The keyboard counterpart to `pan_keys`, which are borrowed only
+      -- while the hover is zoomed. This exists for the same reason the
+      -- resize route does: the keys are a borrow, so someone who has never
+      -- had a magnified picture up cannot discover them.
+      desc = "Move the magnified view",
+      args = {
+        {
+          name = "direction",
+          enum = { "left", "right", "up", "down" },
+          optional = false,
+        },
+      },
+      ---@param ctx table
+      run = function(ctx)
+        local dirs = {
+          left = { -1, 0 },
+          right = { 1, 0 },
+          up = { 0, -1 },
+          down = { 0, 1 },
+        }
+        local d = dirs[(ctx and ctx.args and ctx.args.direction) or ""]
+        if not d then
+          require("hover.notify").warn("which way: left, right, up or down")
+          return
+        end
+        if not hover().pan(d[1], d[2]) then
+          require("hover.notify").info("nothing is zoomed, so there is nothing to move")
+        end
+      end,
+    },
+    {
       path = { "mode" },
       desc = "Set the mode: auto opens by itself, manual only on request, off not at all",
       args = {

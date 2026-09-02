@@ -127,8 +127,11 @@ end
 ---     separated from its description by a run of spaces.
 ---
 --- A trailing state argument is not part of the path (`:Hover paths on` is
---- the `paths` route with an argument), and neither is a completion hint
---- (`[on|off|toggle]`). The state is stripped only while something is left:
+--- the `paths` route with an argument), and neither is a completion hint --
+--- in either of the two shapes the documents use, `[optional|like|this]` and
+--- `{required|like|this}`. Only the first was cut until `:Hover pan` arrived
+--- with a required one, and the spec read its enum as four more route words.
+--- The state is stripped only while something is left:
 --- a bare `:Hover off` is not a command, and reading it as the verb alone
 --- would hide exactly that.
 ---@param text string
@@ -164,7 +167,7 @@ local function documented_routes(text, vimdoc)
 
   local out = {}
   for _, mention in ipairs(mentions) do
-    local route = words((mention:gsub("%[.*$", "")))
+    local route = words((mention:gsub("[%[{].*$", "")))
     while #route > 1 and STATES[route[#route]] do
       table.remove(route)
     end

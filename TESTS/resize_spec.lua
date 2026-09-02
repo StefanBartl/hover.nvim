@@ -154,8 +154,7 @@ describe("the keys a drawn hover borrows", function()
   it("takes the resize keys for a picture", function()
     keys.borrow(
       { lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" },
-      function() end,
-      function() end
+      { scroll = function() end, resize = function() end }
     )
     assert.is_true(mapped("+"))
     assert.is_true(mapped("-"))
@@ -171,8 +170,7 @@ describe("the keys a drawn hover borrows", function()
     -- float that happens to be up is a worse trade than the feature is worth.
     keys.borrow(
       { lines = { "a", "b" }, scroll = { offset = 0, step = 20, more = true } },
-      function() end,
-      function() end
+      { scroll = function() end, resize = function() end }
     )
     assert.is_false(mapped("+"))
     assert.is_false(mapped("-"))
@@ -183,13 +181,16 @@ describe("the keys a drawn hover borrows", function()
   it("takes none when no resize handler was handed over", function()
     -- `borrow` is public; a caller that does not implement zoom must not end
     -- up with keys bound to nothing.
-    keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, function() end)
+    keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, { scroll = function() end })
     assert.is_false(mapped("+"))
   end)
 
   it("gives back what it displaced, rather than deleting it", function()
     vim.keymap.set("n", "+", "<Nop>", { desc = "the user's own +" })
-    keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, function() end, function() end)
+    keys.borrow(
+      { lines = {}, canvas = { cols = 40, rows = 10 } },
+      { scroll = function() end, resize = function() end }
+    )
     assert.equals("hover: make the picture bigger", vim.fn.maparg("+", "n", false, true).desc)
     keys.release()
     assert.equals("the user's own +", vim.fn.maparg("+", "n", false, true).desc)
@@ -197,7 +198,10 @@ describe("the keys a drawn hover borrows", function()
 
   it("binds nothing when the key list is emptied", function()
     config.setup({ resize_keys = { larger = {}, smaller = {} } })
-    keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, function() end, function() end)
+    keys.borrow(
+      { lines = {}, canvas = { cols = 40, rows = 10 } },
+      { scroll = function() end, resize = function() end }
+    )
     assert.is_false(mapped("+"))
     assert.is_false(mapped("-"))
   end)

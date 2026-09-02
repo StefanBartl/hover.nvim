@@ -44,6 +44,7 @@
 ---@field office? Hover.OfficeConfig
 ---@field scroll_keys? Hover.ScrollKeys
 ---@field resize_keys? Hover.ResizeKeys
+---@field pan_keys? Hover.PanKeys
 ---@field dismiss_keys? string|string[] # Keys that wave the hover on screen away. Default `{ "q", "<Esc>" }`; a configured list replaces the default, and an empty one binds nothing.
 ---@field open_keys? string|string[] # Keys that open what the float is showing, through open.nvim or `vim.ui.open`. Default `{ "gf" }`; an empty list binds nothing.
 ---@field keymaps? Hover.Keymaps
@@ -111,6 +112,16 @@
 
 --- Keymaps this plugin sets in the user's own namespace, each disableable on
 --- its own with `false`.
+--- Keys borrowed while a hover is *zoomed in*, to move the magnified view.
+--- The narrowest borrow condition here: these are motions, and the motion
+--- they displace would dismiss the float rather than pan it, because the
+--- dismissal hangs on `CursorMoved`.
+---@class Hover.PanKeys
+---@field left? string|string[] # Default `{ "h" }`.
+---@field right? string|string[] # Default `{ "l" }`.
+---@field up? string|string[] # Default `{ "k" }`.
+---@field down? string|string[] # Default `{ "j" }`.
+
 ---@class Hover.Keymaps
 ---@field show? string|string[]|false # Show the hover for whatever is under the cursor, ignoring every volume switch. Default false: no key is claimed unless asked for.
 
@@ -138,6 +149,10 @@
 ---@field offset? integer # Lines skipped, for a text preview.
 ---@field page? integer # 1-based page, for a PDF preview.
 ---@field resize? integer # Resize steps applied to this hover; the factor is `1.25^resize`. Set by `hover.resize`.
+---@field zoom? integer # Magnification steps cut from the source; 0 is the whole picture. Set by `hover.zoom`.
+---@field zoom_cx? number # Centre of the magnified view, as a fraction of the source width.
+---@field zoom_cy? number # Centre of the magnified view, as a fraction of the source height.
+---@field zoom_px? Hover.Preview.Dims # The source's pixel size, read once so a level check costs no file read.
 ---@field canvas? Hover.Canvas # Size of the picture currently on screen, so `hover.resize` can tell a step that took effect from one the terminal refused.
 ---@field pinned? boolean # Taken out of the cursor's hands: the trigger neither replaces nor closes it.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
@@ -229,6 +244,9 @@
 ---@field line_end? integer # Text previews: last line of a named range (`init.lua:10-20`); shown exactly, without lead-in.
 ---@field offset? integer # Text previews: lines to skip. Set by `hover.scroll`.
 ---@field page? integer # PDF previews: 1-based page to render. Set by `hover.scroll`. Office documents page through their converted PDF the same way.
+---@field zoom? integer # Image previews: magnification steps cut from the source. Set by `hover.zoom`; 0 or absent is the whole picture.
+---@field zoom_cx? number # Centre of the magnified view, as a fraction of the source width. Default 0.5.
+---@field zoom_cy? number # Centre of the magnified view, as a fraction of the source height. Default 0.5.
 
 ---@class Hover.Content
 ---@field lines string[]

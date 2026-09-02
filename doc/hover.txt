@@ -144,6 +144,9 @@ toggles. >
                                          goes elsewhere; again releases it
   :Hover resize [bigger|smaller]         the hover bigger or smaller;
                                          omitted, bigger
+  :Hover zoom [in|out|reset]             magnify a detail of the picture;
+                                         omitted, in
+  :Hover pan {left|right|up|down}        move the magnified view
   :Hover why                             why nothing hovered here: which
                                          gate refused, and what to type
   :Hover mode [auto|manual|off]          set the mode; omitted, report it
@@ -196,6 +199,8 @@ never hold a mapping of its own.
   +, -                        the picture, larger or smaller
   <M-ScrollWheelUp/Down>      any hover, larger or smaller -- but only
                               where the pointer is
+  h, j, k, l                  move the magnified view. Bound ONLY while a
+                              hover is zoomed in
 <
 Both scroll pairs are bound, because a key that is not on the keyboard cannot
 be pressed: laptop and 60% layouts often reach PageUp/PageDown only through an
@@ -247,6 +252,45 @@ because 20 rows is already 'lines' minus four.
 
 A PDF page is not re-rasterized, so making one bigger is free and
 correspondingly unsharp.
+
+                                                                   *hover-zoom*
+ZOOM IS THE OTHER OPERATION, and the difference is the framing. `resize`
+letterboxes the WHOLE picture into a bigger box. A zoom keeps the box and cuts
+the source, so what is on screen is a SMALLER PART of the picture, larger.
+Only the second one is magnification.
+
+`:Hover zoom [in|out|reset]` is the way in, and deliberately the only one
+bound by default: a step writes a cropped file, which costs about a quarter of
+a second, and that makes it a deliberate operation rather than a dial. Measured
+on Windows, 2026-09-02 -- a `magick` start alone is 71 ms, a 1920x1080
+screenshot cropped and fitted 258 ms, a dense image of that size 502 ms, a 4K
+source ~900 ms. No format or compression setting brought it under ~150 ms. It
+runs behind the same placeholder as a PDF page, which it beats: one page cost
+1150 ms the same day.
+
+`h`, `j`, `k`, `l` move the view and are borrowed ONLY while the hover is
+zoomed in. They are motions, like `+` and `-`, but with one difference that
+settles it: what `h` would otherwise do is move the cursor, and the dismissal
+hangs on CursorMoved -- so the unbound key takes the picture away. Nobody
+presses `h` at a magnified picture meaning that. `:Hover pan` is the same move
+without a key.
+
+A zoom step divides the visible rectangle by 1.5 and keeps its centre, so
+going deeper keeps looking at the same place. A pan step is a quarter of what
+is visible. Stepping back to a view already seen is instant -- the crop is
+cached for the session and swept at exit.
+
+The ceiling is the PICTURE, not the terminal -- the opposite of the resize
+ceiling. Zoom stops when the rectangle would fall below 32 source pixels and
+says so, rather than spending a `magick` run to find out.
+
+Pictures only. A PDF page is a picture too, but the file on screen is a
+rasterization in this plugin's own cache rather than the target, and the sharp
+answer for a page is a second render at a higher DPI rather than a crop --
+3.3 s against 258 ms, measured the same day. That is a different feature.
+
+Needs images.nvim carrying `images.convert.crop`, and ImageMagick on 'path'.
+Without either, `:Hover zoom` says so instead of doing nothing.
 
 The dismissal is a suppression, not a close: under CursorHold the event fires
 again after any keystroke followed by 'updatetime' of quiet, so a key bound to
@@ -313,6 +357,7 @@ worth asserting.
       down = { "<M-PageDown>", "<C-Down>" },
       up = { "<M-PageUp>", "<C-Up>" },
     },
+    pan_keys = { left = { "h" }, right = { "l" }, up = { "k" }, down = { "j" } },
     resize_keys = {
       larger = { "+" },
       smaller = { "-" },
@@ -369,10 +414,16 @@ hover.resize({delta})                     Make the open hover bigger or
                                           may have no room left.
                                           See |hover-resize|.
                                                                  *hover.zoom()*
-hover.zoom({delta})                       Legacy spelling of
-                                          |hover.resize()|, kept because the
-                                          feature was called zoom while it
-                                          only applied to pictures.
+hover.zoom({delta})                       Magnify a detail of the picture on
+                                          screen by {delta} steps of 1.5, or
+                                          step back out. Returns false when
+                                          there is no picture to zoom, or no
+                                          detail left. See |hover-zoom|.
+                                                                  *hover.pan()*
+hover.pan({dx}, {dy})                     Move the magnified view. {dx} is -1
+                                          left, 1 right; {dy} is -1 up, 1
+                                          down. Returns false when nothing is
+                                          zoomed.
                                                              *hover.set_mode()*
 hover.set_mode({mode})                    "auto" | "manual" | "off". Returns
                                           the mode, or nil plus a message.

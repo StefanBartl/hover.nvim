@@ -61,5 +61,34 @@ local function add_dep(env_var, deps_name, marker)
   os.exit(1)
 end
 
+--- images.nvim is *optional*, unlike the two above, and the difference is
+--- deliberate: hover.nvim runs without it, and only the zoom specs need it --
+--- only for the half that shells out to ImageMagick. Absent, those skip and
+--- say so, the same stance images.nvim takes in its own `convert_spec`. A
+--- missing optional dependency must not fail a run the way a missing harness
+--- does (`NEW-40` is about the harness).
+---@param env_var string
+---@param deps_name string
+---@param marker string
+local function add_optional(env_var, deps_name, marker)
+  if pcall(require, marker) then
+    return
+  end
+  local candidates = {
+    vim.env[env_var],
+    vim.fn.getcwd() .. "/.deps/" .. deps_name,
+    vim.fs.dirname(vim.fn.getcwd()) .. "/" .. deps_name,
+  }
+  for _, dir in ipairs(candidates) do
+    if dir and dir ~= "" and vim.fn.isdirectory(dir) == 1 then
+      vim.opt.rtp:append(dir)
+      if pcall(require, marker) then
+        return
+      end
+    end
+  end
+end
+
 add_dep("LIB_NVIM_DIR", "lib.nvim", "lib.nvim.notify")
 add_dep("PLENARY_DIR", "plenary.nvim", "plenary")
+add_optional("IMAGES_NVIM_DIR", "images.nvim", "images.convert")

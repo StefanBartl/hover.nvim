@@ -326,6 +326,184 @@ function M.draw_into(png_path, win)
   end
 end
 
+---@type number What one zoom step divides the visible rectangle by.
+--- 1.5 rather than the 1.25 `resize` uses, and the reason is the measurement
+--- below: a zoom step costs a quarter of a second, so the useful number of
+--- them is small. 1.5 reaches 5x in four presses; 1.25 would need eight.
+local ZOOM_STEP = 1.5
+
+---@type integer Smallest rectangle a zoom may ask for, in source pixels.
+--- Past this there is nothing left to magnify -- the crop is upscaled into
+--- the float and the answer is blur rather than detail. A floor on the
+--- *source* rectangle rather than one derived from the terminal's cell size,
+--- because that needs images.nvim's calibration and this does not.
+local ZOOM_FLOOR_PX = 32
+
+--- The rectangle a zoom level and centre select from an image.
+---
+--- The centre is a fraction of the source rather than a pixel, so it survives
+--- a level change: zooming in keeps looking at the same place, which is what
+--- makes stepping feel like one gesture rather than a jump. The rectangle is
+--- then pushed back inside the source, so a centre near an edge still yields
+--- a full-size view rather than one hanging off the picture.
+---@param px Hover.Preview.Dims
+---@param level integer 0 is the whole picture
+---@param cx number 0..1
+---@param cy number 0..1
+---@return { w: integer, h: integer, x: integer, y: integer }|nil rect nil at level 0
+function M.zoom_rect(px, level, cx, cy)
+  if level <= 0 then
+    return nil
+  end
+  local factor = ZOOM_STEP ^ level
+  local w = math.max(ZOOM_FLOOR_PX, math.floor(px.width / factor))
+  local h = math.max(ZOOM_FLOOR_PX, math.floor(px.height / factor))
+  w, h = math.min(w, px.width), math.min(h, px.height)
+
+  local x = math.floor(cx * px.width - w / 2)
+  local y = math.floor(cy * px.height - h / 2)
+  x = math.max(0, math.min(x, px.width - w))
+  y = math.max(0, math.min(y, px.height - h))
+  return { w = w, h = h, x = x, y = y }
+end
+
+--- Whether another step in would show anything new.
+---
+--- The counterpart to how `resize` finds its ceiling: there a step that
+--- changes nothing is stepped back off, because only the terminal knows where
+--- the room ends. Here the limit is knowable in advance -- it is the source's
+--- own pixels -- so it is answered rather than discovered, and a refused step
+--- costs no `magick` run.
+---@param px Hover.Preview.Dims|nil
+---@param level integer the level that would be reached
+---@return boolean
+function M.zoom_possible(px, level)
+  if not px or level <= 0 then
+    return level <= 0
+  end
+  local factor = ZOOM_STEP ^ level
+  return math.floor(px.width / factor) >= ZOOM_FLOOR_PX
+    and math.floor(px.height / factor) >= ZOOM_FLOOR_PX
+end
+
+---@internal
+--- Cropped views, keyed by file, mtime, level and centre. Same lifetime as a
+--- rasterized page and swept by the same hook: stepping back out to a view
+--- that has been seen must not pay for it twice, and a quarter of a second is
+--- worth remembering.
+---@type table<string, string>
+local _crops = {}
+
+---@internal
+---@param path string
+---@param rect { w: integer, h: integer, x: integer, y: integer }
+---@return string|nil
+local function crop_key(path, rect)
+  local st = vim.uv.fs_stat(path)
+  if not st then
+    return nil
+  end
+  return table.concat({
+    path,
+    tostring(st.mtime and st.mtime.sec or 0),
+    rect.w,
+    rect.h,
+    rect.x,
+    rect.y,
+  }, "\0")
+end
+
+--- Pixel dimensions of an image, or nil when neither the header parser nor
+--- `images.info` can say. Public because `hover.zoom` has to know how far in
+--- it may still go, and asking that per step would re-read the file -- and,
+--- for a format the parser cannot read, shell out -- on every press.
+---@param path string
+---@return Hover.Preview.Dims|nil
+function M.pixel_size(path)
+  return pixel_size(path)
+end
+
+--- Whether a magnified detail can be produced at all.
+---
+--- Two things have to be there and neither is a hard dependency: images.nvim
+--- new enough to carry `images.convert.crop`, and the ImageMagick it runs.
+--- Asked before a step rather than discovered during one, so the answer is a
+--- sentence instead of a float that quietly never changes.
+---@return boolean
+function M.can_zoom()
+  local ok, convert = pcall(require, "images.convert")
+  if not ok or type(convert.crop) ~= "function" then
+    return false
+  end
+  return require("lib.nvim.cross.executable").exists("magick")
+end
+
+--- A magnified detail of `path`, as hover content.
+---
+--- **Why this is a separate path from `resize` and not a parameter on it.**
+--- `resize` changes the box and the whole picture is letterboxed into it: no
+--- process, no file, nothing to wait for. A zoom cuts the source, which means
+--- a `magick` run and a file. Measured on Windows, 2026-09-02: process start
+--- 71 ms, a 1920x1080 screenshot cropped and fitted **258 ms**, a dense image
+--- of the same size 502 ms, a 4K source ~900 ms. No format or compression
+--- setting brought it under ~150 ms, and batching several crops into one
+--- process saved only the start.
+---
+--- That cost decides the shape rather than the feature: it is the class this
+--- plugin already runs asynchronously behind a placeholder -- and in fact
+--- *faster* than the PDF page preview that has shipped all along (1150 ms for
+--- one page, measured the same day). So it goes through exactly that
+--- machinery, and it is never a key you hold down.
+---@param path string
+---@param opts Hover.PreviewOpts
+---@param on_result fun(content: Hover.Content|nil): nil
+---@return Hover.Content|nil provisional content, or nil when nothing can be done
+function M.zoomed(path, opts, on_result)
+  local px = pixel_size(path)
+  local rect = px and M.zoom_rect(px, opts.zoom or 0, opts.zoom_cx or 0.5, opts.zoom_cy or 0.5)
+  if not rect then
+    return nil
+  end
+
+  local key = crop_key(path, rect)
+  local cached = key and _crops[key]
+  if cached and vim.uv.fs_stat(cached) then
+    -- Nothing to wait for, so nothing is deferred and no placeholder can
+    -- flash: stepping back to a view already cut is as instant as `resize`.
+    return M.canvas_for(cached, opts)
+  end
+
+  local ok_convert, convert = pcall(require, "images.convert")
+  if not ok_convert or type(convert.crop) ~= "function" then
+    return nil
+  end
+
+  local out = ("%s/hover.nvim/zoom/%s.png"):format(
+    vim.fn.stdpath("cache"),
+    vim.fn.sha256(key or (path .. tostring(rect.x)))
+  )
+  local spec = ("%dx%d+%d+%d"):format(rect.w, rect.h, rect.x, rect.y)
+
+  convert.crop(path, spec, out, nil, function(cropped)
+    if not cropped then
+      -- Silence rather than a badge: the picture the reader is looking at is
+      -- still on screen and still correct, only not magnified.
+      on_result(nil)
+      return
+    end
+    if key then
+      _crops[key] = cropped
+      M._hook_cleanup()
+    end
+    on_result(M.canvas_for(cropped, opts))
+  end)
+
+  -- The uncropped picture, held back for the grace period. A crop that beats
+  -- it shows the detail and nothing else; one that does not leaves the whole
+  -- picture up rather than a wait that looks like the hover failing.
+  return vim.tbl_extend("force", M.canvas_for(path, opts), { pending = true })
+end
+
 --- Image preview.
 ---
 --- Two shapes, depending on whether the picture can actually be drawn:
@@ -372,6 +550,31 @@ local _pages = {}
 local _cleanup_hooked = false
 
 ---@internal
+--- Register the one exit sweep, once. It clears both caches -- rasterized
+--- pages and cropped details -- because they have the same lifetime and the
+--- same reason for it: both outlive the float they were drawn into on
+--- purpose, and neither should outlive the session.
+---@return nil
+function M._hook_cleanup()
+  if _cleanup_hooked then
+    return
+  end
+  _cleanup_hooked = true
+  require("lib.nvim.bindings.autocmd").create("VimLeavePre", function()
+    for _, file in pairs(_pages) do
+      pcall(os.remove, file)
+    end
+    for _, file in pairs(_crops) do
+      pcall(os.remove, file)
+    end
+    _pages, _crops = {}, {}
+  end, {
+    group = "HoverMedia",
+    desc = "hover: delete rasterized PDF pages and cropped details at exit",
+  })
+end
+
+---@internal
 --- The page number is part of the key. It was passed in from the start and
 --- silently dropped, so every page of one PDF shared a single cache slot:
 --- rendering page 2 deleted page 1's PNG, and a later hover on page 1 was
@@ -391,18 +594,7 @@ end
 ---@param key string
 ---@param png string
 local function remember_page(key, png)
-  if not _cleanup_hooked then
-    _cleanup_hooked = true
-    require("lib.nvim.bindings.autocmd").create("VimLeavePre", function()
-      for _, file in pairs(_pages) do
-        pcall(os.remove, file)
-      end
-      _pages = {}
-    end, {
-      group = "HoverMedia",
-      desc = "hover: delete rasterized PDF pages at exit",
-    })
-  end
+  M._hook_cleanup()
 
   local previous = _pages[key]
   if previous and previous ~= png then
