@@ -304,6 +304,24 @@ return {
     down = { "j" },
   },
 
+  --- Step to the next plugin with something to say about this place.
+  ---
+  --- Borrowed only for a *position* hover, and only where more than one
+  --- contribution is registered at all. Several plugins routinely answer for
+  --- one place -- a dotted name is both "what is this module" and "who
+  --- imports it" -- and until this key existed the first registered one won
+  --- and the rest were invisible, decided by plugin load order.
+  ---
+  --- Alt, for the same reason the zoom chords are Alt: it displaces nothing.
+  --- `n` was never a candidate -- it is search-next, and borrowing it for a
+  --- float would be the worst trade in this file. Checked against this
+  --- config's own cheatsheets and source before choosing: `<M-n>` is unused
+  --- in both.
+  position_keys = {
+    ---@type string|string[]
+    next = { "<M-n>" },
+  },
+
   --- Zoom the picture on screen, borrowed while the hover *can* be zoomed.
   ---
   --- **These exist now and deliberately did not before, and the reason the

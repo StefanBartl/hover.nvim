@@ -354,6 +354,19 @@ function M.routes()
       end,
     },
     {
+      path = { "next" },
+      -- The keyboard way in, and the discoverable one: `<M-n>` is a *borrow*,
+      -- bound only while a position hover with more than one possible answer
+      -- is open, so nobody meets it by accident. `:Hover` completion is where
+      -- the rest of this plugin is met.
+      desc = "Step to the next plugin with something to say about this place",
+      run = function()
+        if not hover().next_position() then
+          return
+        end
+      end,
+    },
+    {
       path = { "why" },
       -- The counterpart to `status`: that one says what is configured, this
       -- one says what happened *here*. A hover that does not open is silent

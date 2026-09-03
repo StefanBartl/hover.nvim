@@ -326,6 +326,7 @@ toggles.
 | `:Hover resize [bigger\|smaller]` | make the hover on screen bigger or smaller. Omitted, bigger |
 | `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture on screen. Omitted, in |
 | `:Hover nav {left\|right\|up\|down}` | move the magnified view |
+| `:Hover next` | step to the next plugin with something to say about this place |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |
@@ -668,6 +669,37 @@ answer for a page is a second render at a higher DPI, not a crop. Measured the s
 Needs images.nvim carrying `images.convert.crop`, and ImageMagick on `PATH`. Without either
 `:Hover zoom` says so instead of doing nothing.
 
+## When two plugins answer
+
+A *position* preview says something about the **place** the cursor is in rather
+than about a target it points at, and more than one plugin can have something
+to say about one place. On a dotted name two routinely do: documentation.nvim
+answers *what this module is*, insights.nvim *who imports it*. Both are true
+and they are different sentences.
+
+Until now the first registered one won and the rest were invisible — decided by
+plugin load order, which is nobody's decision. So the answers are a **ring**:
+
+| | |
+| --- | --- |
+| `<M-n>` | the next plugin with something to say here |
+| `:Hover next` | the same step, from the command line |
+
+Past the last answer it returns to the first. With only one answer it says so,
+because a key that silently does nothing is indistinguishable from a broken one.
+
+**Stepped rather than merged, and that is a decision about content.** Two
+answers in one float would mean two titles for one border, two filetypes for
+one highlight, two scroll states for one pair of borrowed keys — and a picture
+cannot be merged with text at all. Stepping keeps each answer whole.
+
+**Nothing is asked in advance.** There is deliberately no "2 of 3" counter:
+knowing how many *would* answer means calling every contribution on every
+hover, which is the cost `on_request` exists to avoid. The key is bound on how
+many are registered, and stepping is what asks. A contribution that declines is
+not a page you step past, and one that declared its answer expensive **is**
+reachable this way — stepping is an explicit act, like `:Hover show`.
+
 ## Configuration
 
 ```lua
@@ -703,6 +735,7 @@ require("hover").setup({
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | |
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | |
+| `position_keys.next` | `{ "<M-n>" }` | Step to the next plugin answering for this place. Borrowed **only for a position hover**, and only where more than one contribution is registered — see [When two plugins answer](#when-two-plugins-answer) |
 | `nav_keys.left` | `{ "h" }` | Move the magnified view. Borrowed **only while a hover is zoomed in** — see [Zooming into a picture](#zooming-into-a-picture). |
 | `nav_keys.right` | `{ "l" }` | |
 | `nav_keys.up` | `{ "k" }` | |

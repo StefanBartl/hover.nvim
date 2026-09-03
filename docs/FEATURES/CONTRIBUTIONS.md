@@ -27,6 +27,23 @@ until the kind existed "no target" meant "no hover", full stop.
 documentation.nvim, spotlight.nvim, sandbox.nvim — which is the strongest
 evidence that the gap was real rather than theoretical.
 
+**Positions are a ring, not a race.** Several plugins can answer for one
+place, and on a dotted name two routinely do: documentation.nvim says what the
+module is, insights.nvim says who imports it. First-match-wins is right for a
+*source* — those compete to describe the same target — and wrong here, where
+the answers are different sentences about the same place and the loser is
+invisible rather than outranked. Which one won was decided by plugin load
+order. `<M-n>` and `:Hover next` step between them; `registry.position_at`
+takes an `nth` over the contributions that *answer*, so one that declines is
+not a page the reader steps past.
+
+Stepped rather than merged on purpose: `Hover.Content` is shaped for one
+answer — one title, one filetype, one optional canvas — and merging two would
+need a policy for each of those, plus one for a picture that cannot be merged
+with text at all. And nothing is counted in advance: knowing how many would
+answer means calling every contribution on every hover, which is exactly the
+cost `on_request` exists to avoid.
+
 Sources are ordered and previews are not, and that asymmetry is not an
 oversight: several sources can match one cursor position (a markdown link and a
 bare path both exist on `[a](./b.png)`), so "first match wins" needs an order,

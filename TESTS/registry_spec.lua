@@ -1320,3 +1320,126 @@ describe("a contribution written in the user's own setup table", function()
     assert.equals(1, asked.second)
   end)
 end)
+
+-- Several plugins with something to say about one place.
+--
+-- First match wins is right for a *source*, where the answers compete to
+-- describe the same target. It is wrong for a position, where they are
+-- different sentences about the same place: on a dotted name, "what is this
+-- module" and "who imports it" are both true and only one was ever seen. Which
+-- one depended on plugin load order, which is nobody's decision.
+--
+-- Three properties, and the third is the one that keeps this affordable:
+--
+--   1. `nth` counts **answers**, not contributions. A plugin that declines is
+--      not a page the reader has to step past.
+--   2. Stepping asks with `force`, so a contribution that declared its answer
+--      expensive is reachable here -- the same stance `:Hover show` takes.
+--   3. **Nothing is asked eagerly.** There is deliberately no "how many
+--      answers are there": finding out means calling every contribution on
+--      every trigger, which is the cost `on_request` exists to avoid. The key
+--      is bound on how many are *registered*, and a press that finds nothing
+--      says so.
+describe("several answers for one position", function()
+  local hover = require("hover")
+
+  before_each(function()
+    registry.reset()
+    config.reset()
+    vim.g.hover_disable = nil
+  end)
+
+  after_each(function()
+    hover.hide()
+    registry.reset()
+    config.reset()
+    vim.g.hover_disable = nil
+    pcall(vim.keymap.del, "n", "<M-n>")
+  end)
+
+  ---@param name string
+  ---@param line string
+  local function answers(name, line)
+    registry.register(name, {
+      positions = {
+        function()
+          return { lines = { line } }
+        end,
+      },
+    })
+  end
+
+  it("hands back the nth answer, counting only those that answer", function()
+    answers("first", "A")
+    registry.register("silent", {
+      positions = {
+        function()
+          return nil
+        end,
+      },
+    })
+    answers("third", "C")
+
+    local one, who = registry.position_at(0, 1, 0, { nth = 1 })
+    assert.same({ "A" }, one.lines)
+    assert.equals("first", who)
+
+    -- Two, not three: the one that declined is not a page to step past.
+    local two, who2 = registry.position_at(0, 1, 0, { nth = 2 })
+    assert.same({ "C" }, two.lines)
+    assert.equals("third", who2)
+
+    assert.is_nil(registry.position_at(0, 1, 0, { nth = 3 }))
+  end)
+
+  it("counts registrations without asking any of them", function()
+    local asked = 0
+    registry.register("counts", {
+      positions = {
+        function()
+          asked = asked + 1
+          return { lines = { "x" } }
+        end,
+      },
+    })
+    answers("second", "y")
+
+    assert.equals(2, registry.position_count())
+    assert.equals(0, asked, "counting must not call a contribution")
+  end)
+
+  it("steps through them and wraps, and says so when there is only one", function()
+    answers("first", "A")
+    answers("second", "B")
+    hover.enable()
+
+    vim.api.nvim_buf_set_lines(0, 0, -1, false, { "nothing resolvable here" })
+    vim.api.nvim_win_set_cursor(0, { 1, 3 })
+    assert.is_true(hover.show({ force = true }))
+
+    ---@return string
+    local function shown()
+      local win = require("hover.float").win()
+      return table.concat(
+        vim.api.nvim_buf_get_lines(vim.api.nvim_win_get_buf(win), 0, -1, false),
+        ""
+      )
+    end
+
+    assert.equals("A", shown())
+    assert.is_true(hover.next_position())
+    assert.equals("B", shown(), "the second plugin's answer, whole")
+    assert.is_true(hover.next_position())
+    assert.equals("A", shown(), "past the last one it wraps rather than dead-ending")
+
+    -- The key is a borrow, and only where a second answer could exist.
+    assert.is_true(vim.fn.maparg("<M-n>", "n") ~= "")
+
+    hover.hide()
+    registry.reset()
+    answers("alone", "only")
+    assert.is_true(hover.show({ force = true }))
+    assert.is_false(vim.fn.maparg("<M-n>", "n") ~= "", "one contribution borrows no key")
+    assert.is_false(hover.next_position(), "and stepping says there is nothing to step to")
+  end)
+end)

@@ -45,6 +45,7 @@
 ---@field scroll_keys? Hover.ScrollKeys
 ---@field resize_keys? Hover.ResizeKeys
 ---@field nav_keys? Hover.NavKeys
+---@field position_keys? Hover.PositionKeys
 ---@field zoom_keys? Hover.ZoomKeys
 ---@field dismiss_keys? string|string[] # Keys that wave the hover on screen away. Default `{ "q", "<Esc>" }`; a configured list replaces the default, and an empty one binds nothing.
 ---@field open_keys? string|string[] # Keys that open what the float is showing, through open.nvim or `vim.ui.open`. Default `{ "gf" }`; an empty list binds nothing.
@@ -116,6 +117,12 @@
 --- The narrowest borrow condition here: these are motions, and the motion
 --- they displace would dismiss the float rather than move it, because the
 --- dismissal hangs on `CursorMoved`.
+--- The key that steps between the plugins answering for one place. Borrowed
+--- only for a position hover, and only where more than one contribution is
+--- registered.
+---@class Hover.PositionKeys
+---@field next? string|string[] # Default `{ "<M-n>" }`.
+
 ---@class Hover.NavKeys
 ---@field left? string|string[] # Default `{ "h" }`.
 ---@field right? string|string[] # Default `{ "l" }`.

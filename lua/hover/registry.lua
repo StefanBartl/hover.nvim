@@ -181,13 +181,33 @@ end
 --- Unlike a source this returns finished content rather than a string to
 --- classify -- there is nothing to classify, which is the entire point of the
 --- kind. See `Hover.PositionFn`.
+---
+--- **`opts.nth` steps past the winner.** Several plugins can have something to
+--- say about one place, and they often do: a dotted name is both "what is this
+--- module" (documentation.nvim) and "who imports it" (insights.nvim). First
+--- match wins is right for a *source*, where the answers compete to describe
+--- the same target -- and wrong here, where they are different sentences about
+--- the same place, and the loser is invisible rather than outranked. Which one
+--- won was decided by nothing better than plugin load order.
+---
+--- So the caller can ask for the second answer, the third, and so on;
+--- `hover.next_position` walks them. Answers are counted, not contributors:
+--- a plugin that declines here is not a page the reader has to step past.
+---
+--- **Nothing is asked eagerly.** There is deliberately no "how many answers
+--- are there" -- finding out would mean calling every contribution on every
+--- trigger, which is exactly the cost `on_request` exists to avoid. The reader
+--- discovers a second answer by asking for it.
 ---@param bufnr integer
 ---@param row integer 1-based
 ---@param col integer 0-based
+---@param opts? { force?: boolean, nth?: integer } `nth` is 1-based, over the contributions that *answer*
 ---@return Hover.Content|nil content
 ---@return string|nil name the plugin that answered, for the dismissal identity
 function M.position_at(bufnr, row, col, opts)
   local force = type(opts) == "table" and opts.force == true
+  local want = math.max(1, math.floor((type(opts) == "table" and opts.nth) or 1))
+  local seen = 0
   for _, entry in ipairs(positions) do
     if force or not entry.on_request then
       -- `pcall` for the same reason as `source_at`: one broken contribution
@@ -199,7 +219,10 @@ function M.position_at(bufnr, row, col, opts)
         and type(content.lines) == "table"
         and #content.lines > 0
       then
-        return content, entry.name
+        seen = seen + 1
+        if seen == want then
+          return content, entry.name
+        end
       end
     end
   end
@@ -295,6 +318,20 @@ function M.contributors()
     return a.name < b.name
   end)
   return out
+end
+
+--- How many position contributions are registered.
+---
+--- Registered, **not** answering: finding out how many would answer means
+--- asking all of them, and this is read on every hover that opens. It exists
+--- for one decision -- whether to borrow a key for stepping between answers --
+--- and for that "could there be a second one at all" is the honest question.
+--- A key bound where nothing further answers costs one press and a message; a
+--- contribution called on every trigger costs what `on_request` was built to
+--- stop.
+---@return integer
+function M.position_count()
+  return #positions
 end
 
 --- Drop every registration. Tests only.

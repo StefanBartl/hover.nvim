@@ -147,6 +147,8 @@ toggles. >
   :Hover zoom [in|out|reset]             magnify a detail of the picture;
                                          omitted, in
   :Hover nav {left|right|up|down}        move the magnified view
+  :Hover next                            the next plugin with something
+                                         to say about this place
   :Hover why                             why nothing hovered here: which
                                          gate refused, and what to type
   :Hover mode [auto|manual|off]          set the mode; omitted, report it
@@ -281,6 +283,18 @@ settles it: what `h` would otherwise do is move the cursor, and the dismissal
 hangs on CursorMoved -- so the unbound key takes the picture away. Nobody
 presses `h` at a magnified picture meaning that. `:Hover nav` is the same move
 without a key.
+
+                                                            *hover-next-answer*
+More than one plugin can answer for one place: on a dotted name, "what is
+this module" and "who imports it" are both true, and only the first
+registered one used to be seen. `<M-n>` steps to the next and wraps past the
+last; `:Hover next` is the same step with no borrow at all.
+
+Stepped rather than merged, because two answers in one float would mean two
+titles for one border and two filetypes for one highlight -- and a picture
+cannot be merged with text at all. There is no "2 of 3" counter on purpose:
+knowing how many would answer means asking every contribution on every
+hover, which is the cost 'on_request' exists to avoid.
 
 A zoom step divides the visible rectangle by 1.5 and keeps its centre, so
 going deeper keeps looking at the same place. A pan step is a quarter of what

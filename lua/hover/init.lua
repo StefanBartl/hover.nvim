@@ -517,6 +517,11 @@ local function present(content)
     zoom = M.zoom,
     zoomed = ((_open and _open.zoom) or 0) > 0,
     zoomable = can_magnify(_open),
+    next_answer = M.next_position,
+    -- Registered, not answering: see `registry.position_count`. Only a
+    -- *position* hover has other answers to step to at all.
+    has_answers = (_open and _open.position ~= nil)
+      and require("hover.registry").position_count() > 1,
   })
 end
 
@@ -703,7 +708,74 @@ function M.show_position(bufnr, opts)
   keys.release()
   -- No `target` field: that absence is what `scroll` and `identity` read to
   -- tell the two kinds apart, rather than a flag either could forget to set.
-  _open = { position = id, bufnr = bufnr, row = row }
+  -- `col` and `position_nth` so `next_position` can ask the same place for
+  -- its next answer. The row alone was enough while only one could win.
+  _open = { position = id, bufnr = bufnr, row = row, col = col, position_nth = 1 }
+  present(content)
+  return true
+end
+
+--- Step to the next plugin that has something to say about this place.
+---
+--- **Why stepping and not merging.** Several plugins can answer for one
+--- position, and on a dotted name two routinely do: "what is this module"
+--- and "who imports it". Until now the first registered won and the rest were
+--- invisible -- decided by plugin load order, which is nobody's decision.
+---
+--- Merging them into one float was the other way, and it is worse than it
+--- looks: `Hover.Content` is shaped for *one* answer. Two contents mean two
+--- titles for one border, two filetypes for one highlight, two `scroll`
+--- states for one pair of borrowed keys -- and a picture cannot be merged
+--- with text at all. Stepping keeps each answer whole, which is the property
+--- that makes it worth the key.
+---
+--- **It asks with `force`.** Stepping is an explicit act, so a contribution
+--- that declared its answer expensive (`on_request`) is reachable here --
+--- exactly as it is through `:Hover show`, and for the same reason.
+---
+--- Wraps: past the last answer it returns to the first, so the key is a ring
+--- rather than a dead end. With only one answer it says so instead, because a
+--- key that silently does nothing is indistinguishable from a broken one.
+---@return boolean stepped
+function M.next_position()
+  if not (_open and _open.position and float.win()) then
+    keys.release()
+    return false
+  end
+
+  local registry = require("hover.registry")
+  local current = _open.position_nth or 1
+
+  ---@param nth integer
+  ---@return Hover.Content|nil, string|nil
+  local function ask(nth)
+    return registry.position_at(_open.bufnr, _open.row, _open.col or 0, {
+      force = true,
+      nth = nth,
+    })
+  end
+
+  local nth = current + 1
+  local content, name = ask(nth)
+  if not content and current > 1 then
+    nth = 1
+    content, name = ask(nth)
+  end
+  if not content then
+    require("hover.notify").info("no other answer here")
+    return false
+  end
+
+  local id = table.concat({ "position", name or "?", _open.bufnr, _open.row }, "|")
+  _generation = _generation + 1
+  keys.release()
+  _open = {
+    position = id,
+    bufnr = _open.bufnr,
+    row = _open.row,
+    col = _open.col,
+    position_nth = nth,
+  }
   present(content)
   return true
 end

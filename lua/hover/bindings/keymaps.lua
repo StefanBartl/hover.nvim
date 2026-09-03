@@ -145,12 +145,13 @@ end
 --- argument stops being readable -- `borrow(c, f, g, h, true)` says nothing
 --- about which of them pans. A fourth condition is one key here.
 ---@param content Hover.Content|nil
----@param handlers { scroll?: fun(delta: integer), resize?: fun(delta: integer), nav?: fun(dx: integer, dy: integer), zoom?: fun(delta: integer), zoomed?: boolean, zoomable?: boolean }
+---@param handlers { next_answer?: fun(), has_answers?: boolean, scroll?: fun(delta: integer), resize?: fun(delta: integer), nav?: fun(dx: integer, dy: integer), zoom?: fun(delta: integer), zoomed?: boolean, zoomable?: boolean }
 ---@return nil
 function M.borrow(content, handlers)
   handlers = handlers or {}
   local rerender, resize = handlers.scroll, handlers.resize
   local nav, zoom = handlers.nav, handlers.zoom
+  local next_answer = handlers.next_answer
   M.release()
 
   local cfg = require("hover.config").get()
@@ -257,6 +258,20 @@ function M.borrow(content, handlers)
           zoom(delta)
         end, "hover: zoom " .. spec[3])
       end
+    end
+  end
+
+  -- Only for a position hover, and only where a second contribution could
+  -- exist. `has_answers` counts registrations rather than answers on purpose:
+  -- finding out who *would* answer means calling all of them on every hover,
+  -- which is the cost `on_request` exists to avoid. A key bound where nothing
+  -- further answers costs one press and a message.
+  if next_answer and handlers.has_answers then
+    local pk = type(cfg.position_keys) == "table" and cfg.position_keys or {}
+    for _, lhs in ipairs(M.keylist(pk.next)) do
+      take(seen, lhs, function()
+        next_answer()
+      end, "hover: the next plugin with something to say here")
     end
   end
 
