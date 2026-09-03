@@ -607,6 +607,21 @@ function M.show(opts)
     return false
   end
 
+  -- The type is one this reader does not want opening by itself.
+  --
+  -- Here rather than at the source, and for the opposite reason the web gate
+  -- above is in two places: this one is *about* the type, and the type is not
+  -- known until `classify` has run. Everything before this point has already
+  -- happened either way -- the scope check, the `fs_stat` -- so what is saved
+  -- is the float and the preview behind it, not the work of finding out there
+  -- was something here. A reader expecting this to make the plugin cheaper is
+  -- getting quiet instead, which is what they asked for.
+  if not opts.force and not config.auto_hover_for(target.type) then
+    M.hide()
+    _suppressed = nil
+    return false
+  end
+
   if _suppressed then
     if opts.force or _suppressed ~= identity(target) then
       -- Either the cursor reached a different target, or a caller asked for
@@ -689,6 +704,13 @@ function M.show_position(bufnr, opts)
     return false
   end
   if not opts.force and not config.positions_enabled() then
+    return false
+  end
+  -- The same type gate the target path gets, for the one entry in it that is
+  -- not a target type. Asked before `position_at`, which is the expensive
+  -- call here: every registered contribution is invoked, and one of them
+  -- reads a file.
+  if not opts.force and not config.auto_hover_for("position") then
     return false
   end
 
@@ -1531,6 +1553,63 @@ function M.set_mode(mode)
   require("hover.notify").info(note)
 
   return mode
+end
+
+--- Read or change which target types open a float by themselves.
+---
+--- `nil` reports and changes nothing; a type name toggles that one; `"all"`
+--- and `"none"` set every one at once. Returns the sentence to show, so the
+--- route does not compose one and this is testable without capturing
+--- notifications.
+---
+--- **No cache reset here, unlike the switches.** The preview cache is keyed
+--- by what a target *is*, and this changes nothing about how any target is
+--- rendered — only whether the trigger asks. A cached preview stays exactly
+--- as valid as it was, and dropping it would make the next explicit request
+--- pay for a decision that was not about it.
+---@param which string|nil `nil` reports, `"all"`/`"none"`, or one type name.
+---@return string|nil report, string|nil err
+function M.set_auto(which)
+  local names = require("hover.config.auto_types")()
+  local raw = config.raw()
+  if type(raw.auto_hover) ~= "table" then
+    -- The boolean forms are folded by `config.normalize` before they are
+    -- stored, so this only happens to a caller that wrote the field directly.
+    local all = raw.auto_hover == true
+    raw.auto_hover = {}
+    for _, name in ipairs(names) do
+      raw.auto_hover[name] = all
+    end
+  end
+
+  if which == nil then
+    local on, off = {}, {}
+    for _, name in ipairs(names) do
+      table.insert(config.auto_hover_for(name) and on or off, name)
+    end
+    return ("opens by itself: %s  ·  only on request: %s"):format(
+      #on > 0 and table.concat(on, ", ") or "nothing",
+      #off > 0 and table.concat(off, ", ") or "nothing"
+    )
+  end
+
+  if which == "all" or which == "none" then
+    local value = which == "all"
+    for _, name in ipairs(names) do
+      raw.auto_hover[name] = value
+    end
+    return value and "every type opens by itself"
+      or "nothing opens by itself (`:Hover show` still answers)"
+  end
+
+  if not vim.tbl_contains(names, which) then
+    return nil,
+      ("unknown type %q (%s, or all|none)"):format(tostring(which), table.concat(names, "|"))
+  end
+
+  local now = not config.auto_hover_for(which)
+  raw.auto_hover[which] = now
+  return ("%s %s by itself"):format(which, now and "opens" or "does not open")
 end
 
 --- Whether a hover would open at all right now -- true in both "auto" and

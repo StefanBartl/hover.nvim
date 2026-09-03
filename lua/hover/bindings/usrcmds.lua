@@ -292,6 +292,38 @@ function M.routes()
       end,
     },
     {
+      path = { "auto" },
+      desc = "Which target types open by themselves; a type toggles it, `all`/`none` set every one",
+      args = {
+        {
+          name = "type",
+          -- Completed from the same list `auto_hover` is validated against,
+          -- so a new target type appears here without an edit. `all` and
+          -- `none` are the two ends of the axis, spelled rather than
+          -- expressed as eleven presses.
+          enum = (function()
+            local names = require("hover.config.auto_types")()
+            local out = { "all", "none" }
+            for _, name in ipairs(names) do
+              out[#out + 1] = name
+            end
+            return out
+          end)(),
+          optional = true,
+        },
+      },
+      ---@param ctx table
+      run = function(ctx)
+        local which = ctx and ctx.args and ctx.args.type
+        local result, err = hover().set_auto(which)
+        if err then
+          require("hover.notify").warn(err)
+          return
+        end
+        require("hover.notify").info(result)
+      end,
+    },
+    {
       path = { "toggle" },
       desc = "Turn the hover off for this session, or back on",
       run = function()

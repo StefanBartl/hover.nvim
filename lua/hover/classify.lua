@@ -167,4 +167,30 @@ function M.is_image_ext(ext)
   return ext ~= nil and IMAGE_EXT[ext:lower()] == true
 end
 
+---@type string[] Every value `classify` can put in `Hover.Target.type`.
+---
+--- A list rather than a set, and sorted, because both consumers want an
+--- order: `auto_hover`'s completion and the `:checkhealth` line that prints
+--- which types open by themselves.
+---
+--- **It is a second copy of `Hover.Target`'s declared union, and that is the
+--- one thing this repository keeps getting wrong** -- a hand-kept list beside
+--- a source of truth has fallen behind five times here. So it is not left to
+--- care: `TESTS/switches_spec.lua` reads the union out of `@types/init.lua`
+--- and compares, the same way `docs_spec` already reads it to check the
+--- vimdoc. The union cannot be read at runtime -- it is a LuaLS annotation,
+--- not data -- so binding the copy with an assertion is the honest option.
+M.TYPES = {
+  "anchor",
+  "directory",
+  "file",
+  "git",
+  "image",
+  "markdown",
+  "missing",
+  "office",
+  "pdf",
+  "url",
+}
+
 return M

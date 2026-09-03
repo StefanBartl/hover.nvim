@@ -49,6 +49,7 @@ See ./docs/architecture.md#modules for details.
 - [Quickstart](#quickstart)
 - [Integrations](#integrations)
 - [What is opt-in, and why](#what-is-opt-in-and-why)
+- [What opens by itself](#what-opens-by-itself)
 - [Modes](#modes)
 - [The `:Hover` command](#the-hover-command)
 - [Bare paths](#bare-paths)
@@ -74,6 +75,7 @@ See ./docs/architecture.md#modules for details.
 | `require("hover").enable()` | Installs the trigger, attaches the buffers that are already open, registers `:Hover`. Idempotent | [Quickstart](#quickstart) |
 | Preview on cursor rest | A float over whatever the cursor points at — a link, or a path written as plain text, in any filetype | [What it previews](#what-it-previews) |
 | `:Hover show` / `show({ force = true })` | One preview, here and now, ignoring every volume switch | [The `:Hover` command](#the-hover-command) |
+| `:Hover auto [<type>]` | Which target types open **by themselves**. Pictures and PDF pages by default; everything else waits to be asked | [What opens by itself](#what-opens-by-itself) |
 | `:Hover mode [auto\|manual\|off]` | The switch above every other switch. `manual` keeps every preview and gives up only the automatic trigger | [Modes](#modes) |
 | Nine runtime switches | `links`, `links web`, `links web fetch`, `paths`, `paths missing`, `paths code`, `positions`, `images`, `office` — declared once, feeding routes, completion, `status` and `:checkhealth` alike | [The `:Hover` command](#the-hover-command) |
 | `:Hover status` | The mode and every switch, in one message | [The `:Hover` command](#the-hover-command) |
@@ -273,6 +275,52 @@ above all of them.
 cover: it is a disclosure. Every link the cursor rests on becomes a request from this
 machine to that host. `:Hover links web on` alone never touches the network.
 
+## What opens by itself
+
+**Pictures and PDF pages open by themselves. Everything else waits to be asked.**
+
+That is the default since 2026-09-03, and the reason is what each preview adds. A picture
+or a rendered page is the only thing this plugin shows that you cannot read off the line
+the cursor is on. The first lines of a text file are a *shortcut* — useful, and a shortcut
+for something you could also just open, while the float lands over the paragraph you were
+reading. The value per interruption is very unevenly spread across the target types, and
+this is the axis it is spread along.
+
+```lua
+require("hover").setup({
+  auto_hover = { "image", "pdf" },        -- the default
+  -- auto_hover = { "image", "pdf", "file", "position" },  -- and text files too
+  -- auto_hover = true,                   -- everything, as it was before
+  -- auto_hover = false,                  -- nothing; same effect as mode = "manual"
+})
+```
+
+| Way in | Does |
+|---|---|
+| `:Hover auto` | list what opens by itself and what waits |
+| `:Hover auto image` | toggle one type |
+| `:Hover auto all` / `:Hover auto none` | both ends at once |
+
+The names are the target types (`image`, `pdf`, `office`, `markdown`, `file`, `directory`,
+`url`, `anchor`, `missing`, `git`) plus `position` for a plugin answering about the *place*
+the cursor is in rather than about a target.
+
+**This gates the trigger, not the plugin.** `:Hover show` — and any key you bind to it —
+answers for every type regardless. That is the whole difference between this and the
+switches in [What is opt-in, and why](#what-is-opt-in-and-why): `paths.enabled = false`
+means a bare path is not a target at all, so nothing finds it; leaving `file` out of
+`auto_hover` means it is found and waits for you to ask.
+
+Two consequences worth knowing before you keep the default:
+
+- **Position previews are off by default too.** documentation.nvim saying what a module is,
+  insights.nvim saying who imports it — those answer on `:Hover show` and not on their own.
+  `:Hover auto position` turns them back on, permanently in `auto_hover`.
+- **It saves the float, not the work before it.** To know that something is a picture, the
+  path still has to be resolved. What you get is quiet, not speed.
+
+---
+
 ## Modes
 
 The switch above every other switch. Three positions:
@@ -327,6 +375,7 @@ toggles.
 | `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture on screen. Omitted, in |
 | `:Hover nav {left\|right\|up\|down}` | move the magnified view |
 | `:Hover next` | step to the next plugin with something to say about this place |
+| `:Hover auto [<type>\|all\|none]` | which target types open by themselves. A type toggles it; omitted, it lists what does and what waits to be asked |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |

@@ -144,6 +144,33 @@ local function check_config()
     health.ok(("mode: %s"):format(mode))
   end
 
+  -- What opens without being asked, said out loud.
+  --
+  -- Reported rather than left to the configuration file, because the default
+  -- is narrow and the failure it produces reads as breakage: a reader who
+  -- hovers a text file and gets nothing has no way to tell "this type waits
+  -- to be asked" from "the plugin is not working". `:Hover why` answers for
+  -- one float; this answers for the setting behind all of them.
+  do
+    local on, off = {}, {}
+    for _, name in ipairs(require("hover.config.auto_types")()) do
+      table.insert(config.auto_hover_for(name) and on or off, name)
+    end
+    if #on == 0 then
+      health.warn("auto_hover: nothing opens by itself", {
+        "`:Hover show` still answers for every type.",
+        "`:Hover auto all` turns the automatic trigger back on for all of them.",
+      })
+    else
+      health.ok(("auto_hover: %s open by themselves"):format(table.concat(on, ", ")))
+      if #off > 0 then
+        health.info(("on request only: %s"):format(table.concat(off, ", ")), {
+          "`:Hover auto <type>` toggles one for this session.",
+        })
+      end
+    end
+  end
+
   if mode == "manual" then
     local keymaps = config.get().keymaps
     local show = type(keymaps) == "table" and keymaps.show

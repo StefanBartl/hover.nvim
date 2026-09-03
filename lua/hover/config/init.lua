@@ -101,6 +101,42 @@ local function normalize(opts)
     end
     opts.url = nil
   end
+
+  -- `auto_hover` in its two short forms, folded into the full table
+  -- `DEFAULTS` declares.
+  --
+  -- A **list** is a closed set -- "these types and no others" -- so it has to
+  -- become an entry for every type, `false` included; merged as a list it
+  -- would leave the default's second element sitting at index 2 and turn on a
+  -- type nobody named, which is the same trap `replace_key_lists` exists for.
+  -- **`true`/`false`** are the "all" and "none" ends of the same axis and
+  -- read better than either extreme written out.
+  --
+  -- A table shape is left exactly as given: that is the additive form, where
+  -- `{ file = true }` means "and file too", and it is the shape a runtime
+  -- toggle writes back.
+  if opts.auto_hover ~= nil then
+    local given = opts.auto_hover
+    if type(given) == "boolean" then
+      local all = {}
+      for _, name in ipairs(require("hover.config.auto_types")()) do
+        all[name] = given
+      end
+      opts.auto_hover = all
+    elseif type(given) == "table" and #given > 0 then
+      local wanted = {}
+      for _, name in ipairs(given) do
+        if type(name) == "string" then
+          wanted[name] = true
+        end
+      end
+      local full = {}
+      for _, name in ipairs(require("hover.config.auto_types")()) do
+        full[name] = wanted[name] == true
+      end
+      opts.auto_hover = full
+    end
+  end
 end
 
 ---@internal
@@ -219,6 +255,48 @@ end
 ---@return boolean
 function M.is_enabled()
   return M.mode() ~= "off"
+end
+
+--- Whether the automatic trigger opens a float for a target of this type.
+---
+--- Answered only for the trigger: `:Hover show` passes `force` and never
+--- reaches this. The difference between it and `paths_enabled` and friends is
+--- the difference between "not without being asked" and "not at all" — see
+--- `DEFAULTS.auto_hover`.
+---
+--- Unknown names answer `true`. A type this table has never heard of is a
+--- newer target class than the configuration was written against, and the
+--- fail-open direction is the one that shows a reader something rather than
+--- silently withholding it — the same choice `hover.scope` makes for capture
+--- families it does not recognise.
+---@param target_type string # A `Hover.Target.type`, or `"position"`.
+---@return boolean
+function M.auto_hover_for(target_type)
+  local auto = M.get().auto_hover
+  if type(auto) == "boolean" then
+    return auto
+  end
+  if type(auto) ~= "table" then
+    return true
+  end
+  local value = auto[target_type]
+  if value == nil then
+    return true
+  end
+  return value == true
+end
+
+--- The `auto_hover` table as it stands, every known name present.
+---
+--- For the places that report rather than decide: `:Hover auto`, the health
+--- section, and the spec that holds the keys against `classify.TYPES`.
+---@return table<string, boolean>
+function M.auto_hover()
+  local out = {}
+  for _, name in ipairs(require("hover.config.auto_types")()) do
+    out[name] = M.auto_hover_for(name)
+  end
+  return out
 end
 
 --- Whether a target found by link syntax may open a float.

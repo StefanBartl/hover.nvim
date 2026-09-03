@@ -104,6 +104,34 @@ reading a README becomes a slideshow and the float lands over the paragraph
 being read. Fetching is off a second time on top of that, because it is a
 disclosure -- `:Hover links web on` alone never touches the network.
 
+                                                        *hover-auto-hover*
+WHAT OPENS BY ITSELF is a second axis, and it says what the list above cannot:
+those are organised by where a target was FOUND, this one by what it turned out
+to BE. A markdown link can point at a picture or at a text file, so
+"pictures only, however they were written" needed its own setting. >lua
+
+  require("hover").setup({
+    auto_hover = { "image", "pdf" },   -- the default
+    -- auto_hover = true,              -- every type, as before 2026-09-03
+    -- auto_hover = false,             -- none; same effect as mode = "manual"
+  })
+<
+Pictures and pages are the default because they are the only thing this plugin
+shows that cannot be read off the line the cursor is on. A text file's first
+lines are a shortcut for something you could also open, and the float lands
+over the paragraph you were reading to give it to you.
+
+Names are the target types plus `position` for a plugin answering about the
+place the cursor is in. A list is a closed set; a table is additive
+(`{ file = true }` adds one); `:Hover auto [type]` toggles one for the
+session and `:Hover auto` lists them.
+
+IT GATES THE TRIGGER, NOT THE PLUGIN. `:Hover show` answers for every type
+regardless -- which is the difference between this and 'paths.enabled' and its
+neighbours: those decide whether something is a target at all. Note that
+position previews are off by default with the rest, so a plugin answering for
+a place waits to be asked until `:Hover auto position`.
+
 ==============================================================================
 5. MODES                                                          *hover-modes*
 
@@ -151,6 +179,8 @@ toggles. >
                                          to say about this place
   :Hover why                             why nothing hovered here: which
                                          gate refused, and what to type
+  :Hover auto [<type>|all|none]          which types open by themselves;
+                                         omitted, list them
   :Hover mode [auto|manual|off]          set the mode; omitted, report it
   :Hover toggle                          off if on, back to auto if off
 

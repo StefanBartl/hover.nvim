@@ -568,3 +568,181 @@ describe("the master switch against an explicit request", function()
     assert.is_true(hover.show({ force = true }))
   end)
 end)
+
+describe("auto_hover, the third axis", function()
+  local hover = require("hover")
+  local registry = require("hover.registry")
+  local classify = require("hover.classify")
+  local auto_types = require("hover.config.auto_types")
+
+  before_each(function()
+    config.reset()
+    registry.reset()
+    vim.g.hover_disable = nil
+  end)
+
+  after_each(function()
+    hover.hide()
+    config.reset()
+    registry.reset()
+    vim.g.hover_disable = nil
+  end)
+
+  -- The two hand-kept lists this feature adds, each held against the source
+  -- it copies. Five times in this repository a copy like these has fallen
+  -- behind the thing it copies, and every one of those was found by a person
+  -- rather than by a run.
+  it("knows exactly the target types Hover.Target declares", function()
+    local fd = assert(io.open(vim.fn.getcwd() .. "/lua/hover/@types/init.lua", "r"))
+    local text = fd:read("*a")
+    fd:close()
+    local union = text:match("@class Hover%.Target.-@field type ([^\n]+)")
+    assert.is_truthy(union, "Hover.Target no longer declares its type union")
+
+    local declared = {}
+    for name in union:gmatch('"(%a+)"') do
+      declared[#declared + 1] = name
+    end
+    table.sort(declared)
+
+    local known = vim.deepcopy(classify.TYPES)
+    table.sort(known)
+    assert.same(declared, known, "classify.TYPES has drifted from the declared union")
+  end)
+
+  it("gives every name it accepts a default", function()
+    -- A type missing from `DEFAULTS.auto_hover` would read as "not
+    -- configured", and `auto_hover_for` fails open, so a new target type
+    -- would arrive switched *on* while the table said nothing about it. That
+    -- is the right direction for an unknown name and the wrong one for a
+    -- known one, which is what this holds apart.
+    local DEFAULTS = require("hover.config.DEFAULTS")
+    for _, name in ipairs(auto_types()) do
+      assert.is_boolean(
+        DEFAULTS.auto_hover[name],
+        ("DEFAULTS.auto_hover has no entry for %q"):format(name)
+      )
+    end
+  end)
+
+  it("opens pictures and pages by itself, and nothing else", function()
+    local defaults = config.auto_hover()
+    assert.is_true(defaults.image)
+    assert.is_true(defaults.pdf)
+    assert.is_false(defaults.file)
+    assert.is_false(defaults.position)
+  end)
+
+  it("reads a list as a closed set rather than merging it", function()
+    -- The trap `replace_key_lists` exists for, one option along: merged by
+    -- index, `{ "file" }` would leave the default's second element in place
+    -- and turn on a type nobody named.
+    config.setup({ auto_hover = { "file" } })
+    local now = config.auto_hover()
+    assert.is_true(now.file)
+    assert.is_false(now.image, "the default's first entry survived a list that did not name it")
+    assert.is_false(now.pdf, "the default's second entry survived a list that did not name it")
+  end)
+
+  it("reads a table as an addition, which is how every other option merges", function()
+    config.setup({ auto_hover = { file = true } })
+    local now = config.auto_hover()
+    assert.is_true(now.file)
+    assert.is_true(now.image, "a partial table replaced the defaults instead of adding to them")
+  end)
+
+  it("reads true and false as both ends of the same axis", function()
+    config.setup({ auto_hover = true })
+    assert.is_true(config.auto_hover_for("file"))
+    config.reset()
+    config.setup({ auto_hover = false })
+    assert.is_false(config.auto_hover_for("image"))
+  end)
+
+  it("fails open for a name it has never heard of", function()
+    -- A newer target class than the configuration was written against. The
+    -- same fail-open direction `hover.scope` takes for capture families it
+    -- does not recognise: show something rather than withhold it silently.
+    assert.is_true(config.auto_hover_for("something-invented-later"))
+  end)
+
+  it("gates the trigger and not the request", function()
+    registry.register("probe", {
+      positions = {
+        function()
+          return { lines = { "probe" } }
+        end,
+      },
+    })
+    config.setup({ auto_hover = { "image" } })
+    assert.is_false(hover.show(), "a position preview opened without being asked for")
+    assert.is_true(hover.show({ force = true }), "an explicit request was refused by a volume gate")
+  end)
+
+  it("gates a target by its type, which is the axis it adds", function()
+    -- The position gate above sits in `show_position`; this one sits after
+    -- `classify`, and they are two different lines of code. Sabotaging one
+    -- left the other's assertion green, which is how this second block came
+    -- to exist.
+    local api = vim.api
+    local root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    vim.fn.writefile({ "first line of the target" }, root .. "/target.md")
+
+    local win = api.nvim_get_current_win()
+    local prev_buf = api.nvim_win_get_buf(win)
+    local prev_isfname = vim.o.isfname
+    vim.o.isfname = "@,48-57,/,.,-,_,+,,,#,$,%,~,=,:"
+    local buf = api.nvim_create_buf(true, false)
+    api.nvim_buf_set_name(buf, root .. "/notes.md")
+    api.nvim_win_set_buf(win, buf)
+    api.nvim_buf_set_lines(buf, 0, -1, false, { "see ./target.md here" })
+    api.nvim_win_set_cursor(win, { 1, 6 })
+
+    config.setup({ auto_hover = { "image", "pdf" } })
+    assert.is_false(hover.show(), "a markdown target opened without being asked for")
+    assert.is_true(hover.show({ force = true }), "an explicit request was refused")
+
+    hover.hide()
+    config.reset()
+    config.setup({ auto_hover = { "markdown" } })
+    assert.is_true(hover.show(), "the type was listed and still did not open")
+
+    hover.hide()
+    vim.o.isfname = prev_isfname
+    pcall(api.nvim_win_set_buf, win, prev_buf)
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    vim.fn.delete(root, "rf")
+  end)
+
+  it("toggles one type, and both ends, through set_auto", function()
+    assert.is_false(config.auto_hover_for("file"))
+    local said = hover.set_auto("file")
+    assert.is_true(config.auto_hover_for("file"))
+    assert.is_truthy(said and said:find("file", 1, true))
+
+    hover.set_auto("file")
+    assert.is_false(config.auto_hover_for("file"), "the second press did not toggle back")
+
+    hover.set_auto("all")
+    assert.is_true(config.auto_hover_for("file"))
+    assert.is_true(config.auto_hover_for("position"))
+
+    hover.set_auto("none")
+    assert.is_false(config.auto_hover_for("image"))
+  end)
+
+  it("reports without changing anything when asked for nothing", function()
+    local before = config.auto_hover()
+    local said = hover.set_auto(nil)
+    assert.is_truthy(said and said:find("image", 1, true))
+    assert.same(before, config.auto_hover())
+  end)
+
+  it("refuses a name that is not a type, and says which are", function()
+    local said, err = hover.set_auto("nonsense")
+    assert.is_nil(said)
+    assert.is_truthy(err and err:find("nonsense", 1, true))
+    assert.is_truthy(err and err:find("image", 1, true), "the error does not name the valid set")
+  end)
+end)

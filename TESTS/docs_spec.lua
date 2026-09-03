@@ -165,10 +165,13 @@ end
 --- would hide exactly that.
 ---@param text string
 ---@param vimdoc boolean Also read the indented command block.
----@return table<string, true>
+---@return table<string, true> every reading of every mention
+---@return table<string, true> only the fully trimmed reading of each
 local function documented_routes(text, vimdoc)
   local STATES = argument_values()
   local mentions = {}
+  ---@type table<string, true> Only the fully trimmed reading of each mention.
+  local trimmed = {}
 
   for mention in text:gmatch("`:Hover([^`]*)`") do
     mentions[#mentions + 1] = mention
@@ -186,15 +189,30 @@ local function documented_routes(text, vimdoc)
   local out = {}
   for _, mention in ipairs(mentions) do
     local route = words((mention:gsub("[%[{].*$", "")))
-    while #route > 1 and STATES[route[#route]] do
-      table.remove(route)
-    end
-    -- A bare `:Hover` is the verb itself and always exists.
+    -- **Both readings are recorded, not just the trimmed one.** The state set
+    -- is every argument value of every route pooled together, so a word can
+    -- be an argument of one route and a route of another -- which stopped
+    -- being hypothetical when `:Hover auto` arrived with the target types as
+    -- its enum: `missing`, `office`, `file` and `image` are argument values
+    -- *and* route words, so `:Hover paths missing` trimmed down to `paths`
+    -- and the real route read as undocumented in three files at once.
+    --
+    -- Deciding per route which pool applies would mean teaching this function
+    -- the route tree it is checking. Keeping both forms costs nothing and
+    -- cannot be wrong in that direction: a document naming `paths missing`
+    -- has documented `paths` as well, which is true.
     if #route > 0 then
       out[table.concat(route, " ")] = true
     end
+    while #route > 1 and STATES[route[#route]] do
+      table.remove(route)
+      out[table.concat(route, " ")] = true
+    end
+    if #route > 0 then
+      trimmed[table.concat(route, " ")] = true
+    end
   end
-  return out
+  return out, trimmed
 end
 
 ---@type table<string, integer> Counts a document is likely to spell out.
@@ -374,7 +392,14 @@ describe("the :Hover routes against the documents", function()
     local routes = declared_routes()
     local bad = {}
     for file, vimdoc in pairs(all_documents()) do
-      for path in pairs(documented_routes(read(file), vimdoc)) do
+      -- The *trimmed* reading, where the check above takes both. The two
+      -- questions want opposite readings of the same ambiguity: "is this
+      -- route documented" is generous, because a word can be an argument of
+      -- one route and part of another; "does a document name something that
+      -- does not exist" has to be conservative, or every `:Hover auto image`
+      -- would read as an invented route.
+      local _, only_trimmed = documented_routes(read(file), vimdoc)
+      for path in pairs(only_trimmed) do
         if not routes[path] then
           bad[#bad + 1] = ("%s names `:Hover %s`"):format(file, path)
         end

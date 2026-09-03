@@ -129,6 +129,7 @@ omitted, which toggles.
 | `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture or PDF page on screen, or step back out. Omitted, in. A picture is cropped, a page re-rendered at a higher DPI; either way a step costs a fraction of a second, which is why it is a route as well as a key |
 | `:Hover next` | step to the next plugin with something to say about this place. Wraps past the last one, and says so when there is only one |
 | `:Hover nav {left\|right\|up\|down}` | move the magnified view. The keyboard counterpart to `nav_keys`, which are a borrow and therefore undiscoverable until one has been seen |
+| `:Hover auto [<type>\|all\|none]` | which target types open by themselves. A type toggles it; omitted, it lists what does and what waits to be asked |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |

@@ -476,6 +476,11 @@ describe("a position preview, end to end", function()
   before_each(function()
     registry.reset()
     config.reset()
+    -- Position previews do not open by themselves at the default settings
+    -- (`auto_hover` is `image` and `pdf`), and these assertions are about the
+    -- mechanism rather than the default. Asked for explicitly, so a change to
+    -- the default cannot quietly turn the block into a test of nothing.
+    config.setup({ auto_hover = true })
     win = api.nvim_get_current_win()
     prev_buf = api.nvim_win_get_buf(win)
     buf = api.nvim_create_buf(false, true)
@@ -594,6 +599,11 @@ describe("a pinned hover", function()
   before_each(function()
     registry.reset()
     config.reset()
+    -- Position previews do not open by themselves at the default settings
+    -- (`auto_hover` is `image` and `pdf`), and these assertions are about the
+    -- mechanism rather than the default. Asked for explicitly, so a change to
+    -- the default cannot quietly turn the block into a test of nothing.
+    config.setup({ auto_hover = true })
     vim.g.hover_disable = nil
     win = api.nvim_get_current_win()
     prev_buf = api.nvim_win_get_buf(win)
@@ -699,6 +709,11 @@ describe("opening what the hover shows", function()
   before_each(function()
     registry.reset()
     config.reset()
+    -- Position previews do not open by themselves at the default settings
+    -- (`auto_hover` is `image` and `pdf`), and these assertions are about the
+    -- mechanism rather than the default. Asked for explicitly, so a change to
+    -- the default cannot quietly turn the block into a test of nothing.
+    config.setup({ auto_hover = true })
     vim.g.hover_disable = nil
 
     root = vim.fn.tempname()

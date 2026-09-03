@@ -33,7 +33,78 @@ return {
   -- "auto" is the feature as it is meant to be used; "manual" keeps every
   -- preview and gives up only the automatic trigger, which is the answer to
   -- "I am reading a document made of links right now". See `hover.mode`.
+  --
+  -- `mode` says *whether* the trigger asks; `auto_hover` below says *what
+  -- for*. The two were one setting until 2026-09-03, and the reason they are
+  -- two is that they answer different questions -- one is a switch for right
+  -- now, the other a standing preference.
   mode = "auto",
+
+  --- Which target types the automatic trigger opens a float for.
+  ---
+  --- **The third axis, and the one the other two could not express.** The
+  --- switches below are organised by where a target was *found* -- link
+  --- syntax, bare prose, a plugin answering for a position. This one is
+  --- organised by what the target turned out to *be*, and the two cross: a
+  --- markdown link can point at a picture or at a text file, so "pictures
+  --- only, however they were written" was not sayable before this existed.
+  ---
+  --- **Why pictures and PDFs are the default, and everything else is not.**
+  --- A picture or a rendered page is the only thing this plugin shows that
+  --- cannot be read off the line the cursor is on. The first lines of a text
+  --- file are a shortcut -- useful, but a shortcut for something you could
+  --- also just open, and the float lands over the paragraph you were reading
+  --- to give it to you. The value per interruption is very unevenly spread
+  --- across the types, and this is the axis it is spread along.
+  ---
+  --- Three shapes, all meaning the same thing to the code:
+  ---
+  ---   * a list of type names -- `{ "image", "pdf" }`, the default
+  ---   * `true`  -- every type, which is what this plugin did before
+  ---   * `false` -- none, identical in effect to `mode = "manual"`
+  ---
+  --- **It gates the automatic trigger only.** `:Hover show` (and any keymap
+  --- bound to it) answers for every type regardless -- that is the difference
+  --- between this and `paths.enabled`, which decides whether a bare path is a
+  --- target *at all*. Turn `paths` off and nothing finds it; leave `file` out
+  --- of this list and it is found, and waits to be asked for.
+  ---
+  --- Type names are `Hover.Target.type` plus `"position"` for a registered
+  --- position preview. `:Hover auto` lists them with their current state.
+  ---
+  --- **Written out as a full table here rather than as the short list**, even
+  --- though the list is what a user writes. Every key present means a user's
+  --- partial table (`auto_hover = { file = true }`) merges the way every other
+  --- option does — additively, one key changed — while a *list* replaces the
+  --- whole setting, which is what a list should mean. `config.normalize`
+  --- turns the list form into this one. `TESTS/switches_spec.lua` holds the
+  --- keys against `classify.TYPES`, so a new target type cannot arrive here
+  --- silently disabled.
+  ---@type table<string, boolean>|boolean|string[]
+  auto_hover = {
+    -- The two that are worth an interruption without being asked.
+    image = true,
+    pdf = true,
+
+    anchor = false,
+    directory = false,
+    file = false,
+    git = false,
+    markdown = false,
+    missing = false,
+    office = false,
+    url = false,
+
+    -- A plugin answering for the *place* the cursor is in rather than for a
+    -- target: what this module is, who imports it, what this container image
+    -- would run. Off by default with the rest, and the one entry whose
+    -- default is a genuine trade rather than an obvious one -- nothing
+    -- registers a position preview by accident, so `position = true` is
+    -- defensible. It is off because "install it, and pictures open" is a
+    -- promise that stays true on a machine with seven contributors
+    -- installed, and `:Hover auto position` is one command.
+    position = false,
+  },
 
   -- "CursorHold" follows 'updatetime', a global usually set for something
   -- else entirely (gitsigns' blame, a statusline). It also fires after any
