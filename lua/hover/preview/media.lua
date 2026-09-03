@@ -579,15 +579,32 @@ end
 --- silently dropped, so every page of one PDF shared a single cache slot:
 --- rendering page 2 deleted page 1's PNG, and a later hover on page 1 was
 --- served page 2's image.
+---
+--- So are the DPI and the window, for the same reason one level up: a
+--- magnified view *is* a second rasterization of the same page, and without
+--- them in the key the sharp view and the plain one overwrite each other --
+--- which `docs/ROADMAP.md` named as the obstacle to this feature before it
+--- was built.
 ---@param path string
 ---@param page integer
+---@param dpi integer
+---@param rect { w: integer, h: integer, x: integer, y: integer }|nil
 ---@return string|nil
-local function page_key(path, page)
+local function view_key(path, page, dpi, rect)
   local st = vim.uv.fs_stat(path)
   if not st then
     return nil
   end
-  return path .. "\0" .. tostring(st.mtime and st.mtime.sec or 0) .. "\0" .. tostring(page)
+  local parts = {
+    path,
+    tostring(st.mtime and st.mtime.sec or 0),
+    tostring(page),
+    tostring(dpi),
+  }
+  if rect then
+    parts[#parts + 1] = ("%dx%d+%d+%d"):format(rect.w, rect.h, rect.x, rect.y)
+  end
+  return table.concat(parts, "\0")
 end
 
 ---@internal
@@ -603,25 +620,138 @@ local function remember_page(key, png)
   _pages[key] = png
 end
 
+---@type integer The DPI a page is rasterized at when nothing is magnified.
+--- Passed explicitly rather than left to pdfport's own default, even though
+--- the two currently agree: the zoom multiplies this number and the cache key
+--- carries it, so it has to be a value this module chose, not one it inherited
+--- and would silently disagree with after an upgrade.
+local PDF_BASE_DPI = 216
+
+---@type integer Highest DPI a magnified page will be rendered at.
+--- Where the picture zoom stops at the source's own pixels, a PDF has none to
+--- stop at -- a vector page is sharp at any DPI, so the ceiling has to be
+--- chosen rather than discovered. 2400 is ~11x the base: past that a scanned
+--- page has long been showing interpolation rather than paper, and a vector
+--- one is showing the inside of single letterforms. Not a cost limit -- the
+--- cost is flat, see `M.pdf` -- which is why it is a number and not a
+--- measurement.
+local PDF_MAX_DPI = 2400
+
+--- The DPI a page is rasterized at for `level`.
+---
+--- The view narrows by `ZOOM_STEP` a step and the resolution rises by the
+--- same factor, which is the whole idea: the window that comes back holds the
+--- same number of pixels as the plain page and every one of them is new.
+---@param level integer
+---@return integer
+function M.pdf_dpi(level)
+  return math.floor(PDF_BASE_DPI * ZOOM_STEP ^ math.max(0, level) + 0.5)
+end
+
+--- Whether another zoom step into a PDF page would be rendered at all.
+---
+--- The counterpart to `zoom_possible` for pictures, and answered the same way:
+--- before the step, so a refused one costs no render. What it is answered
+--- *against* is the difference — a picture runs out of pixels, a page runs
+--- into a number somebody chose.
+---@param level integer the level that would be reached
+---@return boolean
+function M.pdf_zoom_possible(level)
+  if level <= 0 then
+    return true
+  end
+  return M.pdf_dpi(level) <= PDF_MAX_DPI
+end
+
+--- The window a magnified page shows, in pixels of the page at `level`'s DPI.
+---
+--- Derived from the *plain* page's pixel size rather than asked of the
+--- document: a page's size in pixels is a fact about a rasterization, and one
+--- is on disk whenever the reader is looking at the page they are about to
+--- magnify. Scaling that by the same factor the DPI rises by makes the window
+--- come out the size of the plain page — which is why the cost stays flat
+--- however deep the zoom goes, and why this is arithmetic worth its own
+--- function rather than four lines inside `M.pdf`.
+---
+--- Public for the spec and for `scripts/pdfzoom_probe.lua`; `M.pdf` is the
+--- only caller in the plugin.
+---@param base_px Hover.Preview.Dims Pixel size of the page at `PDF_BASE_DPI`
+---@param level integer
+---@param cx number 0..1
+---@param cy number 0..1
+---@return { w: integer, h: integer, x: integer, y: integer }|nil rect nil at level 0
+function M.pdf_window(base_px, level, cx, cy)
+  local factor = ZOOM_STEP ^ level
+  return M.zoom_rect({
+    width = math.floor(base_px.width * factor),
+    height = math.floor(base_px.height * factor),
+  }, level, cx, cy)
+end
+
+--- Whether a magnified *page* can be produced at all.
+---
+--- pdfport has to be there and new enough to rasterize a window of a page
+--- (`opts.crop`). Asked rather than attempted, because an older build ignores
+--- an unknown option in silence: the page would come back rendered at a
+--- higher DPI and letterboxed into the same float, which is a keypress that
+--- visibly does nothing.
+---@return boolean
+function M.can_zoom_pdf()
+  local ok, pdfport = pcall(require, "pdfport")
+  if not ok or type(pdfport.render_page) ~= "function" then
+    return false
+  end
+  return type(pdfport.can_render_page_crop) == "function" and pdfport.can_render_page_crop() == true
+end
+
 --- PDF preview.
 ---
 --- Same destination as an image hover — a blank float in the page's aspect
 --- ratio — reached in up to three steps, because the page does not exist yet.
 ---
---- 1. **Already rasterized** (same file, same mtime): returns the finished
----    content synchronously. Nothing pops, because nothing has to wait.
+--- 1. **Already rasterized** (same file, same mtime, same DPI and window):
+---    returns the finished content synchronously. Nothing pops, because
+---    nothing has to wait.
 --- 2. **Not yet**: `pdfport.render_page` shells out to pdftoppm and the
----    return value is a *provisional* metadata float marked `pending`. Whether
----    it is ever shown is the caller's decision — `hover` holds it
----    back for a grace period, so a fast render never flashes it.
---- 3. **Rendered**: `on_result` receives the real content, and the page is
+---    return value is a *provisional* float marked `pending`. Whether it is
+---    ever shown is the caller's decision — `hover` holds it back for a grace
+---    period, so a fast render never flashes it.
+--- 3. **Rendered**: `on_result` receives the real content, and the view is
 ---    kept for the next hover.
+---
+--- **`opts.zoom` makes this the sharp path rather than a crop.** A page on
+--- screen is a rasterization at `PDF_BASE_DPI`, so cutting a piece out of it
+--- magnifies a bitmap that is already as detailed as it will ever be — bigger,
+--- and no more to see, which is the one thing a zoom is for. A magnified view
+--- is therefore a *second rasterization*: the DPI goes up by the same factor
+--- the view narrows by, and pdftoppm is asked for only the window that is
+--- actually shown.
+---
+--- **Measured on Windows, 2026-09-03, and the measurement overturned the
+--- estimate this feature was parked on.** A whole page re-rendered grows with
+--- the square of the DPI — 176 ms at 216, 2 653 ms at 1 094 on a dense A4
+--- text page — and 3.3 s was the number that made a sharp PDF zoom look like
+--- a decision rather than a feature. Asking for a *window* the size of the
+--- original page instead keeps the pixels produced constant and only changes
+--- the resolution they are sampled from: **120–600 ms at every DPI from 216
+--- to 5 536** on that same page. So a step costs about what a picture crop
+--- costs (258 ms), and the sharpness is real rather than nominal — the same
+--- window re-rendered at 486 DPI carries four times the edge energy of the
+--- one upscaled from 216 (laplacian sd 0.94 against 0.23, identical pixel
+--- size).
+---
+--- **How many resolutions are worth keeping** — the second half of the
+--- obstacle `docs/ROADMAP.md` named. Every view that has been on screen is
+--- kept for the session, because stepping back out to one already rendered
+--- must not pay for it twice, and the count is bounded by the ceiling above
+--- rather than by a sweep: a few hundred KB per view, a handful of views per
+--- page. They go at `VimLeavePre` with everything else this module holds.
 ---
 --- The rendered PNG is owned by this module from here on. Callers must not
 --- delete it — an earlier version did, which is why every hover re-rendered.
 ---@param target Hover.Target
 ---@param opts Hover.PreviewOpts
----@param on_result fun(content: Hover.Content): nil
+---@param on_result fun(content: Hover.Content|nil): nil
 ---@return Hover.Content
 function M.pdf(target, opts, on_result)
   local function metadata(extra)
@@ -647,12 +777,12 @@ function M.pdf(target, opts, on_result)
   end
 
   local page = math.max(1, math.floor(opts.page or 1))
-  local key = page_key(target.path, page)
-  local cached = key and _pages[key]
-  -- `fs_stat`: a temp sweeper may have taken the file since. Then it is not a
-  -- cache entry any more, it is a dangling path.
-  if cached and vim.uv.fs_stat(cached) then
-    local content = M.canvas_for(cached, opts)
+  local level = math.max(0, math.floor(opts.zoom or 0))
+
+  ---@param png string
+  ---@return Hover.Content
+  local function content_for(png)
+    local content = M.canvas_for(png, opts)
     content.scroll = { page = page, step = 1, more = true }
     -- Page 1 stays untitled, as every image preview does: a filename over a
     -- picture the reader is already looking at is noise. From page 2 on the
@@ -662,47 +792,163 @@ function M.pdf(target, opts, on_result)
     end
     return content
   end
-  if key and cached then
-    _pages[key] = nil
+
+  --- One rendered view, from the cache when it is there.
+  ---@param dpi integer
+  ---@param rect { w: integer, h: integer, x: integer, y: integer }|nil
+  ---@return string|nil png
+  local function cached(dpi, rect)
+    local key = view_key(target.path, page, dpi, rect)
+    local png = key and _pages[key]
+    -- `fs_stat`: a temp sweeper may have taken the file since. Then it is not
+    -- a cache entry any more, it is a dangling path.
+    if png and vim.uv.fs_stat(png) then
+      return png
+    end
+    if key and png then
+      _pages[key] = nil
+    end
+    return nil
   end
 
-  pdfport.render_page(target.path, page, nil, function(png_path, err)
-    -- pdftoppm's exit lands in a fast event context, where neither
-    -- `nvim_create_autocmd` nor the ImageMagick fallback's `vim.system():wait()`
-    -- may be called. Everything downstream of here runs on the main loop.
-    vim.schedule(function()
-      if not png_path then
-        -- A failed render past page 1 is almost always "there is no such
-        -- page", which is how the page count is discovered: pdfport reports
-        -- no total, so paging walks until it stops. Reported as an end rather
-        -- than an error so the caller can step back instead of showing a
-        -- failure for a document it has simply reached the end of.
-        if page > 1 then
-          on_result(vim.tbl_extend("force", metadata(("(no page %d)"):format(page)), {
-            scroll = { page = page, step = 1, more = false, past_end = true },
-          }))
-        else
-          on_result(metadata("(page render failed: " .. (err or "unknown error") .. ")"))
+  --- Ask pdftoppm for one view and remember it.
+  ---@param dpi integer
+  ---@param rect { w: integer, h: integer, x: integer, y: integer }|nil
+  ---@param on_png fun(png: string|nil, err: string|nil): nil
+  local function render(dpi, rect, on_png)
+    pdfport.render_page(target.path, page, { dpi = dpi, crop = rect }, function(png, err)
+      -- pdftoppm's exit lands in a fast event context, where neither
+      -- `nvim_create_autocmd` nor the ImageMagick fallback's `vim.system():wait()`
+      -- may be called. Everything downstream of here runs on the main loop.
+      vim.schedule(function()
+        if png then
+          local key = view_key(target.path, page, dpi, rect)
+          if key then
+            remember_page(key, png)
+          end
         end
+        on_png(png, err)
+      end)
+    end)
+  end
+
+  --- A render that did not happen, reported as what it most likely means.
+  ---@param err string|nil
+  local function failed(err)
+    -- A failed render past page 1 is almost always "there is no such page",
+    -- which is how the page count is discovered: pdfport reports no total, so
+    -- paging walks until it stops. Reported as an end rather than an error so
+    -- the caller can step back instead of showing a failure for a document it
+    -- has simply reached the end of.
+    if page > 1 then
+      on_result(vim.tbl_extend("force", metadata(("(no page %d)"):format(page)), {
+        scroll = { page = page, step = 1, more = false, past_end = true },
+      }))
+    else
+      on_result(metadata("(page render failed: " .. (err or "unknown error") .. ")"))
+    end
+  end
+
+  --- The window a magnified view shows, from the plain view on disk.
+  ---@param base_png string
+  ---@return { w: integer, h: integer, x: integer, y: integer }|nil
+  local function window_for(base_png)
+    local base_px = pixel_size(base_png)
+    if not base_px then
+      return nil
+    end
+    return M.pdf_window(base_px, level, opts.zoom_cx or 0.5, opts.zoom_cy or 0.5)
+  end
+
+  if level <= 0 then
+    local png = cached(PDF_BASE_DPI, nil)
+    if png then
+      return content_for(png)
+    end
+    render(PDF_BASE_DPI, nil, function(rendered, err)
+      if not rendered then
+        return failed(err)
+      end
+      on_result(content_for(rendered))
+    end)
+    return vim.tbl_extend(
+      "force",
+      metadata(("rendering page %d…"):format(page)),
+      { pending = true }
+    )
+  end
+
+  local dpi = M.pdf_dpi(level)
+  local base_png = cached(PDF_BASE_DPI, nil)
+
+  --- What is shown while a magnified view is being rendered.
+  ---
+  --- The plain page when it is on disk — the same choice the picture zoom
+  --- makes: a view that beats the grace period shows the detail and nothing
+  --- else, and one that does not leaves the page up rather than a wait that
+  --- looks like the hover failing.
+  ---@return Hover.Content
+  local function provisional()
+    if base_png then
+      return vim.tbl_extend("force", content_for(base_png), { pending = true })
+    end
+    return vim.tbl_extend(
+      "force",
+      metadata(("rendering page %d…"):format(page)),
+      { pending = true }
+    )
+  end
+
+  --- Render (or serve) the window, once its size is known.
+  ---@param rect { w: integer, h: integer, x: integer, y: integer }
+  local function magnified(rect)
+    local png = cached(dpi, rect)
+    if png then
+      on_result(content_for(png))
+      return
+    end
+    render(dpi, rect, function(rendered)
+      if not rendered then
+        -- Silence rather than a badge, as with a picture: the page the reader
+        -- is looking at is still on screen and still correct, only not
+        -- magnified.
+        on_result(nil)
         return
       end
-      if key then
-        remember_page(key, png_path)
-      end
-      local content = M.canvas_for(png_path, opts)
-      content.scroll = { page = page, step = 1, more = true }
-      if page > 1 then
-        content.title = ("p%d"):format(page)
-      end
-      on_result(content)
+      on_result(content_for(rendered))
     end)
-  end)
+  end
 
-  return vim.tbl_extend(
-    "force",
-    metadata(("rendering page %d…"):format(page)),
-    { pending = true }
-  )
+  if base_png then
+    local rect = window_for(base_png)
+    if not rect then
+      return content_for(base_png)
+    end
+    local png = cached(dpi, rect)
+    if png then
+      return content_for(png)
+    end
+    magnified(rect)
+    return provisional()
+  end
+
+  -- The plain view is not on disk: a temp sweep took it, or the file changed
+  -- under the open hover. Render it first and magnify in its callback --
+  -- there is no second source for the page's pixel size, and guessing one
+  -- would put the window somewhere nobody pointed at. Rare by construction:
+  -- the plain page is what the reader is looking at when they press the key.
+  render(PDF_BASE_DPI, nil, function(rendered, err)
+    if not rendered then
+      return failed(err)
+    end
+    local rect = window_for(rendered)
+    if not rect then
+      on_result(content_for(rendered))
+      return
+    end
+    magnified(rect)
+  end)
+  return provisional()
 end
 
 return M

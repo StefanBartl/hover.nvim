@@ -456,14 +456,24 @@ end
 ---@return boolean
 local function can_magnify(open)
   local target = open and open.target
-  -- Images only. A PDF page is a picture too, but the file on screen is a
-  -- rasterization in this plugin's cache rather than at `target.path`, and
-  -- the sharp answer for a page is a second render at a higher DPI rather
-  -- than a crop -- measured at 3.3 s against 258 ms. See `docs/FEATURES/ZOOM.md`.
-  if not (target and target.type == "image" and target.path) then
+  if not (target and target.path) then
     return false
   end
-  return require("hover.preview.media").can_zoom()
+  local media = require("hover.preview.media")
+  -- Two kinds of magnification behind one key, because they are the same
+  -- gesture and a different mechanism. A picture is cropped: the file at
+  -- `target.path` is the source and already carries every pixel there will
+  -- be. A PDF page is *re-rasterized* at a higher DPI, because the thing on
+  -- screen is a rendering in this plugin's cache rather than the file the
+  -- target names -- cropping that would magnify a bitmap already as sharp as
+  -- it gets. See `docs/FEATURES/ZOOM.md`.
+  if target.type == "image" then
+    return media.can_zoom()
+  end
+  if target.type == "pdf" then
+    return media.can_zoom_pdf()
+  end
+  return false
 end
 
 ---@internal
@@ -1141,8 +1151,10 @@ end
 --- would let a held key run the level away.
 ---
 --- A PDF page is not re-rasterized either, so making one bigger costs nothing
---- and is correspondingly unsharp -- a sharp version would mean a second
---- render at a higher DPI, and the page cache is keyed without one.
+--- and is correspondingly unsharp: the same pixels, over more cells. The
+--- sharp answer for a page is a second render at a higher DPI, and that is
+--- what `zoom` does -- the two are different operations on a page in exactly
+--- the way they are on a picture.
 ---@param delta integer positive makes it bigger, negative smaller
 ---@return boolean asked `false` when there is no hover to resize. `true` says the re-render was started, not that the float grew -- for a PDF the answer is asynchronous, and the terminal may refuse the step either way.
 function M.resize(delta)
@@ -1254,10 +1266,15 @@ local function zoomable()
   -- The two halves of "can this be zoomed" are asked separately only so each
   -- can name its own reason; `can_magnify` above is the same test without the
   -- messages, for the borrow site that needs a boolean.
-  if not (target and target.type == "image" and target.path) then
-    return nil, "only a picture can be zoomed"
+  if not (target and target.path and (target.type == "image" or target.type == "pdf")) then
+    return nil, "only a picture or a PDF page can be zoomed"
   end
-  if not require("hover.preview.media").can_zoom() then
+  local media = require("hover.preview.media")
+  if target.type == "pdf" then
+    if not media.can_zoom_pdf() then
+      return nil, "a sharp page needs pdfport.nvim new enough to rasterize a window of one"
+    end
+  elseif not media.can_zoom() then
     return nil, "zoom needs images.nvim with `images.convert.crop`, and ImageMagick on PATH"
   end
   return target.path, nil, open, target
@@ -1284,6 +1301,18 @@ end
 --- `resize` finds its own: there only the terminal knows where the room ends,
 --- here the limit is the source's own pixels and can be answered without
 --- spending a `magick` run to find out.
+---
+--- **A PDF page is the same gesture on a different mechanism.** What is on
+--- screen is a rasterization in this plugin's cache, not the file the target
+--- names, so cropping it magnifies a bitmap that already holds every pixel it
+--- ever will. The page is re-rendered instead: the DPI goes up by the same
+--- factor the view narrows by, and only the visible window is rasterized.
+--- Measured 2026-09-03 -- **120-600 ms a step at any depth**, against the
+--- 3.3 s that had this parked as a decision rather than a feature, because
+--- that number was for re-rendering the *whole* page. The ceiling is a DPI
+--- rather than a pixel count: a vector page is sharp at any resolution, so
+--- there is nothing to discover and the limit has to be chosen. See
+--- `hover.preview.media.pdf`.
 ---@param delta integer positive magnifies, negative steps back out
 ---@return boolean asked
 function M.zoom(delta)
@@ -1296,21 +1325,36 @@ function M.zoom(delta)
   end
 
   local media = require("hover.preview.media")
-  local px = open.zoom_px or media.pixel_size(path)
-  if not px then
-    require("hover.notify").info("cannot read this picture's size, so cannot zoom it")
-    return false
+  local is_page = target.type == "pdf"
+
+  -- A picture's ceiling is its own pixels, so they are read once and kept. A
+  -- page has none -- it is re-rendered from the document at whatever DPI is
+  -- asked for -- so there is nothing to measure and nothing to remember.
+  local px
+  if not is_page then
+    px = open.zoom_px or media.pixel_size(path)
+    if not px then
+      require("hover.notify").info("cannot read this picture's size, so cannot zoom it")
+      return false
+    end
+    open.zoom_px = px
   end
-  open.zoom_px = px
 
   local was = open.zoom or 0
   local level = math.max(0, was + delta)
   if level == was then
     return false
   end
-  if level > was and not media.zoom_possible(px, level) then
-    require("hover.notify").info("no more detail in this picture")
-    return false
+  if level > was then
+    if is_page then
+      if not media.pdf_zoom_possible(level) then
+        require("hover.notify").info("no more resolution worth rendering for this page")
+        return false
+      end
+    elseif not media.zoom_possible(px, level) then
+      require("hover.notify").info("no more detail in this picture")
+      return false
+    end
   end
 
   open.zoom = level
@@ -1326,10 +1370,12 @@ end
 --- Move the magnified view, in fractions of what is currently visible.
 ---
 --- A step is a quarter of the visible rectangle, so four of them cross the
---- view once: far enough to be worth a press at 258 ms, near enough that
---- nothing is skipped over. The centre is kept as a fraction of the source
---- rather than in pixels, so it survives a zoom step -- going deeper keeps
---- looking at the same place.
+--- view once: far enough to be worth a press at a quarter-second a move, near
+--- enough that nothing is skipped over. The centre is kept as a fraction of
+--- the source rather than in pixels, so it survives a zoom step -- going
+--- deeper keeps looking at the same place. Both kinds of magnified view move
+--- the same way; only what happens underneath differs (a crop for a picture,
+--- a re-render for a page).
 ---@param dx integer -1 left, 1 right
 ---@param dy integer -1 up, 1 down
 ---@return boolean asked

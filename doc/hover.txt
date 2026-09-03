@@ -144,8 +144,8 @@ toggles. >
                                          goes elsewhere; again releases it
   :Hover resize [bigger|smaller]         the hover bigger or smaller;
                                          omitted, bigger
-  :Hover zoom [in|out|reset]             magnify a detail of the picture;
-                                         omitted, in
+  :Hover zoom [in|out|reset]             magnify a detail of the picture
+                                         or PDF page; omitted, in
   :Hover nav {left|right|up|down}        move the magnified view
   :Hover next                            the next plugin with something
                                          to say about this place
@@ -260,12 +260,18 @@ correspondingly unsharp.
 
                                                                    *hover-zoom*
 ZOOM IS THE OTHER OPERATION, and the difference is the framing. `resize`
-letterboxes the WHOLE picture into a bigger box. A zoom keeps the box and cuts
-the source, so what is on screen is a SMALLER PART of the picture, larger.
-Only the second one is magnification.
+letterboxes the WHOLE picture into a bigger box. A zoom keeps the box and
+narrows the view, so what is on screen is a SMALLER PART of the source,
+larger. Only the second one is magnification.
+
+Two sources, two mechanisms, one gesture. A PICTURE is cropped: the file the
+target names already holds every pixel there will be. A PDF PAGE is
+RE-RASTERIZED at a higher DPI, because what is on screen for a PDF is a
+rendering in this plugin's cache rather than the file -- cropping that gives
+you bigger, never sharper.
 
 `:Hover zoom [in|out|reset]`, or the keys `<M-z>` in, `<M-Z>` out and `<M-R>`
-back to the whole picture. A step writes a cropped file and costs about a
+back to the whole picture or page. A step writes a file and costs about a
 quarter of a second, so it is a deliberate press rather than a dial -- which
 is why the keys are ALT CHORDS and not `+`/`-`: an operation this slow is not
 worth displacing a motion for, and a chord displaces nothing. They are
@@ -301,17 +307,27 @@ going deeper keeps looking at the same place. A pan step is a quarter of what
 is visible. Stepping back to a view already seen is instant -- the crop is
 cached for the session and swept at exit.
 
-The ceiling is the PICTURE, not the terminal -- the opposite of the resize
-ceiling. Zoom stops when the rectangle would fall below 32 source pixels and
-says so, rather than spending a `magick` run to find out.
+The ceiling is the SOURCE, not the terminal -- the opposite of the resize
+ceiling, and it is answered rather than discovered so a refused step costs no
+process at all. For a picture it is the picture's own pixels: zoom stops when
+the rectangle would fall below 32 of them. For a page there is nothing to run
+out of, since a vector page is sharp at any resolution, so the limit is chosen
+instead: 2400 dpi, about eleven times the base and five steps.
 
-Pictures only. A PDF page is a picture too, but the file on screen is a
-rasterization in this plugin's own cache rather than the target, and the sharp
-answer for a page is a second render at a higher DPI rather than a crop --
-3.3 s against 258 ms, measured the same day. That is a different feature.
+A PAGE IS SHARPER, NOT MERELY LARGER, and the number that kept this to
+pictures measured the wrong operation. Re-rendering a WHOLE page at a higher
+dpi grows with the square of it -- 176 ms at 216 dpi, 2653 ms at 1094 on a
+dense A4 text page, and 3.3 s was that measurement. But a zoom shows a window,
+not a page: asking pdftoppm for only the window keeps the pixel count
+constant, and the cost with it -- 118 to 140 ms at every one of those dpi
+values, measured 2026-09-03. The same window re-rendered carries roughly four
+times the edge detail of one cropped from the plain render and scaled up.
+`scripts/pdfzoom_probe.lua` prints that comparison for any PDF.
 
-Needs images.nvim carrying `images.convert.crop`, and ImageMagick on 'path'.
-Without either, `:Hover zoom` says so instead of doing nothing.
+Needs, for a picture, images.nvim carrying `images.convert.crop` and
+ImageMagick on 'path'; for a page, pdfport.nvim new enough to rasterize a
+window of one (`pdfport.can_render_page_crop`) and its pdftoppm. Without them
+`:Hover zoom` says so instead of doing nothing.
 
 The dismissal is a suppression, not a close: under CursorHold the event fires
 again after any keystroke followed by 'updatetime' of quiet, so a key bound to

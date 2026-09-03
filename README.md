@@ -55,7 +55,7 @@ See ./docs/architecture.md#modules for details.
 - [Where a bare path is looked for](#where-a-bare-path-is-looked-for)
 - [Waving one hover away](#waving-one-hover-away)
 - [Resizing the hover](#resizing-the-hover)
-- [Zooming into a picture](#zooming-into-a-picture)
+- [Zooming into a picture, or a page](#zooming-into-a-picture-or-a-page)
 - [Scrolling a preview](#scrolling-a-preview)
 - [Configuration](#configuration)
 - [Contributing from your own config](#contributing-from-your-own-config)
@@ -81,7 +81,7 @@ See ./docs/architecture.md#modules for details.
 | Bare-path resolution | A path in prose, a code comment or a `:messages` dump is a target too — truncated ones included | [Bare paths](#bare-paths) |
 | `hover.scroll(1)` / `scroll(-1)` | Page through a file's head or a PDF's pages without leaving the document | [Scrolling a preview](#scrolling-a-preview) |
 | `hover.resize(1)` / `resize(-1)` | make the float bigger or smaller: a picture is drawn larger, a text preview shows more lines | [Resizing the hover](#resizing-the-hover) |
-| `:Hover zoom` / `hover.zoom(1)` | magnify a *detail* of a picture, and `h`/`j`/`k`/`l` to move around in it | [Zooming into a picture](#zooming-into-a-picture) |
+| `:Hover zoom` / `hover.zoom(1)` | magnify a *detail* of a picture or a PDF page, and `h`/`j`/`k`/`l` to move around in it | [Zooming into a picture, or a page](#zooming-into-a-picture-or-a-page) |
 | `hover.dismiss()` | Wave one float away and keep it away, until the cursor reaches another target | [Waving one hover away](#waving-one-hover-away) |
 | `hover.pin()` | Keep one float on screen while the cursor goes elsewhere — for comparing rather than reading. One float, so the trigger opens nothing while it is up | [The `:Hover` command](#the-hover-command) |
 | `hover.registry.register()` | Another plugin contributes a *source* or a *preview*; hover.nvim never says its name | [Contributing from a plugin](#contributing-from-a-plugin) |
@@ -568,7 +568,7 @@ two measurements behind the pointer gate, is in
 
 **`zoom_keys` is no longer the old spelling of this.** It briefly was, between the rename
 and the arrival of a real zoom, and it now configures
-[that](#zooming-into-a-picture) instead. A configuration still using the old shape
+[that](#zooming-into-a-picture-or-a-page) instead. A configuration still using the old shape
 (`zoom_keys.larger` / `.smaller`) is **reported on startup and ignored** rather than
 quietly rebound — those entries belong in `resize_keys`. `hover.zoom(delta)` is not an
 alias for `hover.resize(delta)` either, and has not been since the real zoom landed.
@@ -604,19 +604,24 @@ require("hover").setup({
 to resize — which today includes a *position* preview, whose content came from another
 plugin and cannot be asked again at a larger size.
 
-## Zooming into a picture
+## Zooming into a picture, or a page
 
 **Resize and zoom are different operations, and the difference is the framing.**
 `resize` changes the box and letterboxes the *whole* picture into it — you see the same
-picture, larger. A zoom keeps the box and cuts the source, so you see a *smaller part* of
-the picture, larger. Only the second one is magnification.
+picture, larger. A zoom keeps the box and narrows the view, so you see a *smaller part* of
+the source, larger. Only the second one is magnification.
+
+**A picture and a PDF page are the same gesture on different machinery.** A picture is
+cropped — the file already holds every pixel it ever will. A page is **re-rendered at a
+higher DPI**, because what is on screen for a PDF is a rasterization in this plugin's
+cache rather than the file itself, and cutting that up would give you bigger, not sharper.
 
 | Way in | Does | Available | Option |
 | --- | --- | --- | --- |
 | `<M-z>` | one step of magnification | when the picture **can** be zoomed | `zoom_keys.into` |
 | `<M-Z>` | one step back out | as above | `zoom_keys.out` |
-| `<M-R>` | back to the whole picture | as above | `zoom_keys.reset` |
-| `:Hover zoom [in\|out\|reset]` | the same three, from the command line; omitted, in | over a picture | — |
+| `<M-R>` | back to the whole picture or page | as above | `zoom_keys.reset` |
+| `:Hover zoom [in\|out\|reset]` | the same three, from the command line; omitted, in | over a picture or a PDF page | — |
 | `h` `j` `k` `l` | move the magnified view left, down, up, right | **only while zoomed in** | `nav_keys.*` |
 | `:Hover nav {left\|right\|up\|down}` | the same move, from the command line | only while zoomed in | — |
 
@@ -661,13 +666,30 @@ PDF page — which it is in fact faster than.
 terminal knows where the room ends. Zoom stops when the rectangle would fall below 32
 source pixels, and it says so rather than spending a `magick` run to find out.
 
-**Pictures only, and PDF pages deliberately not.** A page is a picture too, but the file on
-screen is a rasterization in this plugin's own cache rather than the target — and the sharp
-answer for a page is a second render at a higher DPI, not a crop. Measured the same day:
-3.3 s against 258 ms. That is a different feature; see [the roadmap](docs/ROADMAP.md).
+**A PDF page is sharper, not merely larger** — and it was parked for a year's worth of
+reasoning on a number that turned out to measure the wrong thing. Re-rendering a *whole*
+page at a higher DPI costs 3.3 s, which is why this stayed on the roadmap. But a zoom does
+not show a whole page: asking pdftoppm for just the window you are looking at keeps the
+pixel count constant, so the cost stops growing with the depth. Measured on 2026-09-03,
+dense A4 text page:
 
-Needs images.nvim carrying `images.convert.crop`, and ImageMagick on `PATH`. Without either
-`:Hover zoom` says so instead of doing nothing.
+| Level | DPI | Whole page | The window actually shown |
+| --- | --- | --- | --- |
+| 1 | 324 | 304 ms | 140 ms |
+| 2 | 486 | 606 ms | 118 ms |
+| 4 | 1094 | 2653 ms | 119 ms |
+
+And it is sharpness rather than size: the same window re-rendered at 486 DPI carries about
+four times the edge detail of the same window cropped out of the plain render and scaled up.
+`scripts/pdfzoom_probe.lua` prints that comparison for any PDF of yours.
+
+A page stops at 2400 DPI — about eleven times the base, five steps. A picture stops when
+its own pixels run out; a vector page never does, so the limit is chosen rather than found.
+
+**What each half needs.** A picture: images.nvim carrying `images.convert.crop`, and
+ImageMagick on `PATH`. A page: pdfport.nvim new enough to rasterize a window of one
+(`pdfport.can_render_page_crop`), and the pdftoppm it uses. Without them `:Hover zoom` says
+so instead of doing nothing.
 
 ## When two plugins answer
 
@@ -1017,7 +1039,7 @@ When a hover fails to appear for one specific thing rather than for everything,
   be settled first: which sibling plugin could contribute a preview and through which
   entry point, which features are missing, which of the things this plugin already does
   it does worse than it could — and what was considered and rejected.
-- [Manual evidence](docs/MANUAL-EVIDENCE.md) — the seven things no CI can check
+- [Manual evidence](docs/MANUAL-EVIDENCE.md) — the eight things no CI can check
   (a drawn image, a resized one, a rasterized PDF page, a converted office document, and
   a contribution asked only on request), when each was last checked by hand, and on what.
 - `:help hover` — the vimdoc: the same ground, offline.

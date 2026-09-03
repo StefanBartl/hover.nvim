@@ -129,9 +129,10 @@
 ---@field up? string|string[] # Default `{ "k" }`.
 ---@field down? string|string[] # Default `{ "j" }`.
 
---- Keys borrowed while the hover on screen *can* be zoomed -- a picture, with
---- a cropping provider present. Alt chords rather than bare keys, which is
---- what makes them affordable: they displace nothing a reader was using.
+--- Keys borrowed while the hover on screen *can* be zoomed -- a picture with
+--- a cropping provider present, or a PDF page with a rasterizer that can
+--- render a window of one. Alt chords rather than bare keys, which is what
+--- makes them affordable: they displace nothing a reader was using.
 ---
 --- `into` rather than `in` because `in` is a Lua keyword and could only be
 --- written `["in"]`, in this file and in every user's config alike.
@@ -169,10 +170,10 @@
 ---@field offset? integer # Lines skipped, for a text preview.
 ---@field page? integer # 1-based page, for a PDF preview.
 ---@field resize? integer # Resize steps applied to this hover; the factor is `1.25^resize`. Set by `hover.resize`.
----@field zoom? integer # Magnification steps cut from the source; 0 is the whole picture. Set by `hover.zoom`.
+---@field zoom? integer # Magnification steps; 0 is the whole picture or page. Set by `hover.zoom`. A picture is cropped at this level, a PDF page re-rendered at a DPI raised by it.
 ---@field zoom_cx? number # Centre of the magnified view, as a fraction of the source width.
 ---@field zoom_cy? number # Centre of the magnified view, as a fraction of the source height.
----@field zoom_px? Hover.Preview.Dims # The source's pixel size, read once so a level check costs no file read.
+---@field zoom_px? Hover.Preview.Dims # A picture's pixel size, read once so a level check costs no file read. Unset for a PDF page, which has no pixel ceiling to check against.
 ---@field canvas? Hover.Canvas # Size of the picture currently on screen, so `hover.resize` can tell a step that took effect from one the terminal refused.
 ---@field pinned? boolean # Taken out of the cursor's hands: the trigger neither replaces nor closes it.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
@@ -264,7 +265,7 @@
 ---@field line_end? integer # Text previews: last line of a named range (`init.lua:10-20`); shown exactly, without lead-in.
 ---@field offset? integer # Text previews: lines to skip. Set by `hover.scroll`.
 ---@field page? integer # PDF previews: 1-based page to render. Set by `hover.scroll`. Office documents page through their converted PDF the same way.
----@field zoom? integer # Image previews: magnification steps cut from the source. Set by `hover.zoom`; 0 or absent is the whole picture.
+---@field zoom? integer # Image and PDF previews: magnification steps. Set by `hover.zoom`; 0 or absent is the whole picture or page. An image is cropped from the source at this level; a PDF page is re-rasterized at a DPI raised by it, which is what makes a magnified page sharp rather than merely larger.
 ---@field zoom_cx? number # Centre of the magnified view, as a fraction of the source width. Default 0.5.
 ---@field zoom_cy? number # Centre of the magnified view, as a fraction of the source height. Default 0.5.
 

@@ -90,7 +90,7 @@ including `on_request` for an answer that costs a process start.
 | [gopath.nvim](https://github.com/StefanBartl/gopath.nvim) | named | resolving truncated paths and `:line:col` suffixes | ordinary relative and absolute paths still resolve; truncated ones do not |
 | [open.nvim](https://github.com/StefanBartl/open.nvim) | named | routing `gf` from the float to the right destination -- a browser for a URL, the configured file manager for a path | `vim.ui.open` opens it instead, letting the OS decide |
 | [images.nvim](https://github.com/StefanBartl/images.nvim) | named | drawing the picture into the float (OSC 1337) | an image target shows format, dimensions and size as text |
-| [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | named | rasterizing a PDF page to PNG; converting an office document to a PDF (opt-in) | a PDF shows its size and why it could not be rendered; a `.docx` shows what it is and how big |
+| [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | named | rasterizing a PDF page to PNG, and a *window* of one at a higher DPI for the zoom; converting an office document to a PDF (opt-in) | a PDF shows its size and why it could not be rendered; a `.docx` shows what it is and how big; `:Hover zoom` says a page cannot be magnified |
 | [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) | registry | `owner/repo` under the cursor, as the path of its cached README | no repository hover |
 | [migrate.nvim](https://github.com/StefanBartl/migrate.nvim) | registry | a *position* preview: this line uses a deprecated API, and what replaces it | no deprecation notice in the float |
 | [documentation.nvim](https://github.com/StefanBartl/documentation.nvim) | registry | a *position* preview: what the dotted module under the cursor is, out of the generated map | no module summary |
@@ -220,6 +220,25 @@ than none.
 
 Without pdfport a `.pdf` target still hovers — as its size, plus the reason
 there is no page.
+
+### …and one window of a page, which is what a sharp zoom is
+
+```lua
+require("pdfport").can_render_page_crop()   --> is this build new enough?
+require("pdfport").render_page(path, page, { dpi = 486, crop = rect }, callback)
+```
+
+`:Hover zoom` over a page raises the DPI by the same factor the view narrows
+by and asks for **only the window on screen**. That pairing is the whole
+feature: raising the DPI alone re-renders the whole page and grows with the
+square of it (176 ms to 2 653 ms across four steps), while a window the size of
+the plain page costs the same at every DPI. `opts.crop` exists in pdfport for
+this, the way `images.convert.crop` exists in images.nvim for the picture half.
+
+`can_render_page_crop` is asked first rather than the option simply passed: an
+older build ignores an unknown field in silence, and the page would come back
+at a higher DPI letterboxed into the same float — a key that visibly does
+nothing. Without it, the zoom keys are not offered for a page at all.
 
 ### …and a whole document at a time
 

@@ -119,6 +119,68 @@ describe("how far in a zoom may go", function()
   end)
 end)
 
+describe("how far in a PDF page may go, which is a different question", function()
+  -- A picture runs out of pixels; a vector page never does, so its ceiling is
+  -- a number somebody chose rather than one the source can be asked for. What
+  -- the two share is *when* the question is asked: before the step, so a
+  -- refused one costs no render.
+  it("rises with the level and stops at the configured DPI", function()
+    assert.is_true(media.pdf_zoom_possible(0), "level zero is the plain page")
+    assert.is_true(media.pdf_zoom_possible(1))
+    assert.is_true(media.pdf_zoom_possible(5))
+    assert.is_false(media.pdf_zoom_possible(6), "past the ceiling")
+    assert.is_false(media.pdf_zoom_possible(40))
+  end)
+
+  it("raises the DPI by exactly the factor the view narrows by", function()
+    -- The equality is the feature: the window shrinks by 1.5 a step and the
+    -- resolution grows by 1.5, so the pixels handed to the terminal stay
+    -- constant in number and change only in what they were sampled from.
+    -- Were these two factors ever to drift apart, the render would silently
+    -- start costing more (or delivering less) with every level.
+    local base = media.pdf_dpi(0)
+    assert.is_true(base > 0)
+    assert.equals(math.floor(base * 1.5 + 0.5), media.pdf_dpi(1))
+    assert.equals(math.floor(base * 1.5 * 1.5 + 0.5), media.pdf_dpi(2))
+    assert.equals(base, media.pdf_dpi(-3), "a negative level is the plain page, not a smaller one")
+  end)
+
+  it("cuts a window the size of the plain page, at every level", function()
+    -- The cost argument, as arithmetic. `pdf_window` is handed the *plain*
+    -- page's pixel size and answers in the coordinates of the page at that
+    -- level's DPI -- so the answer coming back the size of the plain page is
+    -- what makes a deep zoom cost the same as a shallow one.
+    local base = { width = 1608, height = 2097 }
+    for level = 1, 5 do
+      local rect = media.pdf_window(base, level, 0.5, 0.5)
+      assert.is_truthy(rect)
+      assert.is_true(
+        math.abs(rect.w - base.width) <= 2 and math.abs(rect.h - base.height) <= 2,
+        ("level %d asked for %dx%d, not the plain page's %dx%d"):format(
+          level,
+          rect.w,
+          rect.h,
+          base.width,
+          base.height
+        )
+      )
+    end
+  end)
+
+  it("follows the centre it is given, and stays on the page", function()
+    local base = { width = 1000, height = 1000 }
+    local middle = media.pdf_window(base, 2, 0.5, 0.5)
+    local corner = media.pdf_window(base, 2, 0.0, 0.0)
+    assert.is_true(corner.x < middle.x and corner.y < middle.y, "the centre moved the window")
+    assert.equals(0, corner.x, "and the window was pushed back onto the page rather than off it")
+    assert.equals(0, corner.y)
+  end)
+
+  it("has no window at level zero, where the whole page is the view", function()
+    assert.is_nil(media.pdf_window({ width = 800, height = 600 }, 0, 0.5, 0.5))
+  end)
+end)
+
 describe("the keys a zoomed hover borrows", function()
   before_each(function()
     config.reset()

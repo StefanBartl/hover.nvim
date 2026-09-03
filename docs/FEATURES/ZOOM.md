@@ -1,4 +1,4 @@
-# Zooming a picture
+# Zooming a picture, or a page
 
 Not [resize](RESIZE.md), and the difference is the whole feature.
 
@@ -6,10 +6,17 @@ Not [resize](RESIZE.md), and the difference is the whole feature.
 framing never changes, and it costs no process at all — the drawing provider
 is simply handed a larger rectangle.
 
-**Zoom keeps the box and cuts the source.** What is on screen is a *smaller
-part* of the picture, larger. That cannot be done by asking for a bigger
-rectangle; it needs a cropped file, which means a process, which is why almost
-every decision on this page is about the 258 milliseconds that process costs.
+**Zoom keeps the box and narrows the view.** What is on screen is a *smaller
+part* of the source, larger. That cannot be done by asking for a bigger
+rectangle; it needs a new file, which means a process, which is why almost
+every decision on this page is about what that process costs.
+
+**Two sources, two mechanisms, one gesture.** A picture is *cropped*: the file
+the target names already holds every pixel there will ever be. A PDF page is
+*re-rasterized at a higher DPI*, because what is on screen for a page is not
+the file the target names — it is a rendering in this plugin's cache, and
+cutting a piece out of that is bigger and no sharper. Both answer `<M-z>`,
+both move with `h/j/k/l`, and neither knows about the other.
 
 ---
 
@@ -51,20 +58,81 @@ feels answered. That single number produced three decisions:
    run to discover there was no more detail would be paying the full price for
    a refusal.
 
-## Pictures only, and not PDF pages
+## A PDF page: sharper, not merely larger
 
-A PDF page is a picture too, and zooming one is a reasonable thing to want.
-It is refused, and the reason is not laziness:
+A page was refused for a while, and the reason was never laziness. **What is on
+screen for a PDF is not the file the target names** — it is a rasterization
+living in this plugin's own cache, rendered once at one DPI. Cropping *that*
+magnifies a bitmap already as detailed as it will ever be: bigger, no sharper,
+which is the one thing a zoom is for.
 
-**What is on screen for a PDF is not the file the target names.** It is a
-rasterization living in this plugin's own cache. Cropping *that* would magnify
-a bitmap that was already rendered at one fixed resolution — the result is
-bigger and no sharper, which is the one thing a zoom is for.
+The honest answer is a second render at a higher DPI, and it was parked here
+with a price on it: **3.3 s a step**, against 258 ms for a crop. That number
+is why this sat on [ROADMAP.md](../ROADMAP.md) as a decision rather than a
+ticket.
 
-The honest answer for a page is a **second render at a higher DPI**, and that
-is a different feature with a different price: measured at 3.3 s against
-258 ms. It stays on [ROADMAP.md](../ROADMAP.md) rather than being approximated
-here.
+**The number was for the wrong operation, and measuring the right one settled
+it.** 3.3 s is what re-rendering a *whole page* costs, and a whole page is not
+what a zoom shows. Windows, 2026-09-03, dense A4 text page:
+
+| Level | DPI | Whole page | The window actually shown |
+| --- | --- | --- | --- |
+| 0 | 216 | 176 ms | — |
+| 1 | 324 | 304 ms | 140 ms |
+| 2 | 486 | 606 ms | 118 ms |
+| 3 | 729 | 1 231 ms | 119 ms |
+| 4 | 1 094 | 2 653 ms | 119 ms |
+
+The left column grows with the square of the DPI. The right one does not move,
+and the reason is arithmetic rather than luck: **the view narrows by exactly
+the factor the resolution rises by**, so the window is always about the size of
+the plain page in pixels. The same number of pixels comes back every time; only
+what they were sampled from changes.
+
+So a page step costs what a picture step costs — measured through the plugin
+itself, 207–752 ms at every level on a dense page — and it goes through the
+same placeholder machinery for the same reason.
+
+**The sharpness is measured, not asserted.** Same window, same pixel size, one
+re-rendered at the higher DPI and one cropped out of the level-0 render and
+scaled up (which is what the picture path would have done to a page):
+
+| Level | re-rendered | upscaled crop |
+| --- | --- | --- |
+| 1 | 0.81 | 0.37 |
+| 2 | 0.88 | 0.23 |
+| 3 | 0.66 | 0.10 |
+| 4 | 0.22 | 0.03 |
+| 5 | 0.16 | 0.01 |
+
+Standard deviation of a Laplacian — detail per pixel, as one number. Read the
+rows across, never down: *within* a row the re-render carries 2× to 15× the
+edge energy, which is the feature. *Down* a column both fall, because a view
+narrow enough to hold two letterforms is mostly white however it was made.
+`scripts/pdfzoom_probe.lua` prints this table for any PDF.
+
+**The ceiling is a DPI, and that is a different kind of limit.** A picture runs
+out of pixels and the source can be asked where that is. A vector page never
+runs out, so the limit has to be *chosen*: 2400 DPI, about 11× the base and
+five steps. Past that a scanned page has long been showing interpolation rather
+than paper, and a vector one is showing the inside of single letterforms. Not a
+cost limit — the cost is flat — which is why it is a number rather than a
+measurement.
+
+**Every view is kept for the session**, keyed by file, mtime, page, DPI *and*
+window. Without the last two the sharp view and the plain one overwrite each
+other, which [ROADMAP.md](../ROADMAP.md) named as the obstacle before this was
+built. How many are worth keeping answers itself: the ceiling bounds the levels,
+a few hundred KB each, and they go at `VimLeavePre` with everything else.
+
+**pdftoppm does the cutting, not ImageMagick.** `pdfport.render_page` grew an
+`opts.crop` for this (pdfport.nvim `95d27ab`), the same way `images.convert.crop`
+grew for the picture half — a window of a page is a rasterizer's job, and doing
+it here would mean rendering the whole page first, which is the cost this
+feature exists to avoid. A pdfport too old to know the option is detected
+(`can_render_page_crop`) rather than discovered: it would ignore an unknown
+field in silence, and the page would come back rendered at a higher DPI and
+letterboxed into the same float — a key that visibly does nothing.
 
 ## Navigating: the narrowest borrow in the plugin, and the strongest case
 

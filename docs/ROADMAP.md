@@ -72,31 +72,6 @@ the same word.
 ASCII mock-up of the float, which explains the idea but not the feel — the
 thing worth showing is how little it interrupts reading, and a still cannot.
 
-### A sharp zoom for a PDF page
-
-The picture half of this entry is **built** — `:Hover zoom`, a cropped detail
-with `h/j/k/l` to move it, at 258 ms a step. Why it is a route rather than a
-key, and why the ceiling is capped instead of discovered, is in
-[docs/FEATURES/ZOOM.md](FEATURES/ZOOM.md). What is left here is the half that
-crop cannot answer.
-
-**A PDF page on screen is not the file the target names.** It is a
-rasterization in this plugin's own cache, rendered once at pdfport's default
-DPI. Cropping it magnifies a bitmap that is already as sharp as it will ever
-be: bigger, and no more detail — which is the one thing a zoom is for.
-
-The answer is a second rasterization. `render_page` takes a `dpi` and this
-plugin passes none. The obstacle is the page cache, whose key is path, mtime
-and page number: two resolutions of one page would overwrite each other. One
-`dpi` in the key, one in the call, and a decision about how many resolutions
-are worth keeping.
-
-**To settle first: the price.** A second render was measured at 3.3 s against
-258 ms for a crop, on the same machine and the same day. That is well past the
-point where the existing placeholder machinery merely covers a wait, and a
-feature whose cheapest honest form takes three seconds may want a different
-shape than "press the same key again".
-
 ---
 
 ## Optimizations

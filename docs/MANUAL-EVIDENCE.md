@@ -61,6 +61,28 @@ grows through five steps on a 210×55 terminal (71×20 cells of picture up to
 `lines - 4`. Those are float geometries read back from Neovim — they say the
 frame is the right size, not that a picture arrived in it.
 
+### A PDF page zoomed, which is a re-render rather than a crop
+
+| | |
+| --- | --- |
+| **Checked** | *never* |
+| **On** | — |
+| **How** | Hover a PDF with real text on the page, then press `<M-z>` two or three times. Each step shows a **smaller part of the page, larger and genuinely sharper** — letterforms that were grey mush at level 0 should have clean edges at level 2. Then `h` `j` `k` `l` to move around, `<M-R>` back to the whole page. Repeat on a **scanned** PDF, where there is no more detail to find: it should still magnify, just without getting sharper, because the page is an image inside the document and the re-render can only interpolate it. |
+| **Watch for** | Each step taking noticeably *longer* than the one before — that means the crop window is not reaching pdftoppm and the whole page is being rendered at the higher DPI, which is exactly what an older pdfport does silently. Also: a magnified page that is blurry in the way a scaled bitmap is blurry, which is the same symptom from the other side. And the page number in the border changing, or the view jumping back to page 1, when the zoom re-renders. |
+
+**What is covered without a person.** `TESTS/zoom_spec.lua` pins the
+arithmetic — that the DPI rises by exactly the factor the view narrows by,
+that the window comes out the size of the plain page at every level, that the
+ceiling refuses before rendering. `scripts/pdfzoom_probe.lua` runs the whole
+path against a real document and prints time, pixel size, hash and two
+sharpness numbers per level; on 2026-09-03 it reported 207–752 ms a step at a
+constant 1826×2312, and edge energy 2× to 15× that of the same window cropped
+from the plain render.
+
+**What that leaves.** The probe proves the file is produced and is sharper.
+Whether it is *drawn* into the float — and whether a page reads as sharp to a
+person rather than as a number — is what this row is for.
+
 ### A picture zoomed, and panned around in
 
 | | |
@@ -68,7 +90,7 @@ frame is the right size, not that a picture arrived in it.
 | **Checked** | *never* |
 | **On** | — |
 | **How** | Hover an image, then press `<M-z>` two or three times. Each step takes about a quarter of a second and shows a **smaller part of the picture, larger** — not the same picture bigger. Then `h` `j` `k` `l` to move around in it; `<M-Z>` steps back, `<M-R>` returns to the whole picture. `:Hover zoom [in\|out\|reset]` does the same three from the command line. Finally press `h` with the hover **not** zoomed: the float should go away, because there the key is the cursor motion it always was. |
-| **Watch for** | `<M-z>` doing nothing at all, which has two causes that look identical: the picture is not zoomable (no ImageMagick, or it is a PDF page) — the float says so — or the terminal does not send the chord, which `:nnoremap <M-z> :echo "da"<CR>` settles in one press. Then: the **whole picture getting larger** instead of a detail — that is resize's answer arriving where zoom's was asked for, and it looks almost right. Also: panning that jumps to a corner rather than moving a quarter of a view (a pixel centre instead of a fractional one would do that), and a centre that survives `reset` and makes the next zoom start somewhere nobody chose. |
+| **Watch for** | `<M-z>` doing nothing at all, which has two causes that look identical: the picture is not zoomable (no ImageMagick, or no images.nvim) — the float says so — or the terminal does not send the chord, which `:nnoremap <M-z> :echo "da"<CR>` settles in one press. Then: the **whole picture getting larger** instead of a detail — that is resize's answer arriving where zoom's was asked for, and it looks almost right. Also: panning that jumps to a corner rather than moving a quarter of a view (a pixel centre instead of a fractional one would do that), and a centre that survives `reset` and makes the next zoom start somewhere nobody chose. |
 
 **What is covered without a person.** `TESTS/zoom_spec.lua` pins the
 arithmetic, and outside the suite the crops have been confirmed to be written
@@ -215,6 +237,6 @@ Windows, per push.
 ## Keeping this honest
 
 A row whose date is older than the code it describes is worse than no row,
-because it reads as a check that happened. When one of the seven paths above
+because it reads as a check that happened. When one of the eight paths above
 changes, either check it again and move the date, or set the date back to
 *never* and say why.

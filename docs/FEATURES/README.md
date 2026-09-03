@@ -25,10 +25,11 @@ rejected, and the bugs that changed the design.
   called resize rather than zoom, why `+` and `-` are bound over a picture but
   the wheel is bound everywhere, and why the ceiling is found by stepping into
   it rather than carried as a number.
-- **[ZOOM.md](ZOOM.md)** — the other operation: same box, a cut of the source.
-  Why 258 milliseconds made it a route instead of a key, why a PDF page is
-  refused, why the panning keys have the narrowest borrow condition here and
-  the best case for it — and the name collision that survived a green suite.
+- **[ZOOM.md](ZOOM.md)** — the other operation: same box, a narrower view. Why
+  a quarter of a second made it a route before it was a key, why a picture is
+  cropped and a PDF page re-rendered at a higher DPI instead, why the panning
+  keys have the narrowest borrow condition here and the best case for it — and
+  the name collision that survived a green suite.
 - **[INTEGRATIONS.md](../INTEGRATIONS.md)** (one level up) — who is wired to
   whom, through which door, and what degrades when a plugin is absent.
 

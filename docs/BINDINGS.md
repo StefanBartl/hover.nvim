@@ -47,9 +47,9 @@ require("hover").setup({ keymaps = { show = false } })
 | `resize_keys.smaller` | `-` | hovers with a picture only | one step smaller |
 | `resize_keys.wheel_larger` | `<M-ScrollWheelUp>` | **any** hover, and only while the pointer is over the float | one step larger |
 | `resize_keys.wheel_smaller` | `<M-ScrollWheelDown>` | as above | one step smaller |
-| `zoom_keys.into` | `<M-z>` | hovers whose picture **can** be zoomed | magnify a detail one step |
+| `zoom_keys.into` | `<M-z>` | hovers whose picture or PDF page **can** be zoomed | magnify a detail one step |
 | `zoom_keys.out` | `<M-Z>` | as above | step back out |
-| `zoom_keys.reset` | `<M-R>` | as above | back to the whole picture |
+| `zoom_keys.reset` | `<M-R>` | as above | back to the whole picture or page |
 | `position_keys.next` | `<M-n>` | **position hovers only**, and only where more than one contribution is registered | the next plugin with something to say about this place; wraps |
 | `nav_keys.left` | `h` | **only while zoomed in** | move the magnified view left |
 | `nav_keys.right` | `l` | as above | right |
@@ -79,13 +79,15 @@ Three things follow from "borrowed", and each has been a bug at some point:
   dismissal hangs on `CursorMoved`, so the unbound key takes the picture away.
   Nobody presses `h` at a magnified picture meaning that.
 - **The zoom keys are Alt chords, and that is what makes them affordable.**
-  There were deliberately no zoom keys at first: a step costs ~258 ms, which
-  is the wrong shape for a key you hold, and the only candidates then on the
-  table were `+` and `-` — real motions. `<M-z>`, `<M-Z>` and `<M-R>` displace
-  no motion and no builtin, so the trade that failed for `+` succeeds here.
-  They are bound whenever the picture *can* be zoomed rather than only while
-  it is: `out` and `reset` decline at level 0 anyway, and a pair that appears
-  only after a successful press would be worse than one that is simply there.
+  There were deliberately no zoom keys at first: a step costs a quarter of a
+  second or so — ~258 ms to crop a picture, 120–600 ms to re-render a window
+  of a PDF page — which is the wrong shape for a key you hold, and the only
+  candidates then on the table were `+` and `-` — real motions. `<M-z>`,
+  `<M-Z>` and `<M-R>` displace no motion and no builtin, so the trade that
+  failed for `+` succeeds here. They are bound whenever the picture or page
+  *can* be zoomed rather than only while it is: `out` and `reset` decline at
+  level 0 anyway, and a pair that appears only after a successful press would
+  be worse than one that is simply there.
 - **The wheel is bound for every hover, and gated on the pointer instead.**
   `+` is a motion in normal mode, and displacing a motion for every text
   float costs more than the feature is worth there; `<M-ScrollWheel>` costs
@@ -124,7 +126,7 @@ omitted, which toggles.
 | `:Hover why` | why nothing hovered at the cursor -- which gate refused, and what to type about it |
 | `:Hover pin` | take this float out of the cursor's hands. While pinned the trigger opens nothing; `:Hover show` replaces it, `q`/`<Esc>` take it away |
 | `:Hover resize [bigger\|smaller]` | make the hover on screen bigger or smaller -- a picture is drawn larger, a text preview shows more lines. Omitted, bigger. Declines for a *position* preview, which cannot be asked again at another size |
-| `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture on screen, or step back out. Omitted, in. Pictures only, and a step costs ~258 ms, which is why it is a route rather than a key |
+| `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture or PDF page on screen, or step back out. Omitted, in. A picture is cropped, a page re-rendered at a higher DPI; either way a step costs a fraction of a second, which is why it is a route as well as a key |
 | `:Hover next` | step to the next plugin with something to say about this place. Wraps past the last one, and says so when there is only one |
 | `:Hover nav {left\|right\|up\|down}` | move the magnified view. The keyboard counterpart to `nav_keys`, which are a borrow and therefore undiscoverable until one has been seen |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
