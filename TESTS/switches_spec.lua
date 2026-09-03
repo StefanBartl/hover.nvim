@@ -786,7 +786,13 @@ describe("border styles", function()
 
   it("leaves a hand-written list alone, which is the escape hatch", function()
     local custom = { "1", "2", "3", "4", "5", "6", "7", "8" }
-    assert.same(custom, float.resolve_border(custom))
+    -- Bound and narrowed before the comparison: the return type is a union,
+    -- and `assert.same` takes tables -- handing it the union directly is a
+    -- `param-type-mismatch` that a green suite says nothing about, and the
+    -- LuaLS scan does.
+    local resolved = float.resolve_border(custom)
+    assert.equals("table", type(resolved))
+    assert.same(custom, resolved)
   end)
 
   it("falls back to the documented default when nothing is set", function()
