@@ -379,6 +379,17 @@ function M.check()
   else
     health.info("pdftoppm: not on PATH -- pdfport cannot rasterize PDF pages")
   end
+
+  -- The same two tools again, this time out of docs/install.json rather than
+  -- by hand -- which is what adds the per-manager install command and the
+  -- `:Lib deps install hover.nvim` route. The checks above stay: they carry
+  -- the Windows PATH advice for soffice, which no generic report can.
+  -- Silent when lib.nvim.deps is absent (an older lib.nvim).
+  local ok_deps, deps_health = pcall(require, "lib.nvim.deps.health")
+  if ok_deps then
+    health.start("hover.nvim: declared tools (lib.nvim.deps)")
+    deps_health.report_for("hover.nvim")
+  end
 end
 
 return M
