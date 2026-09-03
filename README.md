@@ -205,7 +205,7 @@ interchangeable.
 
 | Door | How it works | Who arrives through it |
 | --- | --- | --- |
-| **Registry** (inbound) | The plugin calls `hover.registry.register(name, …)` and hands over a *source* ("what is under the cursor?"), a *preview* ("how do I render a target of this type?"), or a *position* ("is there anything to say about this **place**?"). hover.nvim never says its name, and the next contributor needs no change here | markdown.nvim, migrate.nvim, reposcope.nvim, documentation.nvim, spotlight.nvim, sandbox.nvim |
+| **Registry** (inbound) | The plugin calls `hover.registry.register(name, …)` and hands over a *source* ("what is under the cursor?"), a *preview* ("how do I render a target of this type?"), or a *position* ("is there anything to say about this **place**?"). hover.nvim never says its name, and the next contributor needs no change here | markdown.nvim, migrate.nvim, reposcope.nvim, documentation.nvim, spotlight.nvim, insights.nvim, sandbox.nvim, language.nvim |
 | **Named soft dependency** (outbound) | hover.nvim `pcall(require, …)`s the plugin by name from inside its own preview code, guarded so a missing plugin is a `nil` rather than an error | images.nvim, pdfport.nvim, gopath.nvim |
 
 Door 1 is the better shape; door 2 is the honest one. A *capability* can be registered —

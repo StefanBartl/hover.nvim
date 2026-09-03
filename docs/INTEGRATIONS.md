@@ -97,6 +97,7 @@ including `on_request` for an answer that costs a process start.
 | [spotlight.nvim](https://github.com/StefanBartl/spotlight.nvim) | registry | a *position* preview: how often a spotlighted token occurs in this buffer | no occurrence count |
 | [insights.nvim](https://github.com/StefanBartl/insights.nvim) | registry | a *position* preview: which files import the module under the cursor, out of its own remembered scan | no importer list in the float |
 | [sandbox.nvim](https://github.com/StefanBartl/sandbox.nvim) | registry | a *position* preview, **request-only**: whether the container image under the cursor is pulled, how big it is, and what runs from it | no image hover |
+| [language.nvim](https://github.com/StefanBartl/language.nvim) | registry | a *position* preview, **request-only**: the word under the cursor, translated | no translation in the float; `:Translate <lang> cword` still answers |
 
 All of them are optional and **none is required**. With none installed the
 hover still gives file heads, directory listings, image and PDF metadata, a
@@ -283,12 +284,20 @@ Each is documented on its own side, because that is where the code is:
 | spotlight.nvim | position | how often a spotlighted token occurs in this buffer | [docs/hover.md](https://github.com/StefanBartl/spotlight.nvim/blob/main/docs/hover.md) |
 | insights.nvim | position | which files import the module under the cursor | [docs/hover.md](https://github.com/StefanBartl/insights.nvim/blob/main/docs/hover.md) |
 | sandbox.nvim | position (`on_request`) | is this container image pulled, how big, what runs from it | [docs/FEATURES/HOVER.md](https://github.com/StefanBartl/sandbox.nvim/blob/main/docs/FEATURES/HOVER.md) |
+| language.nvim | position (`on_request`) | the word under the cursor, translated | [docs/FEATURES/HOVER.md](https://github.com/StefanBartl/language.nvim/blob/main/docs/FEATURES/HOVER.md) |
 
-Four of those six are **position** previews, and that is not a coincidence:
+Six of those eight are **position** previews, and that is not a coincidence:
 until the kind existed, "no target" meant "no hover", and a fact *about* a
-line — it is deprecated, this token occurs fourteen times, this module does X
-— was not expressible at all. Four plugins were waiting on the same missing
-piece.
+line — it is deprecated, this token occurs fourteen times, this module does X,
+this word means Y — was not expressible at all. They were all waiting on the
+same missing piece. (This sentence said "four of those six" while the table
+already held seven rows and five previews: a count next to the list it counts
+is a second source, and it drifted the moment insights.nvim arrived.)
+
+**Two of the six are `on_request`, and they are the expensive ones** — a
+container engine to wake, a network round trip to make. That flag is what let
+either of them be built honestly: without it both would run on the automatic
+trigger, which fires after every keystroke followed by quiet.
 
 sandbox.nvim was waiting on a second one. Its answer costs an engine start,
 measured at 277–754 ms across two runs, so it could not be built at all until
