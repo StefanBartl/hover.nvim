@@ -237,11 +237,18 @@ function M.borrow(content, handlers)
   -- The zoom, on "this hover *can* be zoomed" rather than "is zoomed".
   --
   -- Wider than the navigation borrow below on purpose, and the difference is
-  -- what the keys cost. These are Alt chords: they displace no motion and no
-  -- builtin, so binding `out` and `reset` while nothing is zoomed costs a
-  -- reader nothing and they simply decline. Binding them only *after* a
-  -- successful zoom would make the pair appear and disappear under the
-  -- reader's hands for no gain.
+  -- what the keys cost. `>` and `=` are operators rather than motions, so
+  -- binding `out` and `reset` while nothing is zoomed costs a reader nothing
+  -- and they simply decline. Binding them only *after* a successful zoom
+  -- would make the pair appear and disappear under the reader's hands for no
+  -- gain.
+  --
+  -- **After the resize keys, and that ordering is load-bearing now that both
+  -- lists hold plain characters.** A key in both is taken once, for resize --
+  -- and since every hover reaching here has a picture, an overlap is total
+  -- rather than occasional. `-` is the one that invites it, being the obvious
+  -- partner for a `_`; `hover.health` reports the clash rather than leaving a
+  -- key that resizes where a zoom was asked for.
   if zoom and handlers.zoomable then
     local zk = type(cfg.zoom_keys) == "table" and cfg.zoom_keys or {}
     for _, spec in ipairs({

@@ -47,9 +47,9 @@ require("hover").setup({ keymaps = { show = false } })
 | `resize_keys.smaller` | `-` | hovers with a picture only | one step smaller |
 | `resize_keys.wheel_larger` | `<M-ScrollWheelUp>` | **any** hover, and only while the pointer is over the float | one step larger |
 | `resize_keys.wheel_smaller` | `<M-ScrollWheelDown>` | as above | one step smaller |
-| `zoom_keys.into` | `<M-z>` | hovers whose picture or PDF page **can** be zoomed | magnify a detail one step |
-| `zoom_keys.out` | `<M-Z>` | as above | step back out |
-| `zoom_keys.reset` | `<M-R>` | as above | back to the whole picture or page |
+| `zoom_keys.into` | `>` | hovers whose picture or PDF page **can** be zoomed | magnify a detail one step |
+| `zoom_keys.out` | `\|` | as above | step back out |
+| `zoom_keys.reset` | `=` | as above | back to the whole picture or page |
 | `position_keys.next` | `<M-n>` | **position hovers only**, and only where more than one contribution is registered | the next plugin with something to say about this place; wraps |
 | `nav_keys.left` | `h` | **only while zoomed in** | move the magnified view left |
 | `nav_keys.right` | `l` | as above | right |
@@ -78,16 +78,33 @@ Three things follow from "borrowed", and each has been a bug at some point:
   what `h` would otherwise do over a float is move the cursor, and the
   dismissal hangs on `CursorMoved`, so the unbound key takes the picture away.
   Nobody presses `h` at a magnified picture meaning that.
-- **The zoom keys are Alt chords, and that is what makes them affordable.**
-  There were deliberately no zoom keys at first: a step costs a quarter of a
-  second or so — ~258 ms to crop a picture, 120–600 ms to re-render a window
-  of a PDF page — which is the wrong shape for a key you hold, and the only
-  candidates then on the table were `+` and `-` — real motions. `<M-z>`,
-  `<M-Z>` and `<M-R>` displace no motion and no builtin, so the trade that
-  failed for `+` succeeds here. They are bound whenever the picture or page
-  *can* be zoomed rather than only while it is: `out` and `reset` decline at
-  level 0 anyway, and a pair that appears only after a successful press would
-  be worse than one that is simply there.
+- **The zoom keys were Alt chords until 2026-09-03, and a measurement took
+  that away.** There were deliberately no zoom keys at first: a step costs a
+  quarter of a second or so — ~258 ms to crop a picture, 120–600 ms to
+  re-render a window of a PDF page — which is the wrong shape for a key you
+  hold, and the only candidates then on the table were `+` and `-` — real
+  motions, already `resize_keys`. `<M-z>`, `<M-Z>` and `<M-R>` displaced
+  nothing, and that is worth what the terminal's willingness to send them is
+  worth: on the machine this is developed on, `:nnoremap <M-z> <Cmd>echo
+  "…"<CR>` prints on no press. A key that displaces nothing *and does
+  nothing* is absent, not cheap. Set `zoom_keys` back to the chords wherever
+  they do arrive.
+- **`>`, `|` and `=` replaced them, on two arguments rather than one.** `>`
+  and `=` are *operators*: over a float they move no cursor and complete
+  nothing, so the borrow is free for exactly as long as the float. `|` is a
+  *motion*, and that is the case for taking it — unbound it jumps to column
+  one, the dismissal hangs on `CursorMoved`, and the press takes the picture
+  away, which is the same argument `h` makes below. `<` was rejected because
+  which-key normalizes it to `<lt>` while the mapping stays `<`, and the
+  disagreement re-enters which-key until its guard reports “Recursion
+  detected”. `-` was rejected because `resize_keys.smaller` holds it: resize
+  is bound first, a key listed twice is taken once, and every hover a zoom key
+  is bound for has a picture — so it would resize and never zoom.
+  `:checkhealth hover` reports that overlap.
+- **They are bound whenever the picture or page *can* be zoomed** rather than
+  only while it is: `out` and `reset` decline at level 0 anyway, and a pair
+  that appears only after a successful press would be worse than one that is
+  simply there.
 - **The wheel is bound for every hover, and gated on the pointer instead.**
   `+` is a motion in normal mode, and displacing a motion for every text
   float costs more than the feature is worth there; `<M-ScrollWheel>` costs

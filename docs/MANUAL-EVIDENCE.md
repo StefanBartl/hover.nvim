@@ -71,7 +71,7 @@ frame is the right size, not that a picture arrived in it.
 | --- | --- |
 | **Checked** | *never* |
 | **On** | — |
-| **How** | Hover a PDF with real text on the page, then press `<M-z>` two or three times. Each step shows a **smaller part of the page, larger and genuinely sharper** — letterforms that were grey mush at level 0 should have clean edges at level 2. Then `h` `j` `k` `l` to move around, `<M-R>` back to the whole page. Repeat on a **scanned** PDF, where there is no more detail to find: it should still magnify, just without getting sharper, because the page is an image inside the document and the re-render can only interpolate it. |
+| **How** | Hover a PDF with real text on the page, then press `>` two or three times. Each step shows a **smaller part of the page, larger and genuinely sharper** — letterforms that were grey mush at level 0 should have clean edges at level 2. Then `h` `j` `k` `l` to move around, `=` back to the whole page. Repeat on a **scanned** PDF, where there is no more detail to find: it should still magnify, just without getting sharper, because the page is an image inside the document and the re-render can only interpolate it. |
 | **Watch for** | Each step taking noticeably *longer* than the one before — that means the crop window is not reaching pdftoppm and the whole page is being rendered at the higher DPI, which is exactly what an older pdfport does silently. Also: a magnified page that is blurry in the way a scaled bitmap is blurry, which is the same symptom from the other side. And the page number in the border changing, or the view jumping back to page 1, when the zoom re-renders. |
 
 **What is covered without a person.** `TESTS/zoom_spec.lua` pins the
@@ -91,10 +91,10 @@ person rather than as a number — is what this row is for.
 
 | | |
 | --- | --- |
-| **Checked** | 2026-09-03 — **the magnified detail and the panning.** Driven with `>` / `=` rather than the Alt chords, which never arrived: see below. |
+| **Checked** | 2026-09-03 — **the magnified detail and the panning.** Driven with `>` / `=` rather than the Alt chords, which never arrived — which is why those are the default since that day: see below. |
 | **On** | Windows 11, Neovim 0.12.2, images.nvim + ImageMagick present, which-key installed |
-| **How** | Hover an image, then press `<M-z>` two or three times. Each step takes about a quarter of a second and shows a **smaller part of the picture, larger** — not the same picture bigger. Then `h` `j` `k` `l` to move around in it; `<M-Z>` steps back, `<M-R>` returns to the whole picture. `:Hover zoom [in\|out\|reset]` does the same three from the command line. Finally press `h` with the hover **not** zoomed: the float should go away, because there the key is the cursor motion it always was. |
-| **Watch for** | `<M-z>` doing nothing at all, which has two causes that look identical: the picture is not zoomable (no ImageMagick, or no images.nvim) — the float says so — or the terminal does not send the chord, which `:nnoremap <M-z> :echo "da"<CR>` settles in one press. Then: the **whole picture getting larger** instead of a detail — that is resize's answer arriving where zoom's was asked for, and it looks almost right. Also: panning that jumps to a corner rather than moving a quarter of a view (a pixel centre instead of a fractional one would do that), and a centre that survives `reset` and makes the next zoom start somewhere nobody chose. |
+| **How** | Hover an image, then press `>` two or three times. Each step takes about a quarter of a second and shows a **smaller part of the picture, larger** — not the same picture bigger. Then `h` `j` `k` `l` to move around in it; `\|` steps back, `=` returns to the whole picture. `:Hover zoom [in\|out\|reset]` does the same three from the command line. Finally press `h` with the hover **not** zoomed: the float should go away, because there the key is the cursor motion it always was. |
+| **Watch for** | `>` doing nothing at all, which has two causes that look identical: the picture is not zoomable (no ImageMagick, or no images.nvim) — the float says so — or a key list configured back to Alt chords the terminal does not send, which `:nnoremap <M-z> :echo "da"<CR>` settles in one press. Then: the **whole picture getting larger** instead of a detail — that is resize's answer arriving where zoom's was asked for, and it looks almost right. Also: panning that jumps to a corner rather than moving a quarter of a view (a pixel centre instead of a fractional one would do that), and a centre that survives `reset` and makes the next zoom start somewhere nobody chose. |
 
 **What is covered without a person.** `TESTS/zoom_spec.lua` pins the
 arithmetic, and outside the suite the crops have been confirmed to be written
@@ -111,12 +111,24 @@ reaches Neovim on this machine**: `:nnoremap <M-z> <Cmd>echo "…"<CR>` prints
 nothing when the chord is pressed, so the terminal is not sending it — and
 which-key opens instead, because what does arrive is `<Esc>` followed by `z`,
 and `z` is a prefix. With `zoom_keys = { into = ">", out = "<", reset = "=" }`,
-`>` and `=` work; **`<` makes which-key report "Recursion detected"**, which is
-its own answer to a plugin binding the one character that begins Vim's key
-notation.
+`>` and `=` work; **`<` makes which-key report "Recursion detected"**.
 
-So the Alt chords are the right default only where the terminal sends them,
-and this row is the first evidence that "everywhere" was an assumption.
+**That measurement changed the default on 2026-09-03**, and two of its details
+are worth keeping because they were checked rather than reasoned:
+
+- **which-key normalizes `<` to `<lt>`** while the mapping itself stays `<`
+  (`Util.norm`, run against the installed copy on 2026-09-03). `|`, `_`, `>`
+  and `=` all normalize to themselves. So `<` is not a coincidence of one
+  configuration — anyone with which-key would meet it.
+- **`-` cannot be the way out**, however natural it looks beside a `_`.
+  `resize_keys.smaller` holds it, resize is bound before zoom, a key listed
+  twice is taken once, and every hover a zoom key is bound for has a picture:
+  it would resize on every press. That is a code reading rather than a
+  keypress, and `:checkhealth hover` now reports the clash.
+
+The default is `>` in, `|` out, `=` reset. The Alt chords stay right wherever
+the terminal sends them, and this row is the evidence that "everywhere" was an
+assumption.
 
 **What that leaves.** Every one of those numbers is a rectangle handed to
 ImageMagick. Whether the resulting file is *drawn* into the float, and whether

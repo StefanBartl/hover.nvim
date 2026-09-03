@@ -132,15 +132,16 @@
 
 --- Keys borrowed while the hover on screen *can* be zoomed -- a picture with
 --- a cropping provider present, or a PDF page with a rasterizer that can
---- render a window of one. Alt chords rather than bare keys, which is what
---- makes them affordable: they displace nothing a reader was using.
+--- render a window of one. Plain characters rather than Alt chords since
+--- 2026-09-03: a chord displaces nothing, which is worth nothing at all in a
+--- terminal that never sends it -- see `hover.config.DEFAULTS`.
 ---
 --- `into` rather than `in` because `in` is a Lua keyword and could only be
 --- written `["in"]`, in this file and in every user's config alike.
 ---@class Hover.ZoomKeys
----@field into? string|string[] # Default `{ "<M-z>" }`.
----@field out? string|string[] # Default `{ "<M-Z>" }`.
----@field reset? string|string[] # Default `{ "<M-R>" }`.
+---@field into? string|string[] # Default `{ ">" }`.
+---@field out? string|string[] # Default `{ "|" }`.
+---@field reset? string|string[] # Default `{ "=" }`.
 
 ---@class Hover.Keymaps
 ---@field show? string|string[]|false # Show the hover for whatever is under the cursor, ignoring every volume switch. Default false: no key is claimed unless asked for.

@@ -383,7 +383,13 @@ return {
   --- imports it" -- and until this key existed the first registered one won
   --- and the rest were invisible, decided by plugin load order.
   ---
-  --- Alt, for the same reason the zoom chords are Alt: it displaces nothing.
+  --- Alt, and it is now the only Alt chord this plugin binds a keyboard
+  --- key to -- the zoom keys gave theirs up on 2026-09-03 because a
+  --- terminal that does not send the chord makes it an absent key rather
+  --- than a cheap one. This one keeps it because the alternative would be
+  --- a plain key bound for *position* hovers, where nothing about the
+  --- content narrows the borrow; `:Hover next` is the route for anyone
+  --- whose terminal is in the same position.
   --- `n` was never a candidate -- it is search-next, and borrowing it for a
   --- float would be the worst trade in this file. Checked against this
   --- config's own cheatsheets and source before choosing: `<M-n>` is unused
@@ -395,19 +401,47 @@ return {
 
   --- Zoom the picture on screen, borrowed while the hover *can* be zoomed.
   ---
-  --- **These exist now and deliberately did not before, and the reason the
-  --- objection no longer applies is the chord, not a change of mind.** The
-  --- argument against zoom keys was never that zooming is not worth a key --
-  --- it was that a zoom step costs about a quarter of a second (measured:
-  --- 258 ms, see `hover.zoom`), and a key that is *held down* is the wrong
-  --- shape for that. What made it worse was the only keys on offer at the
-  --- time: `+` and `-` are real motions, and displacing a motion for an
-  --- operation that slow is a bad trade.
+  --- **These exist now and deliberately did not before, and what changed is
+  --- the price of the *key*, never the price of the step.** A zoom step costs
+  --- about a quarter of a second (measured: 258 ms, see `hover.zoom`), which
+  --- is the wrong shape for a key that is held down -- and the only keys on
+  --- the table at the time were `+` and `-`, real motions already spoken for
+  --- by `resize_keys`. The objection was never "zooming is not worth a key".
   ---
-  --- An Alt chord displaces nothing. `<M-z>`, `<M-Z>` and `<M-R>` are not
-  --- motions, are not Neovim builtins, and cost a reader nothing while a
-  --- float is up -- so the trade that failed for `+` succeeds here, and the
-  --- route stays for anyone who wants no borrow at all.
+  --- **The default was `<M-z>` / `<M-Z>` / `<M-R>` until 2026-09-03, and a
+  --- measurement took it away.** An Alt chord displaces nothing -- which is
+  --- worth exactly as much as the terminal's willingness to send it. On the
+  --- machine this plugin is developed on it sends none:
+  --- `:nnoremap <M-z> <Cmd>echo "..."<CR>` prints on no press, because what
+  --- arrives is `<Esc>` followed by `z`. A key that displaces nothing *and
+  --- does nothing* is not a cheap key, it is an absent one, and "the terminal
+  --- sends Alt" was an assumption wearing an argument's clothes. The chords
+  --- remain the right choice where they arrive, and that is a config away.
+  --- See `docs/MANUAL-EVIDENCE.md`.
+  ---
+  --- **So the default is three plain characters that arrive everywhere**, and
+  --- the three are not chosen on one argument but on two:
+  ---
+  ---  * `>` and `=` are **operators**. Pressing one over a float does not
+  ---    move the cursor and does not complete on its own, so the borrow costs
+  ---    a reader nothing for as long as it lasts -- which is exactly as long
+  ---    as the float.
+  ---  * `|` is a **motion**, and that is the argument *for* taking it rather
+  ---    than against. Unbound it jumps the cursor to column one, the
+  ---    dismissal hangs on `CursorMoved`, and so the press takes the picture
+  ---    away. Nobody means that at a magnified picture -- the same case
+  ---    `nav_keys` makes for `h`.
+  ---
+  --- **Two candidates were rejected, and neither for taste.** `<` was the
+  --- first pick for `out`: which-key normalizes it to `<lt>` (`Util.norm`,
+  --- measured 2026-09-03) while the mapping stays `<`, and the disagreement
+  --- re-enters which-key until its own guard reports "Recursion detected".
+  --- `|`, `_`, `>` and `=` all normalize to themselves. And `-`, the obvious
+  --- partner for a `_`, cannot work at all: `resize_keys.smaller` holds it,
+  --- `borrow` takes the resize keys first, a key taken twice is taken once --
+  --- and every hover a zoom key is bound for has a picture in it, so the
+  --- overlap is total rather than occasional. `:checkhealth hover` reports it
+  --- instead of leaving it to be discovered as a key that resizes.
   ---
   --- **`into`, not `in`.** `in` is a Lua keyword, so the field could only be
   --- written `["in"]` -- here and in every user's config. The route argument
@@ -415,16 +449,16 @@ return {
   ---
   --- All three are bound on "this hover can be zoomed" rather than on "is
   --- zoomed": `out` and `reset` decline at level 0 anyway, and the narrower
-  --- condition would buy nothing while making `<M-Z>` appear only after a
-  --- successful `<M-z>`. That is the opposite trade from `nav_keys`, and for
-  --- the opposite reason -- there, the keys are motions.
+  --- condition would buy nothing while making the pair appear only after a
+  --- successful `>`. That is the opposite trade from `nav_keys`, and for the
+  --- opposite reason -- there, the key is a motion the whole time.
   zoom_keys = {
     ---@type string|string[]
-    into = { "<M-z>" },
+    into = { ">" },
     ---@type string|string[]
-    out = { "<M-Z>" },
+    out = { "|" },
     ---@type string|string[]
-    reset = { "<M-R>" },
+    reset = { "=" },
   },
 
   --- Keymaps this plugin sets in the user's namespace. Every entry is a

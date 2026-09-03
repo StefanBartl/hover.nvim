@@ -483,7 +483,15 @@ describe("the borrowed keys against the defaults", function()
     for row in text:gmatch("[^\n]+") do
       local name, rest = row:match("^|%s*`([%a][%w_]*_keys[%w_.]*)`%s*|(.*)$")
       if name then
-        out[name] = keys_in(rest:match("^([^|]*)") or "")
+        -- `\|` is an escaped pipe *inside* a cell, not a cell boundary --
+        -- which is how a document writes a key that happens to be the column
+        -- separator. Hidden before the boundary search and put back after,
+        -- because searching first finds the escape and stops there: the
+        -- default would read as an empty list, and the check would call a
+        -- correct document wrong. That is the worst state a doc check can be
+        -- in, and this one reached it the day `|` became a zoom key.
+        local cell = rest:gsub("\\|", "\1"):match("^([^|]*)") or ""
+        out[name] = keys_in((cell:gsub("\1", "|")))
       end
     end
     return out

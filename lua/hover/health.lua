@@ -205,6 +205,39 @@ local function check_config()
     })
   end
 
+  -- A zoom key a resize key already holds is bound, and then never fires:
+  -- `borrow` takes the resize keys first, a key taken twice is taken once,
+  -- and the two conditions overlap completely -- every hover a zoom key is
+  -- bound for has a picture in it. `-` is what invites this, being the
+  -- obvious partner for a `_`. Reported here because the symptom is a key
+  -- doing something *else*, which is the hardest kind to attribute: the
+  -- picture grows, so the key plainly works, and only the framing is wrong.
+  local zk = config.get().zoom_keys
+  if type(rk) == "table" and type(zk) == "table" then
+    ---@type table<string, string>
+    local held = {}
+    for _, name in ipairs({ "larger", "smaller" }) do
+      for _, lhs in ipairs(keylist(rk[name])) do
+        held[lhs] = "resize_keys." .. name
+      end
+    end
+    ---@type string[]
+    local clash = {}
+    for _, name in ipairs({ "into", "out", "reset" }) do
+      for _, lhs in ipairs(keylist(zk[name])) do
+        if held[lhs] then
+          clash[#clash + 1] = ("`%s` is zoom_keys.%s and %s"):format(lhs, name, held[lhs])
+        end
+      end
+    end
+    if #clash > 0 then
+      table.sort(clash)
+      clash[#clash + 1] = "Resize is bound first, and a key listed twice is taken once."
+      clash[#clash + 1] = "Every hover a zoom key is bound for has a picture, so it is every press."
+      health.warn("a zoom key is also a resize key -- it will resize, never zoom", clash)
+    end
+  end
+
   local any = false
   for _, s in ipairs(require("hover.switches").status()) do
     if s.enabled then

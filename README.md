@@ -667,19 +667,39 @@ cache rather than the file itself, and cutting that up would give you bigger, no
 
 | Way in | Does | Available | Option |
 | --- | --- | --- | --- |
-| `<M-z>` | one step of magnification | when the picture **can** be zoomed | `zoom_keys.into` |
-| `<M-Z>` | one step back out | as above | `zoom_keys.out` |
-| `<M-R>` | back to the whole picture or page | as above | `zoom_keys.reset` |
+| `>` | one step of magnification | when the picture **can** be zoomed | `zoom_keys.into` |
+| `\|` | one step back out | as above | `zoom_keys.out` |
+| `=` | back to the whole picture or page | as above | `zoom_keys.reset` |
 | `:Hover zoom [in\|out\|reset]` | the same three, from the command line; omitted, in | over a picture or a PDF page | — |
 | `h` `j` `k` `l` | move the magnified view left, down, up, right | **only while zoomed in** | `nav_keys.*` |
 | `:Hover nav {left\|right\|up\|down}` | the same move, from the command line | only while zoomed in | — |
 
-**Why the zoom keys are Alt chords, and why moving has four plain ones.** A zoom step
-writes a cropped file and costs about a quarter of a second (measured below), so it is a
+**Why these three, and not the Alt chords they were until 2026-09-03.** A zoom step
+writes a file and costs about a quarter of a second (measured below), so it is a
 deliberate press rather than a dial. For a while there was no key at all, because the only
-candidates on the table were `+` and `-` — real motions, and displacing a motion for an
-operation that slow is a bad trade. `<M-z>` displaces nothing, so the trade that failed
-for `+` succeeds here. All three are bound whenever the picture *can* be zoomed rather
+candidates on the table were `+` and `-` — real motions, and already spoken for by
+`resize_keys`. `<M-z>`, `<M-Z>` and `<M-R>` were the answer to that, on the argument that
+a chord displaces nothing — **which is worth precisely what the terminal's willingness to
+send the chord is worth.** On the machine this is developed on it sends none:
+`:nnoremap <M-z> <Cmd>echo "…"<CR>` prints on no press, because what arrives is `<Esc>`
+followed by `z`. A key that displaces nothing *and does nothing* is an absent key, not a
+cheap one. Where the chords do arrive they are still the better choice, and they are one
+`zoom_keys` away.
+
+**The three that replaced them rest on two different arguments, not one.** `>` and `=` are
+**operators**: pressing one over a float moves no cursor and completes nothing on its own,
+so the borrow costs a reader nothing for as long as it lasts — which is as long as the
+float. `|` is a **motion**, and that is the case *for* taking it rather than against:
+unbound it jumps the cursor to column one, the dismissal hangs on `CursorMoved`, and so
+the press takes the picture away. Nobody means that at a magnified picture — the same
+argument `h` makes below. Two candidates were rejected and neither for taste: `<`, which
+which-key normalizes to `<lt>` while the mapping stays `<`, so pressing it re-enters
+which-key until its own guard reports “Recursion detected”; and `-`, the obvious partner
+for a `_`, which `resize_keys.smaller` already holds — resize is bound first and a key
+listed twice is taken once, so over a picture it would resize and never zoom.
+`:checkhealth hover` reports that overlap rather than leaving it to be found.
+
+All three are bound whenever the picture *can* be zoomed rather
 than only while it is: `out` and `reset` simply decline at level 0, and a pair that
 appears only after a successful press would be worse than one that is always there.
 
@@ -811,9 +831,9 @@ require("hover").setup({
 | `nav_keys.right` | `{ "l" }` | |
 | `nav_keys.up` | `{ "k" }` | |
 | `nav_keys.down` | `{ "j" }` | |
-| `zoom_keys.into` | `{ "<M-z>" }` | Magnify a detail of the picture. Borrowed whenever the hover on screen **can** be zoomed — see [Zooming into a picture](#zooming-into-a-picture). Alt chords, so no motion is displaced. |
-| `zoom_keys.out` | `{ "<M-Z>" }` | |
-| `zoom_keys.reset` | `{ "<M-R>" }` | |
+| `zoom_keys.into` | `{ ">" }` | Magnify a detail of the picture. Borrowed whenever the hover on screen **can** be zoomed — see [Zooming into a picture](#zooming-into-a-picture). Plain characters since 2026-09-03: the Alt chords they replaced displace nothing, which is worth nothing in a terminal that never sends them. |
+| `zoom_keys.out` | `{ "\|" }` | |
+| `zoom_keys.reset` | `{ "=" }` | |
 | `resize_keys.larger` | `{ "+" }` | Bound only for a hover with a picture in it — see [Resizing the hover](#resizing-the-hover). |
 | `resize_keys.smaller` | `{ "-" }` | |
 | `resize_keys.wheel_larger` | `{ "<M-ScrollWheelUp>" }` | Bound for **any** hover. The wheel acts on what it points at: these fire only while the pointer is over the float, its border included. Needs `'mouse'` set |

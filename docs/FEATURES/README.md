@@ -28,8 +28,9 @@ rejected, and the bugs that changed the design.
 - **[ZOOM.md](ZOOM.md)** — the other operation: same box, a narrower view. Why
   a quarter of a second made it a route before it was a key, why a picture is
   cropped and a PDF page re-rendered at a higher DPI instead, why the panning
-  keys have the narrowest borrow condition here and the best case for it — and
-  the name collision that survived a green suite.
+  keys have the narrowest borrow condition here and the best case for it, how
+  a measurement took the Alt chords away again — and the name collision that
+  survived a green suite.
 - **[INTEGRATIONS.md](../INTEGRATIONS.md)** (one level up) — who is wired to
   whom, through which door, and what degrades when a plugin is absent.
 

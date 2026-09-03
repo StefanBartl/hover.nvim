@@ -257,30 +257,30 @@ describe("the keys a zoomed hover borrows", function()
   end)
 
   -- The zoom keys sit on a *wider* condition than hjkl, and the asymmetry is
-  -- deliberate: these are Alt chords and displace nothing, so `out` and
+  -- deliberate: `>` and `=` are operators rather than motions, so `out` and
   -- `reset` are bound before there is anything to step out of. Binding them
   -- only after a successful press would make the pair appear and disappear
   -- under the reader's hands.
-  it("takes the zoom chords whenever the picture can be zoomed, not only while it is", function()
+  it("takes the zoom keys whenever the picture can be zoomed, not only while it is", function()
     borrow({ lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" }, false, true)
-    for _, lhs in ipairs({ "<M-z>", "<M-Z>", "<M-R>" }) do
+    for _, lhs in ipairs({ ">", "|", "=" }) do
       assert.is_true(mapped(lhs), lhs .. " was not borrowed for a zoomable picture")
     end
     assert.is_false(mapped("h"), "the nav keys are the narrow ones, and must stay narrow")
   end)
 
-  it("takes no zoom chord when the picture cannot be zoomed", function()
+  it("takes no zoom key when the picture cannot be zoomed", function()
     borrow({ lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" }, false, false)
-    assert.is_false(mapped("<M-z>"))
-    assert.is_false(mapped("<M-R>"))
+    assert.is_false(mapped(">"))
+    assert.is_false(mapped("="))
   end)
 
   it("asks for one step in, one out, and a step past any level for reset", function()
     borrow({ lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" }, false, true)
-    for _, lhs in ipairs({ "<M-z>", "<M-Z>", "<M-R>" }) do
+    for _, lhs in ipairs({ ">", "|", "=" }) do
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(lhs, true, false, true), "x", false)
     end
-    assert.equals(3, #asked, "one of the three chords did not reach the handler")
+    assert.equals(3, #asked, "one of the three keys did not reach the handler")
     assert.equals(1, asked[1])
     assert.equals(-1, asked[2])
     -- `reset` is not a fourth entry point: `zoom` clamps at level 0, so any
@@ -288,15 +288,35 @@ describe("the keys a zoomed hover borrows", function()
     assert.equals(-math.huge, asked[3])
   end)
 
-  it("binds no zoom chord when the list is emptied", function()
+  it("binds no zoom key when the list is emptied", function()
     config.setup({ zoom_keys = { into = {}, out = {}, reset = {} } })
     borrow({ lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" }, false, true)
-    assert.is_false(mapped("<M-z>"))
+    assert.is_false(mapped(">"))
   end)
 
   it("takes none when no zoom handler was handed over", function()
     keys.borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, { zoomable = true })
-    assert.is_false(mapped("<M-z>"))
+    assert.is_false(mapped(">"))
+  end)
+
+  -- Why `-` is not the key that steps out, however natural it looks beside a
+  -- `_`. Both lists hold plain characters since 2026-09-03, and this is the
+  -- one collision that is total rather than occasional: resize is bound
+  -- first, a key listed twice is taken once, and every hover a zoom key is
+  -- bound for has a picture in it. The failure is a key that does something
+  -- *else* -- the picture grows, so it plainly works, and only the framing is
+  -- wrong.
+  it("gives a key both lists claim to resize, never to zoom", function()
+    config.setup({ zoom_keys = { out = "-" } })
+    borrow({ lines = {}, canvas = { cols = 40, rows = 10 }, image_path = "/x.png" }, false, true)
+    local held = vim.fn.maparg("-", "n", false, true)
+    assert.equals(
+      "hover: make the picture smaller",
+      held.desc,
+      "the zoom key won, and then the resize step is the one that vanished"
+    )
+    vim.api.nvim_feedkeys("-", "x", false)
+    assert.equals(0, #asked, "a resize key reached the zoom handler")
   end)
 end)
 
@@ -332,7 +352,7 @@ describe("the name zoom_keys, which used to mean resize_keys", function()
     assert.equals(1, #said, "the old shape was folded silently")
     assert.is_truthy(said[1]:find("resize_keys", 1, true), "the message does not say where to go")
     assert.same({ "+" }, config.get().resize_keys.larger, "the old shape reached resize_keys")
-    assert.same({ "<M-z>" }, config.get().zoom_keys.into, "the old shape reached zoom_keys")
+    assert.same({ ">" }, config.get().zoom_keys.into, "the old shape reached zoom_keys")
   end)
 end)
 

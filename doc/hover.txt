@@ -231,7 +231,7 @@ never hold a mapping of its own.
   +, -                        the picture, larger or smaller
   <M-ScrollWheelUp/Down>      any hover, larger or smaller -- but only
                               where the pointer is
-  <M-z>, <M-Z>, <M-R>         zoom a detail in, out, or back to the whole
+  >, |, =                     zoom a detail in, out, or back to the whole
                               picture. Bound whenever the picture CAN be
                               zoomed
   h, j, k, l                  move the magnified view. Bound ONLY while a
@@ -300,18 +300,35 @@ RE-RASTERIZED at a higher DPI, because what is on screen for a PDF is a
 rendering in this plugin's cache rather than the file -- cropping that gives
 you bigger, never sharper.
 
-`:Hover zoom [in|out|reset]`, or the keys `<M-z>` in, `<M-Z>` out and `<M-R>`
-back to the whole picture or page. A step writes a file and costs about a
-quarter of a second, so it is a deliberate press rather than a dial -- which
-is why the keys are ALT CHORDS and not `+`/`-`: an operation this slow is not
-worth displacing a motion for, and a chord displaces nothing. They are
-borrowed whenever the picture on screen CAN be zoomed, not only while it
-already is. Measured
-on Windows, 2026-09-02 -- a `magick` start alone is 71 ms, a 1920x1080
-screenshot cropped and fitted 258 ms, a dense image of that size 502 ms, a 4K
-source ~900 ms. No format or compression setting brought it under ~150 ms. It
-runs behind the same placeholder as a PDF page, which it beats: one page cost
-1150 ms the same day.
+`:Hover zoom [in|out|reset]` is the route. The keys are `>` in,
+`|` out and `=` back to the whole picture or page. A step writes a file and
+costs about a quarter of a second, so it is a deliberate press rather than a
+dial -- which is why the keys are not `+`/`-`: an operation this slow is not
+worth displacing a motion already spoken for by `resize_keys`.
+
+They were `<M-z>`, `<M-Z>` and `<M-R>` until 2026-09-03, on the argument that
+an Alt chord displaces nothing -- worth exactly what the terminal's
+willingness to send the chord is worth, which on the development machine is
+nothing at all. See docs/MANUAL-EVIDENCE.md. Set `zoom_keys` back to the
+chords wherever they do arrive.
+
+`>` and `=` are OPERATORS: over a float they move no cursor and complete
+nothing, so the borrow is free for as long as the float lasts. The key that
+steps out is a MOTION, and that is the case for taking it -- unbound it jumps
+the cursor to column one, the dismissal hangs on CursorMoved, and the press
+takes the picture away. `<` was rejected (which-key normalizes it to `<lt>`
+while the mapping stays `<`, and reports "Recursion detected"), and so was
+`-`, which `resize_keys.smaller` already holds: resize is bound first, so it
+would resize and never zoom. `:checkhealth hover` reports that overlap.
+
+They are borrowed whenever the picture on screen CAN be zoomed, not only while
+it already is.
+
+Measured on Windows, 2026-09-02 -- a `magick` start alone is 71 ms, a
+1920x1080 screenshot cropped and fitted 258 ms, a dense image of that size
+502 ms, a 4K source ~900 ms. No format or compression setting brought it
+under ~150 ms. It runs behind the same placeholder as a PDF page, which it
+beats: one page cost 1150 ms the same day.
 
 `h`, `j`, `k`, `l` move the view and are borrowed ONLY while the hover is
 zoomed in. They are motions, like `+` and `-`, but with one difference that
@@ -425,9 +442,10 @@ worth asserting.
       up = { "<M-PageUp>", "<C-Up>" },
     },
     nav_keys = { left = { "h" }, right = { "l" }, up = { "k" }, down = { "j" } },
-    -- Alt chords, so no motion is displaced. Bound whenever the picture
-    -- on screen can be zoomed at all.
-    zoom_keys = { into = { "<M-z>" }, out = { "<M-Z>" }, reset = { "<M-R>" } },
+    -- Plain characters since 2026-09-03: an Alt chord displaces nothing,
+    -- which is worth nothing in a terminal that never sends it. Bound
+    -- whenever the picture on screen can be zoomed at all.
+    zoom_keys = { into = { ">" }, out = { "|" }, reset = { "=" } },
     resize_keys = {
       larger = { "+" },
       smaller = { "-" },

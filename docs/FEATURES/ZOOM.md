@@ -15,8 +15,8 @@ every decision on this page is about what that process costs.
 the target names already holds every pixel there will ever be. A PDF page is
 *re-rasterized at a higher DPI*, because what is on screen for a page is not
 the file the target names — it is a rendering in this plugin's cache, and
-cutting a piece out of that is bigger and no sharper. Both answer `<M-z>`,
-both move with `h/j/k/l`, and neither knows about the other.
+cutting a piece out of that is bigger and no sharper. Both answer `>`, both
+move with `h/j/k/l`, and neither knows about the other.
 
 ---
 
@@ -43,10 +43,9 @@ feels answered. That single number produced three decisions:
    `:Hover zoom [in|out|reset]` was the only way in, because the keys on the
    table then were `+` and `-` — real motions, and displacing a motion for an
    operation this slow is a bad trade. **The keys exist now, and what changed
-   is the chord, not the reasoning:** `<M-z>`, `<M-Z>` and `<M-R>` are not
-   motions, not builtins, and cost a reader nothing while a float is up. The
-   objection was never "zooming is not worth a key" — it was "not worth *that*
-   key".
+   was never the reasoning — only which key is cheap.** The objection was never
+   "zooming is not worth a key", it was "not worth *that* key". See
+   [Which keys, and the assumption that cost two of them](#which-keys-and-the-assumption-that-cost-two-of-them).
 2. **It goes through the placeholder machinery** that PDF pages have used all
    along — `build_async`, a generation counter, and a provisional frame that
    waits out the grace period. Measured, a zoom beats the page it borrowed the
@@ -57,6 +56,43 @@ feels answered. That single number produced three decisions:
    source's own pixels, and arithmetic answers it — spending a 258 ms `magick`
    run to discover there was no more detail would be paying the full price for
    a refusal.
+
+## Which keys, and the assumption that cost two of them
+
+The answer was `<M-z>`, `<M-Z>` and `<M-R>` from the day the keys were built
+until 2026-09-03, on one line of reasoning: **an Alt chord displaces nothing.**
+That is true, and it is worth exactly what the terminal's willingness to send
+the chord is worth — which nobody had measured.
+
+Measured on the development machine, it sends none. `:nnoremap <M-z> <Cmd>echo
+"…"<CR>` prints on no press; what arrives is `<Esc>` followed by `z`, and `z`
+is a which-key prefix, so the visible symptom is a fold menu opening over a
+picture. **A key that displaces nothing and does nothing is not a cheap key, it
+is an absent one.** The chords remain the right default in a terminal that
+sends them, and a `zoom_keys` table puts them back.
+
+The three plain characters that replaced them do not rest on one argument:
+
+| Key | Why it is affordable |
+| --- | --- |
+| `>` in | an **operator**: over a float it moves no cursor and completes nothing on its own, so the borrow costs a reader nothing for exactly as long as the float lasts |
+| `=` reset | the same, and already the shape of "back to normal" |
+| `\|` out | a **motion** — and that is the argument *for* borrowing it. Unbound, it jumps the cursor to column one, the dismissal hangs on `CursorMoved`, and so the press takes the picture away. The same case [`nav_keys`](#moving-around-once-you-are-in) makes for `h` |
+
+**Two rejections, and neither is about taste.**
+
+- **`<`** was the first pick for `out` and is unusable with which-key
+  installed: `Util.norm` turns it into `<lt>` (measured 2026-09-03) while the
+  mapping itself stays `<`, and pressing it re-enters which-key until its own
+  guard reports "Recursion detected". `|`, `_`, `>` and `=` all normalize to
+  themselves.
+- **`-`** is the obvious partner for a `_` and cannot work at all.
+  `resize_keys.smaller` holds it, `hover.bindings.keymaps.borrow` takes the
+  resize keys **before** the zoom keys, and a key listed twice is taken once.
+  The two conditions do not merely overlap sometimes: every hover a zoom key
+  is bound for has a picture in it, so `-` would resize and never zoom, on
+  every press. `:checkhealth hover` reports the clash rather than leaving it to
+  be found as a picture that grows instead of a detail that sharpens.
 
 ## A PDF page: sharper, not merely larger
 
