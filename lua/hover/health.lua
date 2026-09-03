@@ -164,9 +164,16 @@ local function check_config()
     else
       health.ok(("auto_hover: %s open by themselves"):format(table.concat(on, ", ")))
       if #off > 0 then
-        health.info(("on request only: %s"):format(table.concat(off, ", ")), {
-          "`:Hover auto <type>` toggles one for this session.",
-        })
+        -- One string, no advice list: `health.info` takes a message and
+        -- nothing else, and a second argument is dropped in silence -- the
+        -- same trap documentation.nvim's own health section fell into
+        -- (`9f128bb`). The LuaLS scan is what saw it here, after a green
+        -- suite.
+        health.info(
+          ("on request only: %s -- `:Hover auto <type>` toggles one for this session"):format(
+            table.concat(off, ", ")
+          )
+        )
       end
     end
   end
