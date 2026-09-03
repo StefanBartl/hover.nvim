@@ -147,6 +147,7 @@ omitted, which toggles.
 | `:Hover next` | step to the next plugin with something to say about this place. Wraps past the last one, and says so when there is only one |
 | `:Hover nav {left\|right\|up\|down}` | move the magnified view. The keyboard counterpart to `nav_keys`, which are a borrow and therefore undiscoverable until one has been seen |
 | `:Hover auto [<type>\|all\|none]` | which target types open by themselves. A type toggles it; omitted, it lists what does and what waits to be asked |
+| `:Hover border [<style>]` | the frame's look: `rounded` `single` `double` `heavy` `ascii` `dashed` `block` `solid` `shadow` `none`. Omitted, it reports the current one and lists the rest |
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |

@@ -324,6 +324,29 @@ function M.routes()
       end,
     },
     {
+      path = { "border" },
+      desc = "Border style: rounded, single, double, heavy, ascii, dashed, block, solid, shadow, none",
+      args = {
+        {
+          name = "style",
+          -- Read from `float.border_names()`, which is also what the setter
+          -- validates against -- one list, two consumers.
+          enum = require("hover.float").border_names(),
+          optional = true,
+        },
+      },
+      ---@param ctx table
+      run = function(ctx)
+        local style = ctx and ctx.args and ctx.args.style
+        local report, err = hover().set_border(style)
+        if err then
+          require("hover.notify").warn(err)
+          return
+        end
+        require("hover.notify").info(report)
+      end,
+    },
+    {
       path = { "toggle" },
       desc = "Turn the hover off for this session, or back on",
       run = function()

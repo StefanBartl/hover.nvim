@@ -48,6 +48,76 @@ local HL_DEFAULTS = {
   HoverInfo = "DiagnosticHint",
 }
 
+--- Border styles this plugin adds to the ones `nvim_open_win` already knows.
+---
+--- **Only what Neovim does not have.** `none`, `single`, `double`, `rounded`,
+--- `solid` and `shadow` are its own names and are passed straight through --
+--- adding a table for them here would be a copy of something the API already
+--- answers, and copies are what this repository keeps finding stale.
+---
+--- What is left is the two shapes a reader has to spell out as eight
+--- characters otherwise, and neither is decoration:
+---
+---   * **`heavy`** is the one that gets asked for. "Make the line thicker" has
+---     no name in Neovim, and the eight characters are easy to get wrong in a
+---     way that shows only in the corners.
+---   * **`ascii`** is a fallback rather than a taste. Box-drawing characters
+---     are missing from more fonts and more terminals than their popularity
+---     suggests, and a frame drawn as `?` is worse than one drawn as `+`.
+---     This is the same machine that turned out not to send Alt chords.
+---
+--- `dashed` and `block` round the set out at no cost.
+---
+--- Eight entries, clockwise from the top-left, which is the order
+--- `nvim_open_win` documents: topleft, top, topright, right, botright, bottom,
+--- botleft, left.
+---@type table<string, string[]>
+local BORDERS = {
+  heavy = { "┏", "━", "┓", "┃", "┛", "━", "┗", "┃" },
+  ascii = { "+", "-", "+", "|", "+", "-", "+", "|" },
+  dashed = { "┌", "┄", "┐", "┆", "┘", "┄", "└", "┆" },
+  block = { "▛", "▀", "▜", "▐", "▟", "▄", "▙", "▌" },
+}
+
+---@type string[] Border names `nvim_open_win` understands on its own.
+local NATIVE_BORDERS = { "none", "single", "double", "rounded", "solid", "shadow" }
+
+--- Every border name that can be configured, sorted.
+---
+--- Public because three callers need the same list and none of them should
+--- keep its own: the route's completion, the validator below, and the health
+--- section. A seventh style is one entry in `BORDERS` and nothing else.
+---@return string[]
+function M.border_names()
+  local out = {}
+  for _, name in ipairs(NATIVE_BORDERS) do
+    out[#out + 1] = name
+  end
+  for name in pairs(BORDERS) do
+    out[#out + 1] = name
+  end
+  table.sort(out)
+  return out
+end
+
+--- Resolve a configured border into what `nvim_open_win` takes.
+---
+--- A name this module adds becomes its character list; anything else is
+--- passed through untouched -- Neovim's own names, and the eight-character
+--- list a user writes by hand, which stays supported precisely because a
+--- preset table can never cover every taste.
+---@param border string|string[]|nil
+---@return string|string[]
+function M.resolve_border(border)
+  if type(border) == "string" and BORDERS[border] then
+    return vim.deepcopy(BORDERS[border])
+  end
+  if border == nil then
+    return "rounded"
+  end
+  return border
+end
+
 --- Is a hover window currently open?
 ---@return boolean
 function M.is_open()
@@ -99,6 +169,25 @@ function M.set_pinned(pinned)
     return
   end
   pcall(api.nvim_win_set_config, _win, { title = title, title_pos = "left" })
+end
+
+--- Change the border of the float that is already open.
+---
+--- Exists so `:Hover border heavy` shows the answer rather than promising it
+--- for the next hover: trying styles is the whole reason to have names for
+--- them, and a setting that only takes effect later cannot be tried at all.
+---
+--- The ring stays one cell wide whatever the characters are, so nothing about
+--- the geometry moves -- which is why this is a config change on the live
+--- window rather than a re-open, and why a drawn picture inside it is
+--- undisturbed.
+---@param border string|string[]
+---@return boolean changed false when no float is open
+function M.set_border(border)
+  if not safe_api.is_valid_window(_win) then
+    return false
+  end
+  return (pcall(api.nvim_win_set_config, _win, { border = M.resolve_border(border) }))
 end
 
 --- Register teardown to run when this hover closes — used by previewers that
@@ -320,7 +409,7 @@ function M.open(lines, opts)
     width = width,
     height = height,
     style = "minimal",
-    border = opts.border or "rounded",
+    border = M.resolve_border(opts.border),
     focusable = opts.focusable == true,
     noautocmd = true,
     title = not canvas and opts.title or nil,

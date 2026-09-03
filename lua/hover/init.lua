@@ -1612,6 +1612,40 @@ function M.set_auto(which)
   return ("%s %s by itself"):format(which, now and "opens" or "does not open")
 end
 
+--- Read or change the border style.
+---
+--- Cosmetic, and the only setting in this plugin that is. It earns its route
+--- for a reason that is not taste: two of the styles have no name in Neovim
+--- (`heavy`, `ascii`) and would otherwise be eight characters written by hand,
+--- and a style is a thing you try rather than decide -- so it changes the
+--- float that is already on screen instead of the next one.
+---
+--- A hand-written eight-character list stays valid in `setup()`; this route
+--- only deals in names, because those are what can be typed.
+---@param name string|nil `nil` reports, otherwise a name from `float.border_names()`.
+---@return string|nil report, string|nil err
+function M.set_border(name)
+  local float_mod = require("hover.float")
+  local names = float_mod.border_names()
+
+  if name == nil then
+    local current = config.get().border
+    return ("border: %s  ·  available: %s"):format(
+      type(current) == "string" and current or "custom",
+      table.concat(names, ", ")
+    )
+  end
+
+  if not vim.tbl_contains(names, name) then
+    return nil, ("unknown border %q (%s)"):format(tostring(name), table.concat(names, "|"))
+  end
+
+  config.raw().border = name
+  -- Shown now rather than at the next hover: see `float.set_border`.
+  float_mod.set_border(name)
+  return ("border: %s"):format(name)
+end
+
 --- Whether a hover would open at all right now -- true in both "auto" and
 --- "manual", false only when it is switched off.
 ---@return boolean

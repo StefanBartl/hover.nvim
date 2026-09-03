@@ -181,6 +181,8 @@ toggles. >
                                          gate refused, and what to type
   :Hover auto [<type>|all|none]          which types open by themselves;
                                          omitted, list them
+  :Hover border [style]                  the frame's look; omitted,
+                                         report it and list the rest
   :Hover mode [auto|manual|off]          set the mode; omitted, report it
   :Hover toggle                          off if on, back to auto if off
 

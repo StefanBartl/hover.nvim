@@ -130,7 +130,16 @@ return {
   max_lines = 20,
   ---@type integer Float width cap, in display columns.
   max_width = 80,
-  ---@type string|string[] `nvim_open_win` border.
+  --- The frame's look. Every name `nvim_open_win` knows -- `none`, `single`,
+  --- `double`, `rounded`, `solid`, `shadow` -- plus four this plugin adds
+  --- because Neovim has no name for them: `heavy` (a thick line), `ascii`
+  --- (`+-|`, for a font or terminal without box-drawing characters), `dashed`
+  --- and `block`. An eight-character list still works and is the escape hatch
+  --- for anything not listed.
+  ---
+  --- `:Hover border <style>` changes the float that is already on screen, so a
+  --- style can be tried rather than decided. See `hover.float`.
+  ---@type string|string[]
   border = "rounded",
 
   -- Draw pictures and rasterized PDF pages into the float when a provider

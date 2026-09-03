@@ -746,3 +746,79 @@ describe("auto_hover, the third axis", function()
     assert.is_truthy(err and err:find("image", 1, true), "the error does not name the valid set")
   end)
 end)
+
+describe("border styles", function()
+  local hover = require("hover")
+  local float = require("hover.float")
+
+  before_each(function()
+    config.reset()
+  end)
+
+  after_each(function()
+    hover.hide()
+    config.reset()
+  end)
+
+  it("passes Neovim's own names through untouched", function()
+    -- The names `nvim_open_win` already knows must not be copied into a table
+    -- here: a copy of something the API answers is exactly the shape that has
+    -- gone stale five times in this repository.
+    for _, name in ipairs({ "none", "single", "double", "rounded", "solid", "shadow" }) do
+      assert.equals(name, float.resolve_border(name))
+    end
+  end)
+
+  it("turns its own names into eight characters, clockwise from the top-left", function()
+    for _, name in ipairs({ "heavy", "ascii", "dashed", "block" }) do
+      local chars = float.resolve_border(name)
+      assert.equals("table", type(chars), name .. " did not resolve to a character list")
+      -- Eight, always: `nvim_open_win` reads the list positionally, and a
+      -- shorter one is not an error -- it repeats, and the frame comes out
+      -- with corners in the wrong places.
+      assert.equals(8, #chars, name .. " has the wrong number of characters")
+      for i, ch in ipairs(chars) do
+        assert.equals("string", type(ch), ("%s[%d] is not a string"):format(name, i))
+        assert.is_true(#ch > 0, ("%s[%d] is empty"):format(name, i))
+      end
+    end
+  end)
+
+  it("leaves a hand-written list alone, which is the escape hatch", function()
+    local custom = { "1", "2", "3", "4", "5", "6", "7", "8" }
+    assert.same(custom, float.resolve_border(custom))
+  end)
+
+  it("falls back to the documented default when nothing is set", function()
+    assert.equals("rounded", float.resolve_border(nil))
+  end)
+
+  it("offers every name it accepts, and accepts every name it offers", function()
+    local names = float.border_names()
+    assert.is_true(#names >= 10)
+    for _, name in ipairs(names) do
+      local report, err = hover.set_border(name)
+      assert.is_nil(err, ("border_names() offers %q and set_border refused it"):format(name))
+      assert.is_truthy(report)
+      assert.equals(name, config.get().border)
+    end
+  end)
+
+  it("refuses a name that is not a style, and says which are", function()
+    local report, err = hover.set_border("fancy")
+    assert.is_nil(report)
+    assert.is_truthy(err and err:find("fancy", 1, true))
+    assert.is_truthy(err and err:find("heavy", 1, true), "the error does not name the valid set")
+  end)
+
+  it("reports without changing anything when asked for nothing", function()
+    config.setup({ border = "double" })
+    local report = hover.set_border(nil)
+    assert.is_truthy(report and report:find("double", 1, true))
+    assert.is_truthy(
+      report and report:find("heavy", 1, true),
+      "the report does not list the styles"
+    )
+    assert.equals("double", config.get().border)
+  end)
+end)
