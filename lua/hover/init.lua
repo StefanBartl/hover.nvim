@@ -117,6 +117,17 @@ end
 ---@param opts? Hover.Config
 ---@return Hover.Config
 function M.setup(opts)
+  -- Report the declared external tools (docs/install.json) once, ever, on
+  -- the first setup after installation. pcall'd because an older lib.nvim
+  -- without lib.nvim.deps must not break setup() over an informational
+  -- popup; `:Lib deps show hover.nvim` stays available either way. Turn it
+  -- off with `vim.g.lib_nvim_deps_disable_first_run` (or the per-plugin
+  -- `vim.g.lib_nvim_deps_disabled_plugins`).
+  local ok_deps, deps = pcall(require, "lib.nvim.deps")
+  if ok_deps then
+    deps.show_once("hover.nvim")
+  end
+
   if type(opts) == "table" and type(opts.contribute) == "table" then
     require("hover.registry").register("user", opts.contribute)
 

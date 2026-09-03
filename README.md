@@ -88,6 +88,7 @@ See ./docs/architecture.md#modules for details.
 | `hover.pin()` | Keep one float on screen while the cursor goes elsewhere — for comparing rather than reading. One float, so the trigger opens nothing while it is up | [The `:Hover` command](#the-hover-command) |
 | `hover.registry.register()` | Another plugin contributes a *source* or a *preview*; hover.nvim never says its name | [Contributing from a plugin](#contributing-from-a-plugin) |
 | `:checkhealth hover` | One check per soft dependency, asking for the entry point actually called rather than for the module | [Bindings](docs/BINDINGS.md) |
+| `:Lib deps show hover.nvim` | The external tools declared in [`docs/install.json`](docs/install.json) (`soffice`, `pdftoppm`) with why each matters and how to install it here; shown once automatically after installing | [lib.nvim.deps](https://github.com/StefanBartl/lib.nvim/blob/main/lua/lib/nvim/deps/README.md) |
 | `vim.g.hover_disable` | Forces `mode = "off"` from a plugin spec, outranking anything a host configures | [Modes](#modes) |
 
 ---

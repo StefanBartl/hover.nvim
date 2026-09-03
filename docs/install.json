@@ -1,0 +1,36 @@
+{
+  "tools": [
+    {
+      "bin": "soffice",
+      "required": false,
+      "why": "Turns an office document (doc/docx/odt and friends) under the cursor into a picture in the hover window instead of a plain format badge — the conversion runs through pdfport.nvim's soffice producer. On Windows the LibreOffice installer does not extend PATH, so this can report missing on a machine where LibreOffice is plainly installed: add the LibreOffice `program` directory to PATH, or `:Hover office off` to stop asking.",
+      "pkg": {
+        "apt": "libreoffice",
+        "dnf": "libreoffice",
+        "pacman": "libreoffice-still",
+        "zypper": "libreoffice",
+        "apk": "libreoffice",
+        "brew": "libreoffice",
+        "winget": "TheDocumentFoundation.LibreOffice",
+        "scoop": "libreoffice",
+        "choco": "libreoffice-fresh"
+      }
+    },
+    {
+      "bin": "pdftoppm",
+      "required": false,
+      "why": "Renders the first page of a PDF under the cursor as the hover preview, rather than reporting it as bytes. Ships with poppler and is reached through pdfport.nvim — both have to be present, `:checkhealth hover` says which is missing.",
+      "pkg": {
+        "apt": "poppler-utils",
+        "dnf": "poppler-utils",
+        "pacman": "poppler",
+        "zypper": "poppler-tools",
+        "apk": "poppler-utils",
+        "brew": "poppler",
+        "winget": "oschwartz10612.Poppler",
+        "scoop": "poppler",
+        "choco": "poppler"
+      }
+    }
+  ]
+}
