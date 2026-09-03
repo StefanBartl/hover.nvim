@@ -791,7 +791,9 @@ describe("border styles", function()
     -- `param-type-mismatch` that a green suite says nothing about, and the
     -- LuaLS scan does.
     local resolved = float.resolve_border(custom)
-    assert.equals("table", type(resolved))
+    if type(resolved) ~= "table" then
+      error("a hand-written list did not come back as a list")
+    end
     assert.same(custom, resolved)
   end)
 
