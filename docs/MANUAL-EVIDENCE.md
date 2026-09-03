@@ -37,9 +37,9 @@ one thing work once, on one machine.
 
 | | |
 | --- | --- |
-| **Checked** | 2026-09-02 — **the picture half. The text half is still unchecked**, see below. |
-| **On** | Windows 11, WezTerm, Neovim 0.12.2, images.nvim present |
-| **How** | Hover an image, then press `+` a few times and `-` back. The float grows and shrinks with it, and the picture fills it edge to edge at every size. Then hover a *text* file and run `:Hover resize` a few times: the float grows and more lines appear in it — `+` is deliberately not bound there. |
+| **Checked** | 2026-09-03 — **both halves.** The picture half on 2026-09-02, the text half on 2026-09-03: more lines arrive, not a larger frame around the same ones. |
+| **On** | Windows 11, Neovim 0.12.2, images.nvim present |
+| **How** | Hover an image, then press `+` a few times and `-` back. The float grows and shrinks with it, and the picture fills it edge to edge at every size. Then hover a *text* file and run `:Hover resize` a few times: the float grows and more lines appear in it. **`+` and `-` are deliberately not bound over a text hover** — there they are the motions they always were, and pressing one moves the cursor a line, which takes the float away. That is not a failure of the resize; it is the reason the route exists. |
 | **Watch for** | The **frame** growing while the picture inside it does not — that is the one failure a spec cannot see. `TESTS/resize_spec.lua` pins the geometry all the way to `nvim_win_get_config`, but the cell area is only a *request* to the terminal, and whether the drawing actually followed it is visible and nothing else. Also: letterboxing that drifts as the box grows (the picture no longer centred, or gaining a margin on one side only), which would mean the inset is being added at the wrong end of the scaling. |
 
 **What was seen:** `+` several times and `-` back, over an image. The float
