@@ -95,6 +95,7 @@ including `on_request` for an answer that costs a process start.
 | [migrate.nvim](https://github.com/StefanBartl/migrate.nvim) | registry | a *position* preview: this line uses a deprecated API, and what replaces it | no deprecation notice in the float |
 | [documentation.nvim](https://github.com/StefanBartl/documentation.nvim) | registry | a *position* preview: what the dotted module under the cursor is, out of the generated map | no module summary |
 | [spotlight.nvim](https://github.com/StefanBartl/spotlight.nvim) | registry | a *position* preview: how often a spotlighted token occurs in this buffer | no occurrence count |
+| [insights.nvim](https://github.com/StefanBartl/insights.nvim) | registry | a *position* preview: which files import the module under the cursor, out of its own remembered scan | no importer list in the float |
 | [sandbox.nvim](https://github.com/StefanBartl/sandbox.nvim) | registry | a *position* preview, **request-only**: whether the container image under the cursor is pulled, how big it is, and what runs from it | no image hover |
 
 All of them are optional and **none is required**. With none installed the
@@ -261,6 +262,7 @@ Each is documented on its own side, because that is where the code is:
 | migrate.nvim | position | this line uses a deprecated API, and what replaces it | [docs/hover.md](https://github.com/StefanBartl/migrate.nvim/blob/main/docs/hover.md) |
 | documentation.nvim | position | what the dotted module under the cursor is | [docs/hover.md](https://github.com/StefanBartl/documentation.nvim/blob/main/docs/hover.md) |
 | spotlight.nvim | position | how often a spotlighted token occurs in this buffer | [docs/hover.md](https://github.com/StefanBartl/spotlight.nvim/blob/main/docs/hover.md) |
+| insights.nvim | position | which files import the module under the cursor | [docs/hover.md](https://github.com/StefanBartl/insights.nvim/blob/main/docs/hover.md) |
 | sandbox.nvim | position (`on_request`) | is this container image pulled, how big, what runs from it | [docs/FEATURES/HOVER.md](https://github.com/StefanBartl/sandbox.nvim/blob/main/docs/FEATURES/HOVER.md) |
 
 Four of those six are **position** previews, and that is not a coincidence:
@@ -292,6 +294,11 @@ itself rather than relying on a switch here:
 - sandbox.nvim declines a name whose last component carries an extension, so
   `init.lua:42` never reaches the engine — the same shape as `nginx:1.27`, and
   the test runs before any process starts rather than after.
+- insights.nvim answers only for a module something actually imports, and only
+  out of a scan that already happened. A full scan is 631 ms to 1.9 s
+  depending on the tree, so a cold index means silence rather than a walk
+  started from a cursor movement — and "0 files import this" for every dotted
+  name in prose would be the noise the kind was built to avoid.
 
 That distribution of responsibility is deliberate. The framework has no way to
 judge whether a contribution is noisy — it cannot know what the answer is

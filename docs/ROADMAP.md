@@ -20,26 +20,13 @@ type?") or a *position* ("is there anything to say about this place?") and
 needs no change here at all. See [INTEGRATIONS.md](INTEGRATIONS.md) for the
 doors and which plugins use which.
 
-Five of the candidates that used to be listed here are built and live in the
-plugins that own them: migrate.nvim, reposcope.nvim, documentation.nvim,
-spotlight.nvim and sandbox.nvim. What remains is one that is blocked on its
-own side, and two that are collisions rather than contributions.
+The candidates that used to be listed here are built and live in the plugins
+that own them: migrate.nvim, reposcope.nvim, documentation.nvim,
+spotlight.nvim, sandbox.nvim and insights.nvim. What remains are the two that
+are collisions rather than contributions.
 
-### `insights.nvim` — who else uses this
-
-`insights.run_imports_reverse(module)` answers "which files import this
-module", which is the question one actually has while reading a module header.
-
-**Blocked, and not on hover.nvim's side.** `run_reverse` runs
-`scan_cwd_async` — a full walk of the working directory, chunked over
-`vim.schedule` — and opens a scratch buffer with the report. There is no
-index to consult: every query re-scans. A hover cannot start that, and
-`positions` cannot answer asynchronously.
-
-To settle, in insights.nvim rather than here: **a cached import index**, warm
-enough to answer a lookup, with the preview declining when it is cold rather
-than building it. That is a change to that plugin's architecture, not a
-wiring job.
+(No count in that sentence on purpose. It carried one until 2026-09-03, and it
+was wrong twice.)
 
 ### Two that are collisions rather than contributions
 
