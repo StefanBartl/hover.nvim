@@ -27,35 +27,20 @@
 
 vim.opt.rtp:append(vim.fn.getcwd())
 
+-- The dependency probe lives in `scripts/probe_deps.lua`: it was written
+-- here first, as a `{ vim.env[...], ... }` literal, and an unset variable put
+-- a `nil` in slot 1 -- which makes `ipairs` stop before trying the `.deps`
+-- checkout or the sibling directory. That is the same hole `ade6c1f` closed
+-- in `minimal_init.lua`, still open in this copy, which is why there is no
+-- copy any more.
+local deps = dofile(vim.fn.getcwd() .. "/scripts/probe_deps.lua")
+
 ---@param env_var string
 ---@param name string
 ---@param marker string module `require()`d to confirm the directory is right
 ---@return boolean
 local function add_dep(env_var, name, marker)
-  if pcall(require, marker) then
-    return true
-  end
-  local candidates = {
-    vim.env[env_var],
-    vim.fn.getcwd() .. "/.deps/" .. name,
-    vim.fs.dirname(vim.fn.getcwd()) .. "/" .. name,
-  }
-  for _, dir in ipairs(candidates) do
-    if dir and dir ~= "" and vim.fn.isdirectory(dir) == 1 then
-      vim.opt.rtp:append(dir)
-      if pcall(require, marker) then
-        return true
-      end
-    end
-  end
-  io.stderr:write(
-    ("scripts/onrequest_probe.lua: %s not found. Set %s, clone it to .deps/%s, or place it beside this repo.\n"):format(
-      name,
-      env_var,
-      name
-    )
-  )
-  return false
+  return deps.add(env_var, name, marker, "scripts/onrequest_probe.lua")
 end
 
 if not add_dep("LIB_NVIM_DIR", "lib.nvim", "lib.nvim.notify") then
