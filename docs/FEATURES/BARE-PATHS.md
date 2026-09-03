@@ -57,8 +57,26 @@ token: on the automatic trigger gopath is asked only when it could plausibly
 help (the token contains `...` or `…`, or has no slash at all), and an explicit
 `:Hover show` runs the full pipeline. What that gives up is stated at
 `gopath_can_help`: a relative path that exists elsewhere in the project stops
-resolving on the timer. If gopath ever gains a cheap "this token cannot
-resolve" early-out, that gate becomes unnecessary.
+resolving on the timer.
+
+**A correction from 2026-09-03, made by measuring the same thing from the
+other side.** This number saw one cost where there were two, because it was
+taken in a buffer that had a language server attached:
+
+- **A 200 ms LSP wait** in every buffer with *no* server —
+  `vim.lsp.buf_request_sync` does not return early when nobody is listening,
+  it times out. Never visible from here, and by far the larger of the two.
+  Fixed in gopath (`a7529d1`), where the provider now asks whether a client is
+  attached before sending.
+- **The tail search**, ~11.5 ms for a token with separators that could be a
+  relative path. That one is real resolution work and is unchanged.
+
+So the gate **stays**, and its reason is sharper than it was: measured after
+the fix, a token with no separator costs ~100 µs and one with separators still
+costs ~11.5 ms — which is exactly the shape the gate already had. It refuses
+the slash-bearing tokens and asks for the rest. What did change is that a
+hover in a `.txt`, a `gitcommit` or any buffer without a server got 200 ms
+cheaper without a line changing here.
 
 **2. The Treesitter gate is 80× more expensive than the token gate before it**,
 not cheaper — ~90 µs against ~1.1 µs. It is affordable only because the token

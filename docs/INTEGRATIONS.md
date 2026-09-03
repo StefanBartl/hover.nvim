@@ -154,6 +154,8 @@ What it gives up is stated where it is implemented (`gopath_can_help` in
 not beside the buffer, not under the cwd — stops resolving on the timer.
 `:Hover show` still finds it.
 
+That number was refined on 2026-09-03 by measuring the same call from gopath's side: it saw one cost where there were two. The larger was a **200 ms LSP timeout** in buffers with no server attached — invisible from here, because the original measurement was taken in a buffer that had one — and it is fixed in gopath (`a7529d1`). What remains is the **tail search**, ~11.5 ms for a token with separators, which is why this gate stays. See [FEATURES/BARE-PATHS.md](FEATURES/BARE-PATHS.md).
+
 Two things the hover does with the answer, both worth knowing when a result
 surprises you:
 
