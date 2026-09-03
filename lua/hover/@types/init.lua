@@ -164,6 +164,8 @@
 ---@field position? string # Dismissal identity of a position preview. Absent for a target.
 ---@field bufnr integer
 ---@field row? integer # Cursor row a position preview answered for.
+---@field col? integer # Cursor column a position preview answered for, so `hover.next_position` can ask the same place again.
+---@field position_nth? integer # Which answer for that place is on screen: 1-based, counting only contributions that answered.
 ---@field offset? integer # Lines skipped, for a text preview.
 ---@field page? integer # 1-based page, for a PDF preview.
 ---@field resize? integer # Resize steps applied to this hover; the factor is `1.25^resize`. Set by `hover.resize`.
