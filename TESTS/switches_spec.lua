@@ -772,7 +772,9 @@ describe("border styles", function()
   it("turns its own names into eight characters, clockwise from the top-left", function()
     for _, name in ipairs({ "heavy", "ascii", "dashed", "block" }) do
       local chars = float.resolve_border(name)
-      assert.equals("table", type(chars), name .. " did not resolve to a character list")
+      if type(chars) ~= "table" then
+        error(name .. " did not resolve to a character list")
+      end
       -- Eight, always: `nvim_open_win` reads the list positionally, and a
       -- shorter one is not an error -- it repeats, and the frame comes out
       -- with corners in the wrong places.
