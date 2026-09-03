@@ -102,6 +102,36 @@ local function normalize(opts)
     opts.url = nil
   end
 
+  -- A border name nobody has, reported and dropped rather than passed on.
+  --
+  -- **The failure it prevents is a total one, and silent.** `nvim_open_win`
+  -- refuses an unknown border string, `float.open` calls it inside a `pcall`
+  -- and answers "no window" -- so a single typo in `setup()` produces a plugin
+  -- that never opens a float again and never says why. Measured 2026-09-03:
+  -- `border = "heavey"` survives the merge, and `nvim_open_win` returns false.
+  --
+  -- Reported and dropped, not corrected: the same stance the legacy
+  -- `zoom_keys` shape gets. Guessing which style was meant would be a second
+  -- kind of wrong, and keeping the default means the plugin still works while
+  -- the message says what to fix.
+  --
+  -- Only *strings* are checked. An eight-character list is the escape hatch
+  -- and cannot be validated against a name list; `nvim_open_win` judges that
+  -- one, and a wrong list still draws a frame rather than none.
+  if type(opts.border) == "string" then
+    local names = require("hover.float").border_names()
+    if not vim.tbl_contains(names, opts.border) then
+      require("hover.notify").warn(
+        ("unknown border %q -- keeping %q. Available: %s"):format(
+          opts.border,
+          DEFAULTS.border,
+          table.concat(names, ", ")
+        )
+      )
+      opts.border = nil
+    end
+  end
+
   -- `auto_hover` in its two short forms, folded into the full table
   -- `DEFAULTS` declares.
   --

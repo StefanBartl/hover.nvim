@@ -36,7 +36,7 @@
 ---@field placeholder_grace_ms? integer # How long an async preview may take before a "rendering..." placeholder is shown. Default 250.
 ---@field max_lines? integer # Preview line cap (also the float's max height). Default 20.
 ---@field max_width? integer # Float width cap, in display columns. Default 80.
----@field border? string|string[] # The frame's look. Every `nvim_open_win` name (`none`, `single`, `double`, `rounded`, `solid`, `shadow`) plus `heavy`, `ascii`, `dashed` and `block`, which Neovim has no names for; or an eight-character list, clockwise from the top-left. Default "rounded". `:Hover border <style>` changes the open float, so a style can be tried.
+---@field border? string|string[] # The frame's look. Every `nvim_open_win` name (`none`, `single`, `double`, `rounded`, `solid`, `shadow`) plus `heavy`, `ascii`, `dashed` and `block`, which Neovim has no names for; or an eight-character list, clockwise from the top-left. Default "rounded". `:Hover border [style]` changes the open float, so a style can be tried.
 ---@field inline_images? boolean # Draw images / rasterized PDF pages into the float when a provider can. Default true.
 ---@field filetypes? string|string[] # `FileType` pattern the hover attaches on. Default "*".
 ---@field links? Hover.LinksConfig

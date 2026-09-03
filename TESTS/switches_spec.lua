@@ -814,6 +814,34 @@ describe("border styles", function()
     end
   end)
 
+  it("keeps working when setup is handed a typo", function()
+    -- The failure this prevents is total and silent: `nvim_open_win` refuses
+    -- an unknown border string, `float.open` calls it inside a `pcall`, and
+    -- the plugin then never opens a float again without saying why. Measured
+    -- 2026-09-03 -- `border = "heavey"` survived the merge and
+    -- `nvim_open_win` returned false.
+    config.setup({ border = "heavey" })
+    assert.equals(
+      "rounded",
+      config.get().border,
+      "a border name that does not exist was kept, and every hover would be gone"
+    )
+  end)
+
+  it("takes every name it offers through setup, which is where a user writes it", function()
+    for _, name in ipairs(float.border_names()) do
+      config.reset()
+      config.setup({ border = name })
+      assert.equals(name, config.get().border, ("setup() dropped %q"):format(name))
+    end
+  end)
+
+  it("leaves a hand-written list alone in setup, since a name list cannot judge it", function()
+    local custom = { "1", "2", "3", "4", "5", "6", "7", "8" }
+    config.setup({ border = custom })
+    assert.same(custom, config.get().border)
+  end)
+
   it("refuses a name that is not a style, and says which are", function()
     local report, err = hover.set_border("fancy")
     assert.is_nil(report)
