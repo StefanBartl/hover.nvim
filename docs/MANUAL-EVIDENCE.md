@@ -47,13 +47,17 @@ grows and shrinks with it and the picture fills it edge to edge at every size
 — so the picture followed the cell area rather than the frame growing around a
 picture that stayed put, which was the one failure no spec can reach.
 
-**Still unchecked: the text half.** `+` and `-` are deliberately not bound over
-a text hover — they are motions there — so the check is a different gesture:
-hover a text file and run `:Hover resize` a few times. The float should grow
-*and more lines appear in it*. That distinction is the whole reason the feature
-was renamed, and it is the half a spec covers least convincingly: the spec
-asserts the float's geometry, and "more lines are in it" is what a reader
-actually looks for.
+**The text half, seen on 2026-09-03.** `:Hover resize` over a text file: the
+float grows *and more lines appear in it*. That distinction is the whole reason
+the feature was renamed, and it is the half a spec covers least convincingly —
+the spec asserts the float's geometry, and "more lines are in it" is what a
+reader actually looks for.
+
+**The instruction that produced this row was wrong first, which is worth
+keeping.** It said to press `+`. Over a text hover `+` is not borrowed — it is
+the motion it always was, so it moves the cursor a line and the dismissal on
+`CursorMoved` takes the float away. The row above said so already; a note
+elsewhere said otherwise, and the note was what got followed.
 
 Measured, not seen, on 2026-09-02: a 1200×675 image at the default `80×20`
 grows through five steps on a 210×55 terminal (71×20 cells of picture up to
@@ -87,8 +91,8 @@ person rather than as a number — is what this row is for.
 
 | | |
 | --- | --- |
-| **Checked** | *never* |
-| **On** | — |
+| **Checked** | 2026-09-03 — **the magnified detail and the panning.** Driven with `>` / `=` rather than the Alt chords, which never arrived: see below. |
+| **On** | Windows 11, Neovim 0.12.2, images.nvim + ImageMagick present, which-key installed |
 | **How** | Hover an image, then press `<M-z>` two or three times. Each step takes about a quarter of a second and shows a **smaller part of the picture, larger** — not the same picture bigger. Then `h` `j` `k` `l` to move around in it; `<M-Z>` steps back, `<M-R>` returns to the whole picture. `:Hover zoom [in\|out\|reset]` does the same three from the command line. Finally press `h` with the hover **not** zoomed: the float should go away, because there the key is the cursor motion it always was. |
 | **Watch for** | `<M-z>` doing nothing at all, which has two causes that look identical: the picture is not zoomable (no ImageMagick, or no images.nvim) — the float says so — or the terminal does not send the chord, which `:nnoremap <M-z> :echo "da"<CR>` settles in one press. Then: the **whole picture getting larger** instead of a detail — that is resize's answer arriving where zoom's was asked for, and it looks almost right. Also: panning that jumps to a corner rather than moving a quarter of a view (a pixel centre instead of a fractional one would do that), and a centre that survives `reset` and makes the next zoom start somewhere nobody chose. |
 
@@ -97,6 +101,22 @@ arithmetic, and outside the suite the crops have been confirmed to be written
 and to shrink as calculated — `800x533+200+133`, then `533x355+333+222`, then
 `355x237+422+281`, with the centre clamped inside the source and `reset`
 returning the whole image.
+
+**What was seen on 2026-09-03, and what it cost to see it.** The magnified
+detail arrives drawn, and panning it with `h/j/k/l` reads as one gesture rather
+than as jumps — the half no spec can be asked about at all.
+
+Getting there needed different keys, and that is the finding. **`<M-z>` never
+reaches Neovim on this machine**: `:nnoremap <M-z> <Cmd>echo "…"<CR>` prints
+nothing when the chord is pressed, so the terminal is not sending it — and
+which-key opens instead, because what does arrive is `<Esc>` followed by `z`,
+and `z` is a prefix. With `zoom_keys = { into = ">", out = "<", reset = "=" }`,
+`>` and `=` work; **`<` makes which-key report "Recursion detected"**, which is
+its own answer to a plugin binding the one character that begins Vim's key
+notation.
+
+So the Alt chords are the right default only where the terminal sends them,
+and this row is the first evidence that "everywhere" was an assumption.
 
 **What that leaves.** Every one of those numbers is a rectangle handed to
 ImageMagick. Whether the resulting file is *drawn* into the float, and whether
@@ -147,9 +167,9 @@ usable, so `hover.float.contains` does the rectangle test itself.
 
 | | |
 | --- | --- |
-| **Checked** | 2026-09-02, and confirmed a second time the same day — **the conversion and the cache. The sweep is still unchecked**, see below. |
+| **Checked** | 2026-09-03 — **all three: the conversion, the cache, and the sweep.** The first two on 2026-09-02 and confirmed a second time that day; the sweep on 2026-09-03. |
 | **On** | Windows 11, WezTerm, Neovim 0.12.2, pdfport.nvim + LibreOffice 25.x |
-| **How** | `:Hover office on`, then hover a `.docx`. The first one costs a LibreOffice start, which is seconds. Then `:qa`, restart, `:Hover office on`, and hover the same document again. |
+| **How** | `:Hover office on`, then hover a `.docx`. The first one costs a LibreOffice start, which is seconds. Then `:qa`, restart, `:Hover office on`, and hover the same document again. For the sweep: backdate the converted PDF in the cache directory past `office.cache_days`, restart, and hover a **different** office document — the sweep runs once per session and only on the first real conversion, so re-hovering a document that is already cached does not trigger it. |
 | **Watch for** | The badge saying LibreOffice is missing rather than a failed conversion — `can_create("office")` is asked first, precisely so the answer is a sentence and not a hang. On Windows that badge is the *expected* first result even with LibreOffice installed, because its installer does not extend `PATH`; the fix is in [installation.md](installation.md#soffice-on-windows-installing-libreoffice-is-not-enough) and it is not a bug in this path. |
 
 **What was seen**, in order: with office rendering off, the badge
@@ -174,12 +194,18 @@ into its own output, so the path has to be written rather than echoed:
 ls "$(nvim -u NONE --headless -c 'lua io.write(vim.fn.stdpath("cache"))' -c 'q')/hover.nvim/office"
 ```
 
-**Still unchecked: the age-based sweep.** `office.cache_days` (default 7) is
-covered by specs only where it is wiring; the sweep itself touches a real
-cache directory, and that is in no test. What is left to confirm by hand:
-a file in that directory older than `cache_days` is gone after the next
-conversion, and nothing outside the directory is touched. Backdating one file
-there and hovering any office document is the whole check.
+**The sweep, seen on 2026-09-03.** `office.cache_days` (default 7) is covered
+by specs only where it is wiring; the sweep itself touches a real cache
+directory, and that is in no test. What was done: one converted PDF in
+`stdpath("cache")/hover.nvim/office` backdated thirty days, Neovim restarted,
+a *different* office document hovered. The backdated file was gone and the new
+one was there — the sweep ran, and it ran on the first conversion of the
+session rather than at startup, which is where it is called from.
+
+**Why a different document.** The sweep is called from the conversion path,
+once per session. Re-hovering the same document answers out of the cache and
+converts nothing, so nothing would have been swept and the check would have
+read as a failure of the sweep rather than of the method.
 
 ### A contribution asked only on request
 
