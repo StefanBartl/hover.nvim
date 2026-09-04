@@ -174,11 +174,19 @@ describe("hover.zen", function()
   -- The one place a hover is deliberately not next to what it describes.
   it("centres the float instead of anchoring it at the cursor", function()
     assert.is_true(show_at("see ./many.txt here", 5))
-    local before = vim.api.nvim_win_get_position(float.win())
+    -- `assert` rather than the bare call: `float.win()` is `integer|nil`, and
+    -- a nil here would reach `nvim_win_get_position` as a window id. The same
+    -- guard `geometry()` and `resize_spec` use -- and bound to a local first,
+    -- because plenary replaces the global `assert` with luassert, whose return
+    -- is multi-valued: inlined into the argument list it expands, and the API
+    -- call fails with "Expected 1 argument".
+    local win = assert(float.win())
+    local before = vim.api.nvim_win_get_position(win)
 
     assert.is_true(hover.zen(true))
     local w, h = geometry()
-    local pos = vim.api.nvim_win_get_position(float.win())
+    local zen_win = assert(float.win())
+    local pos = vim.api.nvim_win_get_position(zen_win)
     assert.same({
       math.max(1, math.floor((vim.o.lines - h) / 2)),
       math.max(1, math.floor((vim.o.columns - w) / 2)),
