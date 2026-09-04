@@ -627,6 +627,20 @@ describe("docs/BINDINGS.md against the groups the source installs", function()
       links[name] = link
     end
 
+    -- **Two sources, because there are two.** The float's groups were the
+    -- only ones until `:Hover status` became a board, and a spec that kept
+    -- reading one file would have passed on a table that documented half the
+    -- groups -- which is this repository's recurring bug, in the one place
+    -- built to catch it. `HL_SPEC` writes its names out for exactly this.
+    local board = read("lua/hover/status_view.lua"):match("local HL_SPEC = {(.-)\n}")
+    assert.is_truthy(board, "status_view.lua no longer declares HL_SPEC")
+    local found = 0
+    for name, link in board:gmatch('{%s*"(%a+)",%s*"(%a+)"%s*}') do
+      links[name] = link
+      found = found + 1
+    end
+    assert.is_true(found > 0, 'HL_SPEC no longer reads as { "Group", "Link" } pairs')
+
     -- Read as pairs, not as two lists: "which group does HoverInfo link to"
     -- is the claim a reader acts on, and a table can name all three groups
     -- while pointing one of them at the wrong colour.

@@ -16,6 +16,7 @@ generated and gitignored, so it is not in the checkout — run it when you want 
 | `hover.config` | The effective configuration, legacy normalization, and every predicate derived from it |
 | `hover.config.DEFAULTS` | Plugin-side defaults, and why each one is what it is |
 | `hover.switches` | Every runtime on/off switch, declared once — routes, completion, `status` and `:checkhealth` all read from it |
+| `hover.status_view` | `:Hover status` as a board: every switch, its state, and the command that acts on it |
 | `hover.cache` | The LRU of built previews, and the rule about dropping it |
 | `hover.registry` | Plugin sources, previews and position previews |
 | `hover.classify` | Target string → typed target. Pure, no I/O beyond one `fs_stat` |

@@ -51,48 +51,13 @@ local function to_bool(state)
 end
 
 ---@internal
---- The route path for one switch: the implication chain, read as a command
---- tree. `fetch` implies `web` implies `links`, so it is
---- `:Hover links web fetch`; `code` and `missing` both imply `paths`, so they
---- are `:Hover paths code` and `:Hover paths missing`.
----
---- **Derived rather than written down.** This was a hand-maintained
---- `if name == "web" then ... elseif ...` chain, and it broke the moment a
---- switch was added without a matching branch: `hover.switches` says a new
---- switch is one table entry and nothing else, and that was true of dispatch,
---- completion, `status` and `:checkhealth` but quietly not of this. The
---- eighth switch landed as a bare top-level `code` route rather than under
---- `paths`, with nothing failing to say so. Reading `implies`
---- gives exactly the same paths for every switch that existed before, and
---- cannot fall behind the table it now reads from.
----
---- The `seen` guard is for a chain that points at itself. Nothing in
---- `SWITCHES` does today; a cycle here would hang the command registration at
---- startup, which is a bad way to find out.
----@param name string
----@return string[]
-local function route_path(name)
-  local path = { name }
-  local seen = { [name] = true }
-  local cursor = switches.spec(name)
-
-  while cursor and cursor.implies and not seen[cursor.implies] do
-    table.insert(path, 1, cursor.implies)
-    seen[cursor.implies] = true
-    cursor = switches.spec(cursor.implies)
-  end
-
-  return path
-end
-
----@internal
 --- One `:Hover <feature> [on|off|toggle]` route.
 ---@param name string
 ---@return table
 local function switch_route(name)
   local spec = switches.spec(name)
   return {
-    path = route_path(name),
+    path = switches.route(name),
     desc = spec and spec.desc or name,
     args = {
       {
@@ -111,73 +76,44 @@ local function switch_route(name)
 end
 
 ---@internal
---- Report everything that is on or off, in one message rather than seven.
----@return nil
----@internal
 --- The status as one message. The fallback, and the whole of what `:Hover
---- status` used to be.
+--- status` used to be -- kept for a lib.nvim without the UI kit, and for a
+--- host that has swapped `vim.notify` for something it prefers.
 ---@param status table
 ---@return nil
 local function notify_status(status)
   local lines = { ("mode: %s"):format(status.mode) }
   for _, s in ipairs(status.switches) do
-    lines[#lines + 1] = ("  %-22s %s"):format(s.label, s.enabled and "on" or "off")
+    -- The route, not just the label: a reader who has only this form still
+    -- gets the words to type. That gap is what the board was built for.
+    lines[#lines + 1] = ("  %-22s %-4s :Hover %s"):format(
+      s.label,
+      s.enabled and "on" or "off",
+      table.concat(s.route, " ")
+    )
   end
   require("hover.notify").info(table.concat(lines, "\n"))
 end
 
 ---@internal
---- The status as a chooser, when lib.nvim's UI kit is there to draw one.
+--- The board first, the message if it cannot be drawn.
 ---
---- **Why a selection at all.** Nine switches read as a message tell you the
---- state and then leave you to type a command at it -- and the command's name
---- is not the label you just read (`broken-target marker` is
---- `:Hover paths missing`). Picking the line you are already looking at is
---- one step instead of two, and needs no translation.
+--- **Why a board and not a report.** Nine switches read as a message tell you
+--- the state and then leave you to type a command at it -- and the command is
+--- not the label you just read: `broken-target marker` is
+--- `:Hover paths missing`, and `web links` is `:Hover links web`, which is
+--- exactly the confusion that produced this. Acting on the line you are
+--- already looking at is one step instead of two, and needs no translation.
 ---
---- It stays a *report* first: the list is the same nine lines in the same
---- order, so reading it costs nothing new. Choosing is the addition.
----
---- **`pcall`, even though lib.nvim is a hard dependency.** It is pinned by
---- commit, so a present-but-older lib.nvim without the kit is a real state
---- rather than a hypothetical -- the same reason `hover.health` checks for
---- partial installs. Without the kit this returns false and the message runs,
---- which is exactly the previous behaviour.
----@param status table
----@return boolean shown
-local function choose_status(status)
-  local ok, kit = pcall(require, "lib.nvim.ui.kit")
-  if not ok or type(kit) ~= "table" or type(kit.select) ~= "function" then
-    return false
-  end
-
-  local items, by_label = {}, {}
-  for _, sw in ipairs(status.switches) do
-    local label = ("%-22s %s"):format(sw.label, sw.enabled and "on" or "off")
-    items[#items + 1] = label
-    by_label[label] = sw.name
-  end
-
-  local shown = pcall(kit.select, {
-    title = ("hover: mode %s  --  <CR> toggles"):format(status.mode),
-    items = items,
-    on_select = function(choice)
-      local name = type(choice) == "string" and by_label[choice] or nil
-      if name then
-        -- Through `switches.set`, not a second toggle path: the implication
-        -- chain, the cache drop and the announcement all live there.
-        switches.set(name, nil)
-      end
-    end,
-  })
-  return shown == true
-end
-
+--- It stays a *report* first: the same switches in the same order, plus the
+--- mode and what opens by itself. Acting on them is the addition.
+---@return nil
 local function report_status()
-  local status = hover().status()
-  if not choose_status(status) then
-    notify_status(status)
+  local ok, view = pcall(require, "hover.status_view")
+  if ok and type(view) == "table" and view.open() then
+    return
   end
+  notify_status(hover().status())
 end
 
 --- Every `:Hover` route, in the shape `composer.verb` expects. Public so a

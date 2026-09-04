@@ -116,7 +116,7 @@ Six routes carry most of the daily use:
 | --- | --- |
 | `:Hover show` | one hover, here, now, ignoring every volume switch |
 | `:Hover why` | why nothing hovered *here* — which gate refused, and what to type about it |
-| `:Hover status` | the mode and every switch, as a chooser where picking a line toggles it |
+| `:Hover status` | the mode, every switch and what opens by itself — a board where `<CR>` toggles the row and `?` lists the keys |
 | `:Hover mode manual` | nothing opens by itself any more; every preview still answers when asked |
 | `:Hover auto [<type>]` | which target types open by themselves |
 | `:Hover links web on` | let http(s) links hover too — off by default, because documentation is made of links |

@@ -1697,9 +1697,22 @@ end
 
 --- Everything that is on or off right now, for a statusline, a report, or
 --- `:checkhealth`.
----@return { mode: Hover.Mode, switches: { name: string, label: string, enabled: boolean, implies: string|nil }[] }
+---
+--- Three axes, because three different things can silence a hover and they
+--- look identical from the outside: the mode, the feature switches, and
+--- `auto_hover` -- which decides not *whether* a type hovers but whether it
+--- does so unprompted. A report that carried only the first two answered
+--- "everything is on" for a session where nothing opened by itself.
+---
+--- `auto` is a list rather than the map `config.auto_hover()` returns,
+--- because every consumer of this prints it and a map has no order.
+---@return { mode: Hover.Mode, switches: { name: string, label: string, enabled: boolean, flag: boolean, implies: string|nil, route: string[] }[], auto: { name: string, enabled: boolean }[] }
 function M.status()
-  return { mode = config.mode(), switches = switches.status() }
+  local auto = {}
+  for _, name in ipairs(require("hover.config.auto_types")()) do
+    auto[#auto + 1] = { name = name, enabled = config.auto_hover_for(name) }
+  end
+  return { mode = config.mode(), switches = switches.status(), auto = auto }
 end
 
 return M

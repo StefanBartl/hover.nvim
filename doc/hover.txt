@@ -166,8 +166,10 @@ toggles. >
 
   :Hover show                            one hover, here, now -- ignores
                                          every volume switch
-  :Hover status                          the mode and every switch; <CR>
-                                         toggles the line you pick
+  :Hover status                          the mode, every switch and what
+                                         opens by itself, as a board:
+                                         <CR> toggles the row, ? lists
+                                         the keys, y yanks its command
   :Hover pin                             keep this float while the cursor
                                          goes elsewhere; again releases it
   :Hover resize [bigger|smaller]         the hover bigger or smaller;
@@ -552,8 +554,12 @@ hover.set({name}, {on})                   Turn one switch on, off, or over.
 hover.enabled({name})                     Whether one switch is in effect,
                                           implications included.
                                                                *hover.status()*
-hover.status()                            { mode, switches } -- for a
-                                          statusline or a report.
+hover.status()                            { mode, switches, auto } -- for a
+                                          statusline or a report. Each switch
+                                          carries `enabled` (the implication
+                                          chain folded in), `flag` (its own
+                                          value) and `route` (the words to
+                                          type at it).
                                                    *hover.target_under_cursor()*
 hover.target_under_cursor({bufnr}, {opts})
                                           The target under the cursor, or nil.

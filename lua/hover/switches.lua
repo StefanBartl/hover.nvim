@@ -133,6 +133,37 @@ function M.spec(name)
   return SWITCHES[name]
 end
 
+--- The command tree path for one switch: its implication chain, read
+--- outside in. `fetch` implies `web` implies `links`, so it is
+--- `{ "links", "web", "fetch" }` -- the tokens of `:Hover links web fetch`.
+---
+--- **Here rather than in the command module, because it has two readers.**
+--- It was a local in `hover.bindings.usrcmds`, which was fine while the
+--- command tree was the only thing that needed it. `:Hover status` needs the
+--- same answer -- a row saying `broken-target marker` is unusable unless it
+--- also says which words to type -- and a second derivation of the same
+--- chain is exactly the drift this table exists to prevent. So it lives with
+--- the table it reads.
+---
+--- The `seen` guard is for a chain that points at itself. Nothing in
+--- `SWITCHES` does today; a cycle here would hang command registration at
+--- startup, which is a bad way to find out.
+---@param name string
+---@return string[]
+function M.route(name)
+  local path = { name }
+  local seen = { [name] = true }
+  local cursor = SWITCHES[name]
+
+  while cursor and cursor.implies and not seen[cursor.implies] do
+    table.insert(path, 1, cursor.implies)
+    seen[cursor.implies] = true
+    cursor = SWITCHES[cursor.implies]
+  end
+
+  return path
+end
+
 ---@internal
 --- The raw flag at a switch's `path` in the merged configuration.
 ---
@@ -285,7 +316,18 @@ end
 
 --- Every switch's current state, in display order, for `:Hover status` and
 --- `:checkhealth hover`.
----@return { name: string, label: string, enabled: boolean, implies: string|nil }[]
+---
+--- `enabled` folds in the implication chain and is the answer to "does this
+--- do anything right now". `flag` is the switch's own value before that fold,
+--- and the two differ in exactly one interesting case: a switch that is set
+--- while the switch above it is off. That reads as plain `off` everywhere,
+--- and then turning the parent on appears to turn on something nobody asked
+--- for -- so a report that can tell the two apart says so (`hover.status_view`
+--- draws it as a third glyph).
+---
+--- `route` is the words to type at it. A row labelled `broken-target marker`
+--- is a fact the reader cannot act on; `:Hover paths missing` is.
+---@return { name: string, label: string, enabled: boolean, flag: boolean, implies: string|nil, route: string[] }[]
 function M.status()
   local out = {}
   for _, name in ipairs(ORDER) do
@@ -294,7 +336,9 @@ function M.status()
       name = name,
       label = spec.label,
       enabled = effective(name),
+      flag = flag_at(spec.path) == true,
       implies = spec.implies,
+      route = M.route(name),
     }
   end
   return out
