@@ -81,10 +81,43 @@ function M.put(key, content)
   store():put(key, content)
 end
 
---- Throw away every built preview.
+---@type (fun())[] Stores that have to be dropped whenever this one is.
+local _droppers = {}
+
+--- Register a store of your own that must be dropped with this one.
+---
+--- **Why a registry rather than a call from `reset`.** A previewer that keeps
+--- something across hovers -- `preview/url.lua` keeps the last response, so a
+--- float re-rendered at another size costs no second request to that host --
+--- has a store this module knows nothing about. Writing the drop into `reset`
+--- would make that a list of previewers kept by hand in the module they do not
+--- belong to, which is the shape this repository has now been bitten by five
+--- times. Registering inverts it: a previewer that has such a store says so,
+--- and one that has none needs no entry anywhere.
+---
+--- Called on first use rather than at load, so requiring a previewer to look
+--- at it -- which the specs and the doc checks do -- registers nothing.
+---
+--- Not un-registerable, and it does not need to be: the callback closes over a
+--- module-local table in a module `require` keeps for the session, so there is
+--- nothing whose lifetime is shorter than this one's.
+---@param drop fun()
+---@return nil
+function M.on_reset(drop)
+  if type(drop) == "function" then
+    _droppers[#_droppers + 1] = drop
+  end
+end
+
+--- Throw away every built preview, and everything registered alongside.
 ---@return nil
 function M.reset()
   _store = nil
+  for _, drop in ipairs(_droppers) do
+    -- `pcall`: a previewer whose drop errors must not stop a switch from
+    -- taking effect, and the switch is what the reader is looking at.
+    pcall(drop)
+  end
 end
 
 return M
