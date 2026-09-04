@@ -183,6 +183,144 @@ describe("hover.preview.url.page_text", function()
   end)
 end)
 
+describe("the answer kept between renders", function()
+  -- **The disclosure this closes.** `hover.cache` is keyed by what a target
+  -- *is*, not by how large it is being shown, so `hover.resize`, `hover.zen`
+  -- and `hover.scroll` all bypass it on purpose and rebuild from `build` --
+  -- which for a URL meant a fresh HTTP request to that host per keypress.
+  -- Fetching is a disclosure, `F` made "press a key at a link" the gesture
+  -- that pays off, and the two together are a request storm aimed at one
+  -- host instead of many.
+  --
+  -- One entry, because the case is the float that is *open* being rebuilt.
+  -- Dropped with `hover.cache`, because `:Hover links web off` / `on` is the
+  -- documented way to retire a stale status and this must not outlive it.
+
+  local cache = require("hover.cache")
+  local saved
+
+  ---@type integer
+  local requests
+
+  before_each(function()
+    requests = 0
+    saved = package.loaded["lib.nvim.net.curl"]
+    -- A stand-in for the network, and for nothing else: `fetch_raw` is the
+    -- whole surface this module uses. Answering synchronously is fine here --
+    -- `M.fetch`'s contract is "the answer arrives through the callback",
+    -- which says nothing about when.
+    package.loaded["lib.nvim.net.curl"] = {
+      fetch_raw = function(_, _, callback)
+        requests = requests + 1
+        callback(true, {
+          status = 200,
+          status_text = "OK",
+          headers = { ["content-type"] = "text/html" },
+          body = "<html><body><p>Hello.</p></body></html>",
+        })
+      end,
+    }
+    url.reset()
+    cache.reset()
+  end)
+
+  after_each(function()
+    package.loaded["lib.nvim.net.curl"] = saved
+    url.reset()
+    cache.reset()
+  end)
+
+  ---@param link string
+  ---@param opts? Hover.PreviewOpts
+  ---@return Hover.Content
+  local function fetched(link, opts)
+    local content
+    url.fetch({ type = "url", raw = link, url = link }, opts or { max_lines = 20 }, function(c)
+      content = c
+    end)
+    return content
+  end
+
+  it("asks once for a link answered twice", function()
+    fetched("https://example.com/a")
+    fetched("https://example.com/a")
+    assert.same(1, requests, "a re-render went back to the host")
+  end)
+
+  it("rebuilds against the new box, which is the point of keeping it", function()
+    -- The re-render is not a replay: the same body, more room, more of the
+    -- page. A cache that handed back the finished content would have made
+    -- `F` over a link do nothing at all.
+    local small = fetched("https://example.com/a", { max_lines = 20, max_width = 80 })
+    local large = fetched("https://example.com/a", { max_lines = 60, max_width = 80 })
+    assert.same(1, requests)
+    assert.same(small.lines, large.lines, "this page is short enough to fit in both")
+
+    local many = "<html><body>"
+    for i = 1, 40 do
+      many = many .. ("<p>paragraph %d</p>"):format(i)
+    end
+    package.loaded["lib.nvim.net.curl"] = {
+      fetch_raw = function(_, _, callback)
+        requests = requests + 1
+        callback(true, {
+          status = 200,
+          headers = { ["content-type"] = "text/html" },
+          body = many .. "</body></html>",
+        })
+      end,
+    }
+    url.reset()
+
+    local few = fetched("https://example.com/b", { max_lines = 20, max_width = 80 })
+    local lots = fetched("https://example.com/b", { max_lines = 60, max_width = 80 })
+    assert.same(2, requests, "the larger box went back to the host")
+    assert.is_true(
+      #lots.lines > #few.lines,
+      ("a bigger box gave %d lines, the small one %d"):format(#lots.lines, #few.lines)
+    )
+  end)
+
+  it("asks again for a different link, since it keeps exactly one", function()
+    fetched("https://example.com/a")
+    fetched("https://example.com/b")
+    fetched("https://example.com/a")
+    assert.same(3, requests)
+  end)
+
+  it("is dropped with the preview cache, which is what a switch drops", function()
+    -- `:Hover links web off` then `on` is the documented way to retire a
+    -- stale status. Without this hook the body would outlive the gesture
+    -- written to defeat it.
+    fetched("https://example.com/a")
+    cache.reset()
+    fetched("https://example.com/a")
+    assert.same(2, requests, "the switch did not reach this store")
+  end)
+
+  it("keeps a refusal too, since a dead host costs the whole timeout", function()
+    package.loaded["lib.nvim.net.curl"] = {
+      fetch_raw = function(_, _, callback)
+        requests = requests + 1
+        callback(false, "could not resolve host")
+      end,
+    }
+    url.reset()
+
+    local first = fetched("https://nowhere.invalid/a")
+    local second = fetched("https://nowhere.invalid/a")
+    assert.same(1, requests, "a dead host was asked twice")
+    assert.same(first.lines, second.lines)
+    assert.is_truthy(first.lines[1]:find("no answer", 1, true))
+  end)
+
+  it("never reaches the network for a scheme that is not http(s)", function()
+    local content = fetched("mailto:someone@example.com")
+    assert.same(0, requests)
+    assert.same({ "someone@example.com" }, content.lines)
+  end)
+end)
+
 describe("hover.preview.url.offline", function()
   -- The always-available half, unchanged by the page text above it: nothing
   -- here touches the network, and that is the promise `:Hover links web on`

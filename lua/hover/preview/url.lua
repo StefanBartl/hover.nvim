@@ -31,6 +31,14 @@
 --- passes it, which also means a server that has since recovered still shows
 --- its old status until the cache is dropped (`:Hover links web off` / `on`
 --- does that).
+---
+--- **The last raw answer is kept here as well, and for a different reason.**
+--- That cache holds finished *content*, keyed by what a target is rather than
+--- by how large it is being shown -- so `resize`, `zen` and `scroll` all
+--- bypass it on purpose and rebuild, and for a URL that used to mean a fresh
+--- request to that host on every keypress. One entry, dropped along with the
+--- content cache, so the off/on gesture still retires a stale status. See
+--- `_last`.
 
 local M = {}
 
@@ -454,12 +462,149 @@ function M.offline(target)
   return { lines = lines, title = parts.scheme or "url" }
 end
 
+---@internal
+--- One curl answer, turned into the float's content.
+---
+--- **Split out of the request so that a re-render can reach it without making
+--- a second one.** The float is rebuilt from scratch on every `F`, `+`, `-`
+--- and scroll -- `hover.cache` is keyed by what a target *is*, not by how
+--- large it is being shown, so those bypass it deliberately -- and for a URL
+--- that meant a fresh HTTP request to that host per keypress. Which is the
+--- one thing this whole module is arranged to keep rare: fetching is called a
+--- disclosure four paragraphs up, and zen turned "press a key at a link" into
+--- the gesture that pays off.
+---@param target Hover.Target
+---@param opts Hover.PreviewOpts
+---@param ok boolean
+---@param response table|string|nil
+---@return Hover.Content
+local function content_for(target, opts, ok, response)
+  local offline = M.offline(target)
+
+  if not ok or type(response) ~= "table" then
+    -- No status line at all: DNS failure, refused connection, TLS error, or
+    -- the timeout. Distinguished from an HTTP error, because "the server said
+    -- 500" and "there was no server" are different problems and the reader is
+    -- about to act on one of them.
+    local lines = { "✗ no answer" }
+    local reason = type(response) == "string" and vim.trim(response:gsub("%s+", " ")) or nil
+    lines[#lines + 1] = (reason and reason ~= "") and reason
+      or ("unreachable, or slower than " .. tostring(opts.url_timeout_ms or 2000) .. " ms")
+    for _, line in ipairs(offline.lines) do
+      lines[#lines + 1] = line
+    end
+    return { lines = lines, title = offline.title, highlight = "HoverError" }
+  end
+
+  local status = tonumber(response.status) or 0
+  local phrase = response.status_text
+  if not phrase or phrase == "" then
+    phrase = STATUS_TEXT[status] or ""
+  end
+
+  -- The status first, and on its own line. It is the answer to the question a
+  -- reader hovers a link to ask -- "is this still there?" -- and burying it
+  -- under a page title is what made the earlier version of this preview only
+  -- decorative.
+  local lines = { vim.trim(("HTTP %d %s"):format(status, phrase)) }
+
+  local title, description = extract_meta(response.body or "")
+  if title then
+    lines[#lines + 1] = title
+  end
+  if description then
+    lines[#lines + 1] = description
+  end
+
+  local ctype = type_line(response.headers, response.body)
+  if ctype then
+    lines[#lines + 1] = ctype
+  end
+
+  -- **What the page says, between the header block and the URL.**
+  --
+  -- Placed here rather than appended, and the reason is the float's height: it
+  -- is `min(#lines, max_lines)`, so anything past the budget is not scrolled
+  -- to, it is simply absent. Last would mean the URL parts push the text off a
+  -- small float; below the text they are always the last thing in the box, and
+  -- the *budget* is what the text is trimmed to.
+  --
+  -- Only `text/html`: a JSON API or a tarball has no prose in it, and running
+  -- the tag stripper over one would produce a line of punctuation with the
+  -- reader's cursor on it.
+  local body = response.body
+  if body and body ~= "" and (ctype or ""):find("text/html", 1, true) then
+    -- One blank above, one below, and room for the URL that follows. Reads the
+    -- box `opts` carries rather than the configured one, so a hover put full
+    -- screen shows a screenful of the page and not twenty lines of it.
+    local budget = (opts.max_lines or 20) - #lines - #offline.lines - 2
+    local text = M.page_text(body, { max_width = opts.max_width or 80, max_lines = budget })
+    if #text > 0 then
+      lines[#lines + 1] = ""
+      for _, line in ipairs(text) do
+        lines[#lines + 1] = line
+      end
+    end
+  end
+
+  lines[#lines + 1] = ""
+  for _, line in ipairs(offline.lines) do
+    lines[#lines + 1] = line
+  end
+
+  return {
+    lines = lines,
+    title = title and "page" or offline.title,
+    -- 4xx/5xx marked, so a dead link is recognizable without reading the
+    -- number. 3xx is not an error: curl followed it, and what is shown is
+    -- the destination's own status.
+    highlight = (status >= 400 or status == 0) and "HoverError" or nil,
+  }
+end
+
+---@internal
+--- The last answer, and the URL it came from.
+---
+--- **One entry, and that is the whole eviction policy.** The case this exists
+--- for is the float that is *open* being rebuilt at another size, so a second
+--- entry would buy nothing and every entry costs up to the 2 MB
+--- `--max-filesize` allows. Hovering another link drops it.
+---
+--- Dropped with `hover.cache`, which is what `:Hover links web off` / `on`
+--- already does -- so the documented way to retire a stale status still
+--- retires it. Without that hook this cache would outlive the gesture written
+--- to defeat it.
+---@type { url: string, ok: boolean, response: table|string|nil }|nil
+local _last = nil
+
+---@type boolean Whether the drop above has been registered this session.
+local _hooked = false
+
+---@internal
+--- Register the drop, once, on first use. Not at load: requiring this module
+--- to look at it -- which the specs and the documentation checks do -- must
+--- register nothing.
+---@return nil
+local function hook_reset()
+  if _hooked then
+    return
+  end
+  _hooked = true
+  require("hover.cache").on_reset(function()
+    _last = nil
+  end)
+end
+
 --- Fetch page metadata. Only called when `hover.url.fetch` is on.
 ---
 --- The callback always receives content, never nil: a failed request is an
 --- answer worth showing ("✗ no answer", and the URL that was tried), and a
 --- nil would collapse into "no hover at all", which is indistinguishable from
 --- the feature being off.
+---
+--- **The last answer is kept, and a repeat of it costs no request.** See
+--- `_last`: a re-render is not a re-hover, and a keypress at a link is not a
+--- second consent to tell that link's host about it.
 ---@param target Hover.Target
 ---@param opts Hover.PreviewOpts
 ---@param callback fun(content: Hover.Content)
@@ -473,6 +618,15 @@ function M.fetch(target, opts, callback)
     return
   end
 
+  -- The same link, answered again: `F` at a full-screen float, a resize step,
+  -- a re-render after a switch that did not touch this preview. The body in
+  -- hand is the answer, and `content_for` rebuilds against the *new* box, so
+  -- the page text grows without a second request.
+  if _last and _last.url == url then
+    callback(content_for(target, opts, _last.ok, _last.response))
+    return
+  end
+
   local ok_curl, curl = pcall(require, "lib.nvim.net.curl")
   if not ok_curl then
     local content = M.offline(target)
@@ -480,6 +634,8 @@ function M.fetch(target, opts, callback)
     callback(content)
     return
   end
+
+  hook_reset()
 
   curl.fetch_raw(url, {
     method = "GET",
@@ -489,89 +645,19 @@ function M.fetch(target, opts, callback)
     raw_args = { "-L", "--max-filesize", "2000000" },
     headers = { Accept = "text/html,application/xhtml+xml" },
   }, function(ok, response)
-    local offline = M.offline(target)
-
-    if not ok or type(response) ~= "table" then
-      -- No status line at all: DNS failure, refused connection, TLS error, or
-      -- the timeout. Distinguished from an HTTP error, because "the server
-      -- said 500" and "there was no server" are different problems and the
-      -- reader is about to act on one of them.
-      local lines = { "✗ no answer" }
-      local reason = type(response) == "string" and vim.trim(response:gsub("%s+", " ")) or nil
-      lines[#lines + 1] = (reason and reason ~= "") and reason
-        or ("unreachable, or slower than " .. tostring(opts.url_timeout_ms or 2000) .. " ms")
-      for _, line in ipairs(offline.lines) do
-        lines[#lines + 1] = line
-      end
-      callback({ lines = lines, title = offline.title, highlight = "HoverError" })
-      return
-    end
-
-    local status = tonumber(response.status) or 0
-    local phrase = response.status_text
-    if not phrase or phrase == "" then
-      phrase = STATUS_TEXT[status] or ""
-    end
-
-    -- The status first, and on its own line. It is the answer to the question
-    -- a reader hovers a link to ask -- "is this still there?" -- and burying
-    -- it under a page title is what made the earlier version of this preview
-    -- only decorative.
-    local lines = { vim.trim(("HTTP %d %s"):format(status, phrase)) }
-
-    local title, description = extract_meta(response.body or "")
-    if title then
-      lines[#lines + 1] = title
-    end
-    if description then
-      lines[#lines + 1] = description
-    end
-
-    local ctype = type_line(response.headers, response.body)
-    if ctype then
-      lines[#lines + 1] = ctype
-    end
-
-    -- **What the page says, between the header block and the URL.**
-    --
-    -- Placed here rather than appended, and the reason is the float's height:
-    -- it is `min(#lines, max_lines)`, so anything past the budget is not
-    -- scrolled to, it is simply absent. Last would mean the URL parts push the
-    -- text off a small float; below the text they are always the last thing in
-    -- the box, and the *budget* is what the text is trimmed to.
-    --
-    -- Only `text/html`: a JSON API or a tarball has no prose in it, and
-    -- running the tag stripper over one would produce a line of punctuation
-    -- with the reader's cursor on it.
-    local body = response.body
-    if body and body ~= "" and (ctype or ""):find("text/html", 1, true) then
-      -- One blank above, one below, and room for the URL that follows. Reads
-      -- the box `opts` carries rather than the configured one, so a hover put
-      -- full screen shows a screenful of the page and not twenty lines of it.
-      local budget = (opts.max_lines or 20) - #lines - #offline.lines - 2
-      local text = M.page_text(body, { max_width = opts.max_width or 80, max_lines = budget })
-      if #text > 0 then
-        lines[#lines + 1] = ""
-        for _, line in ipairs(text) do
-          lines[#lines + 1] = line
-        end
-      end
-    end
-
-    lines[#lines + 1] = ""
-    for _, line in ipairs(offline.lines) do
-      lines[#lines + 1] = line
-    end
-
-    callback({
-      lines = lines,
-      title = title and "page" or offline.title,
-      -- 4xx/5xx marked, so a dead link is recognizable without reading the
-      -- number. 3xx is not an error: curl followed it, and what is shown is
-      -- the destination's own status.
-      highlight = (status >= 400 or status == 0) and "HoverError" or nil,
-    })
+    -- Kept whether or not it worked. A host that does not answer costs the
+    -- full timeout, and paying it again per keypress is the worse half of
+    -- this: the float would go back to "rendering…" on every press.
+    _last = { url = url, ok = ok, response = response }
+    callback(content_for(target, opts, ok, response))
   end)
+end
+
+--- Forget the last answer, so the next hover asks again. For the test suite,
+--- and for anything that wants a fresh status without waiting for a switch.
+---@return nil
+function M.reset()
+  _last = nil
 end
 
 return M
