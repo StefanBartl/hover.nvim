@@ -166,6 +166,15 @@ float is `focusable = false`, and with the pointer squarely inside one, that
 field named the window *underneath* it. Only the screen coordinates are
 usable, so `hover.float.contains` does the rectangle test itself.
 
+### A hover put full screen
+
+| | |
+| --- | --- |
+| **Checked** | — **never yet.** Written down when zen was built (2026-09-04). `TESTS/zen_spec.lua` pins the geometry, the budget and the pin coupling all the way to `nvim_win_get_config`; what it cannot reach is whether the *drawing* followed, which is the same gap the resize row above exists for. |
+| **On** | — not yet seen. Needs a terminal that can draw and images.nvim for the picture half. |
+| **How** | Hover a picture and press `F`. The float takes almost the whole editor, centred, and the picture fills it. `F` again returns it to where it was. Then hover a *text* file and press `F`: the float should show roughly fifty lines rather than twenty — **more lines**, not a larger frame around the same twenty. `-` inside zen shrinks it without leaving zen; `+` does nothing, because zen is already at the terminal's ceiling. |
+| **Watch for** | The **frame** filling the screen while the picture inside it stays the size it was — the same failure the resize row watches for, and the one a spec structurally cannot see, since the cell area is only a request to the terminal. Also the 📌 marker: zen pins by default, and the marker is re-applied after every re-render because `float.open` replaces the window. A zen float with no 📌 in its border means that re-application was lost again. |
+
 ### A PDF page rasterized
 
 | | |
@@ -174,6 +183,15 @@ usable, so `hover.float.contains` does the rectangle test itself.
 | **On** | Windows 11, WezTerm, Neovim 0.12.2, pdfport.nvim + `pdftoppm` on PATH |
 | **How** | Cursor on a `.pdf` path; page 1 appears. `<M-PageDown>` pages forward and stops at the last page. |
 | **Watch for** | "rendering…" that never resolves, and paging past the end — the page count is never known in advance, so the last page is discovered by asking for one too many. |
+
+### A page rendered by a headless browser
+
+| | |
+| --- | --- |
+| **Checked** | — **never yet.** Written down when the feature was built (2026-09-04) and not seen end to end. The browser start and one render against a `file://` page were measured (710–735 ms and 768 ms respectively, see [FEATURES/SHOT.md](FEATURES/SHOT.md)); a page fetched over the network and drawn into a float has not been looked at. |
+| **On** | — not yet seen. Needs a terminal that can draw, images.nvim, a Chromium-based browser, and a network. |
+| **How** | `:Hover links web shot`, then `:Hover show` with the cursor on an `https://` link. A picture of the page appears in the float. Then `F` for the full-screen reading, `>` to magnify a detail, `h`/`j`/`k`/`l` to move it. For the trigger half: `:Hover links web shot eager` and `:Hover auto url`, then rest the cursor on a link and wait — nothing should start for the first second of stillness. |
+| **Watch for** | Three things, in order of how badly they would fail. **The reader's own Chrome profile being used** — the picture would show them logged in, and their cookies would have gone to that host; the throwaway `--user-data-dir` is what prevents it and it is the one flag worth verifying by eye. **A browser per link while scrolling**, which would mean the start delay or the one-at-a-time kill is not working; the cheapest check is watching the process list while running the cursor down a page of links. And **an unreadable picture**, which is the fit factor rather than a bug — 1280×900 into a zen float is about 1.0, and a taller capture is meant to be read with the zoom. |
 
 ### An office document converted
 
@@ -275,6 +293,12 @@ Windows, per push.
 ## Keeping this honest
 
 A row whose date is older than the code it describes is worse than no row,
-because it reads as a check that happened. When one of the eight paths above
+because it reads as a check that happened. When one of the ten paths above
 changes, either check it again and move the date, or set the date back to
 *never* and say why.
+
+Two of them stand at *never* right now — the full-screen hover and the
+rendered page, both built on 2026-09-04. They are written down before they
+were seen on purpose: a row that exists and says "not yet" is the gap being
+legible, which is what this file is for. A feature shipped with no row at all
+is the gap being invisible.

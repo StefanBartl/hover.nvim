@@ -194,7 +194,7 @@ appears there as `registry: user`. That line is what separates "it never registe
 :Hover status
 ```
 
-The mode, all nine switches and what opens by itself, on one board — with the command
+The mode, all eleven switches and what opens by itself, on one board — with the command
 that acts on each row beside it, `<CR>` to toggle the row under the cursor, and `?` for
 the rest of the keys. `:Hover` is registered from `plugin/hover.lua` whether or not
 anything called `enable()`, so this answers even from the session where the hover appears

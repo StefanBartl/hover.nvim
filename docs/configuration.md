@@ -41,7 +41,7 @@ default rather than extending it, which is what a list should mean. `{}` binds n
 | `zen.pin` | `true` | Whether `:Hover zen` also pins the float. On, and this default follows from a mechanism rather than taste: the float is `focusable = false` and its dismissal hangs on `CursorMoved`, so an unpinned full-screen hover closes on the first key that is not borrowed. `false` gives exactly that transient reading back. Leaving zen releases only a pin zen itself took. See [ZEN.md](FEATURES/ZEN.md). |
 | `placeholder_grace_ms` | `250` | How long an async preview may take before a "rendering…" placeholder is allowed to interrupt. Below this, waiting quietly reads as instant; above it, silence reads as breakage. |
 
-## The nine switches
+## The eleven switches
 
 Each of these has a `:Hover` route too, and the route is the way to throw one for the
 session — see [commands.md](commands.md). **Implication runs upward only:** `fetch` turns
@@ -54,6 +54,14 @@ clearing their flag, so turning it back on restores what you had.
 | `links.web` | `false` | Whether an http(s) link hovers. Implies `links.enabled`. Off because documentation is made of links: the offline preview shows host, path and query, all of which are already *in* the link. |
 | `links.fetch` | `false` | Fetch for status code, title, and — for an HTML page — **what the page says**. Implies `links.web`. Off a second time for a reason volume does not cover — it is a disclosure: every link the cursor rests on becomes a request from this machine to that host. There is no third switch for the page text: the body is downloaded either way, so it costs no request and no second disclosure. It is trimmed to the room the float has, which is what makes `:Hover zen` over a link worth pressing. |
 | `links.timeout_ms` | `2000` | |
+| `links.shot.enabled` | `false` | Render a hovered link in a headless browser and draw the page into the float, instead of previewing it as text. Implies `links.web` and deliberately **not** `links.fetch` — a fetch is one `curl` GET with a 2 MB cap and no JavaScript, a render *executes* the page and fetches every subresource it names. See [SHOT.md](FEATURES/SHOT.md). |
+| `links.shot.eager` | `false` | Whether the **automatic trigger** may start a browser, or only `:Hover show`. A second switch because the two questions have different answers: fifty links scrolled past is fifty browser starts, and `auto_hover.url` cannot say it — the text preview and the screenshot are the same target type. |
+| `links.shot.timeout_ms` | `20000` | How long one render may take. Measured 2026-09-04: a browser start alone is ~0.7 s, and a real documentation page took 3.9–19.6 s — the same URL, at both ends. |
+| `links.shot.width` | `1280` | Viewport width the page is laid out in. |
+| `links.shot.height` | `900` | Viewport height, and what is captured. 900 rather than a full-page 4000, and that is a legibility measurement: a picture is letterboxed into the float, so on a 210×55 terminal a zen float is roughly 1850×970 px — a 1280×900 capture fits at about 1.0 and 16 px text stays 16 px, while 1280×4000 is height-limited to 0.24 and the same text becomes 4 px. Raise it for a whole-page capture and read it with `>`, which crops. |
+| `links.shot.cache_days` | `7` | How long a rendered page may survive between sessions. Keyed by URL and geometry — a page that has since changed answers with the old picture until this expires. `0` keeps nothing. |
+| `links.shot.delay_ms` | `1000` | Stillness the **automatic** path waits for before starting a browser, on top of `delay_ms`. Its own number because 250 ms is the right wait for a free preview and the wrong one for seconds of work. An explicit request never waits. |
+| `links.shot.command` | *(unset)* | The browser to run. Unset means "find one": the usual names on `PATH`, then the usual install locations, preferring Chrome and Chromium over Edge. The search is not a convenience — measured, Chrome is installed on the machine this was built on and is on no `PATH` at all. |
 | `paths.enabled` | `true` | Whether a path written without link syntax hovers. |
 | `paths.missing` | `true` | Whether a bare path resolving to nothing may be marked broken. Deliberately hard to satisfy — this is the only preview class whose value goes *negative* when it is wrong. |
 | `paths.code` | `false` | Whether a bare path hovers inside executable code. Off: in a parsed buffer, only comments and strings are searched. Prose is untouched — see [BARE-PATHS.md](FEATURES/BARE-PATHS.md#where-one-is-looked-for). |

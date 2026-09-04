@@ -189,6 +189,54 @@ local function check_config()
     end
   end
 
+  -- The browser, and only once the switch that needs one is on.
+  --
+  -- **Reported here because `lib.nvim.deps` cannot answer it.** That check
+  -- asks whether `chrome` is on PATH, and on Windows it is not: the installer
+  -- does not extend PATH, so a machine with Chrome plainly installed reports
+  -- it missing -- the same false alarm `soffice` already carries a note about
+  -- in `docs/install.json`. This asks the previewer, which searches the usual
+  -- install locations, and names the binary it would actually run.
+  if config.shot_enabled() then
+    -- Read off `preview_opts` rather than walked out of the options table by
+    -- hand: that is where the shape is already normalized, and a second walk
+    -- here would be one more place for the option path to be spelled wrong.
+    local configured = config.preview_opts().shot_command
+    local browser =
+      require("hover.preview.shot").browser(type(configured) == "string" and configured or nil)
+    if browser then
+      -- **Reconciled out loud, because the report contradicts itself
+      -- otherwise.** The dependency section below asks `PATH` and says
+      -- `chrome NOT found`; this line found one anyway, by looking where the
+      -- installer puts it. Two lines about the same binary disagreeing is
+      -- exactly the state a health report exists to prevent, so the one that
+      -- knows more says which is which. A name with no separator in it came
+      -- off `PATH` and there is nothing to reconcile.
+      if browser:find("[/\\]") then
+        health.ok(
+          ("page screenshots: %s -- found off PATH, so the `chrome NOT found` line below is expected and not a problem"):format(
+            browser
+          )
+        )
+      else
+        health.ok(("page screenshots: %s"):format(browser))
+      end
+    else
+      health.warn("page screenshots are on, and no headless browser was found", {
+        "Any Chromium-based one answers: chrome, chromium, brave, msedge.",
+        "PATH is searched first, then the usual install locations.",
+        '`links = { shot = { command = "/path/to/chrome" } }` names one outright.',
+        "`:Hover links web shot off` stops asking.",
+      })
+    end
+    if not config.images_enabled() then
+      health.warn("page screenshots are on, but pictures are switched off", {
+        "A rendered page is a picture; with `images` off there is nothing to draw it with.",
+        "`:Hover images on`, or `:Hover links web shot off`.",
+      })
+    end
+  end
+
   -- The resize wheel is *inert* without 'mouse', not broken, and from the
   -- outside those look identical: a chord that arrives and does nothing, and
   -- one that never arrives at all. Reported here because the difference is

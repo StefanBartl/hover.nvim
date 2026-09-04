@@ -30,10 +30,19 @@ describe("hover.switches", function()
   end)
 
   it("lists every switch in hierarchy order, not hash order", function()
-    assert.same(
-      { "links", "web", "fetch", "paths", "missing", "code", "positions", "images", "office" },
-      switches.names()
-    )
+    assert.same({
+      "links",
+      "web",
+      "fetch",
+      "shot",
+      "eager",
+      "paths",
+      "missing",
+      "code",
+      "positions",
+      "images",
+      "office",
+    }, switches.names())
   end)
 
   describe("implication", function()

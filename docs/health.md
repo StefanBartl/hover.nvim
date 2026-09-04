@@ -14,7 +14,7 @@ would report the symptom everyone already has.
 | **configuration** | Which mode is set, what `auto_hover` opens by itself, and every switch with its current state |
 | **optional contributors** | Which sibling plugins are installed, what each absent one is not doing, whether a link source is registered at all, and — read back off the registry — every name that registered |
 | **external tools** | `soffice` and `pdftoppm` on `PATH`, and *whether they are even needed* |
-| **declared tools** | The same two tools as declared in [`install.json`](install.json), through `lib.nvim.deps` — why each matters and how to install it on this machine. Absent on an older lib.nvim |
+| **declared tools** | The tools declared in [`install.json`](install.json), through `lib.nvim.deps` — why each matters and how to install it on this machine. Absent on an older lib.nvim |
 
 ---
 
@@ -32,6 +32,13 @@ combinations that each leave a correctly installed plugin doing nothing visible:
   preview still answers on `:Hover show`.
 - **Every preview class switched off** — no target can produce a float, so there is
   nothing left for the trigger to find.
+
+Two more arrive with page screenshots, and only while that switch is on:
+
+- **No headless browser found** — the render cannot happen, and the section names what it
+  looked for and how to point it at one.
+- **Screenshots on while `images` is off.** A rendered page *is* a picture; with nothing to
+  draw it there is no browser worth starting, and the float says so instead of rendering.
 
 Two more come from the keys rather than from the switches:
 
@@ -68,6 +75,22 @@ On Windows the LibreOffice installer does not put `soffice.exe` on `PATH`, so th
 it missing on a machine where LibreOffice is plainly installed. That is correct, and the
 one-line fix is in
 [installation.md](installation.md#soffice-on-windows-installing-libreoffice-is-not-enough).
+
+**The browser for page screenshots is the one place the report will appear to contradict
+itself, and that is deliberate.** With `:Hover links web shot` on you may see both of
+these:
+
+```
+✅ page screenshots: C:\Program Files\Google\Chrome\Application\chrome.exe
+   -- found off PATH, so the `chrome NOT found` line below is expected and not a problem
+⚠️ chrome NOT found (optional)
+```
+
+Both are true and only the first one counts. The declared-tools section asks `PATH`, and
+the Chrome installer does not extend it — the same thing `soffice` does. hover.nvim
+searches the usual install locations itself, so the line that names a path is the one that
+says what would actually be run. `links.shot.command` names one outright when the search
+picks the wrong browser.
 
 ## When it is not the right tool
 
