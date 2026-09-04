@@ -146,6 +146,34 @@ vim.keymap.set("n", "<C-u>", function() require("hover").scroll(-1) end)
 `scroll(delta)` and `dismiss()` both return `false` when there is no open
 hover, so either is safe to bind unconditionally.
 
+### Owned — buffer-local, inside the `:Hover status` board
+
+Not borrowed and not global: these live on the board's own scratch buffer and
+go away with it. They are not configurable, because nothing outside that window
+can reach them.
+
+| Key | Does |
+| --- | --- |
+| `<CR>`, `<Space>`, `<2-LeftMouse>` | toggle the row under the cursor; on the mode row, cycle `auto` → `manual` → `off` |
+| `+` | turn the row on — on the mode row, `auto` |
+| `-` | turn the row off — on the mode row, `off` |
+| `<Tab>` / `<S-Tab>` | next / previous actionable row, skipping headings and blanks |
+| `y` | yank this row's `:Hover ...` command |
+| `r` | re-read the configuration and redraw |
+| `?` | the same table, in a panel, generated from the source |
+| `q`, `<Esc>` | close the board |
+
+The `winbar` carries the keys that fit and pins `? Keys`, which is how the rest
+stays reachable. Both the legend and the `?` panel are generated from one table
+in `hover.status_view`, so neither can advertise a key that is not bound.
+
+Every row also carries the command that acts on it, and the indentation is the
+implication chain — `web links` sits under `link targets` because
+`:Hover links web` sits under `:Hover links`. Three glyphs, not two: `●` on,
+`○` off, and `◐` for a switch that is set here while the switch above it is
+off. That last one is the state a flat on/off list cannot express, and the
+reason it earns a glyph is that it comes back the moment the parent does.
+
 ---
 
 ## User commands
@@ -222,6 +250,14 @@ Defined on demand with `default = true`, so a colorscheme still wins.
 | `HoverMissing` | `DiagnosticError` | the "this target does not exist" marker |
 | `HoverError` | `DiagnosticError` | an HTTP 4xx/5xx, or an unreachable host |
 | `HoverInfo` | `DiagnosticHint` | the "no text in this file" badge |
+| `HoverStatusHeader` | `Title` | a section heading on the `:Hover status` board |
+| `HoverStatusOn` | `DiagnosticOk` | a row that is on, glyph and state |
+| `HoverStatusOff` | `Comment` | a row that is off |
+| `HoverStatusHeld` | `DiagnosticWarn` | a row that is set, but held off by the row above it |
+| `HoverStatusLabel` | `Normal` | the label of a row that is on |
+| `HoverStatusRoute` | `NonText` | the `:Hover ...` command a row carries |
+| `HoverStatusMuted` | `Comment` | the label of a row that is off, and the legend's words |
+| `HoverStatusKey` | `Special` | a key in the board's `winbar` legend |
 
 ---
 

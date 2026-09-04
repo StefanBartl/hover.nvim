@@ -46,7 +46,7 @@ be tried rather than decided.
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover auto [<type>\|all\|none]` | which target types open by themselves. A type toggles it; omitted, it lists what does and what waits to be asked |
-| `:Hover status` | the mode and every switch — as a chooser where picking a line toggles it, or as one message where lib.nvim has no UI kit |
+| `:Hover status` | the mode, every switch and what opens by itself — as a board where `<CR>` toggles the row under the cursor, `?` lists its keys, and every row carries the command that acts on it. One message where lib.nvim has no UI kit |
 
 The type names `:Hover auto` takes are `image`, `pdf`, `office`, `markdown`, `file`,
 `directory`, `url`, `anchor`, `missing` and `git`, plus `position` for a plugin answering

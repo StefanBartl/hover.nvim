@@ -238,12 +238,19 @@ local function check_config()
     end
   end
 
+  -- The route beside the label, for the same reason `:Hover status` grew a
+  -- board: `broken-target marker` is a state, `:Hover paths missing` is the
+  -- thing to type about it, and only one of them used to be on screen. A
+  -- switch that is set while the switch above it is off says so rather than
+  -- reading as a plain "off" that turning the parent on appears to undo.
   local any = false
   for _, s in ipairs(require("hover.switches").status()) do
     if s.enabled then
       any = true
     end
-    health.info(("%-22s %s"):format(s.label, s.enabled and "on" or "off"))
+    local state = s.enabled and "on"
+      or (s.flag and "off (held by " .. tostring(s.implies) .. ")" or "off")
+    health.info(("%-22s %-24s :Hover %s"):format(s.label, state, table.concat(s.route, " ")))
   end
 
   if not any and mode ~= "off" then

@@ -194,10 +194,11 @@ appears there as `registry: user`. That line is what separates "it never registe
 :Hover status
 ```
 
-The mode and all nine switches in one message. `:Hover` is registered from
-`plugin/hover.lua` whether or not anything called `enable()`, so this answers even from
-the session where the hover appears to be doing nothing — which is the session someone
-typing it is usually in.
+The mode, all nine switches and what opens by itself, on one board — with the command
+that acts on each row beside it, `<CR>` to toggle the row under the cursor, and `?` for
+the rest of the keys. `:Hover` is registered from `plugin/hover.lua` whether or not
+anything called `enable()`, so this answers even from the session where the hover appears
+to be doing nothing — which is the session someone typing it is usually in.
 
 If `:Hover` itself does not exist, the plugin is not on `'runtimepath'` at all; check the
 plugin manager before anything on this page.

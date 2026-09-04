@@ -48,7 +48,7 @@ detail left.
 | `hover.set(name, on)` | Turn a single switch on, off, or over. The names are what `hover.switches.names()` returns |
 | `hover.enabled(name)` | Whether one switch is in effect, implications included |
 | `hover.set_auto(which)` | Which target types open by themselves |
-| `hover.status()` | `{ mode, switches }` — for a statusline or a report |
+| `hover.status()` | `{ mode, switches, auto }` — for a statusline or a report. Each switch carries `enabled` (the chain folded in), `flag` (its own value) and `route` (the words to type at it) |
 | `hover.why()` | Which gate declined at this cursor position |
 
 `set_mode` keeps `vim.g.hover_disable` in step, so the runtime switch and the spec setting
