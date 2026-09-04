@@ -13,7 +13,8 @@ the alternatives that were rejected, and the bugs that changed the design.
 [docs/README.md](../README.md) indexes all of it.
 
 - **[QUIET.md](QUIET.md)** — why so little is on by default: the noise
-  diagnosis this started from, the two axes the opt-in model is built on, the
+  diagnosis this started from, the two axes the opt-in model was built on and
+  the third one added when they could not express `auto_hover` at all, the
   three modes and what outranks what, and why every switch is derived from one
   table rather than listed.
 - **[BARE-PATHS.md](BARE-PATHS.md)** — the one preview class whose value turns
