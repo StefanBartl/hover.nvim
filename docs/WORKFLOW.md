@@ -55,20 +55,26 @@ it catches the missing hard dependency, the mode set in a forgotten spec, the em
 The order matters. `:Hover why` on a position where nothing was ever going to hover tells
 you the truth and not much else.
 
-## Three operations on a float, and they answer three questions
+## Four operations on a float, and they answer four questions
 
-They are easy to confuse because two of them make the picture bigger.
+They are easy to confuse because three of them make the picture bigger.
 
 | You want | Reach for | What actually happens |
 | --- | --- | --- |
 | more of the *file* | `<C-Down>` / `<C-Up>`, or `<M-PageDown>` / `<M-PageUp>` | the next screenful of lines, or the next PDF page |
 | the same content, more *room* | `+` / `-` over a picture, `:Hover resize` anywhere | the box grows: a picture is drawn larger, text shows **more lines** |
+| **all** the room there is | `F`, or `:Hover zen` | the same, with the screen as the box — and the float is pinned so the next keystroke does not take it away |
 | a *detail*, closer | `>` / `\|` / `=`, or `:Hover zoom` | the box stays, the view narrows: a picture is cropped, a PDF page re-rendered sharper |
 
-**Only the third is magnification**, which is why it is not called zoom on the second row
-— for text a bigger box cannot mean bigger letters, because the font belongs to the
+**Only the last is magnification**, which is why it is not called zoom on the two rows
+above — for text a bigger box cannot mean bigger letters, because the font belongs to the
 terminal emulator. Once you are zoomed in, `h`/`j`/`k`/`l` move the view; they are bound
 only while zoomed, and handed straight back after.
+
+Zen is the third row and not "resize, held down", because how many `+` presses reach the
+edge is a property of the terminal: measured, a 210×55 one has room for five steps and an
+80×24 one for none at all. `+` and `-` keep working inside zen, and `F` again is what
+leaves it. See [ZEN.md](FEATURES/ZEN.md).
 
 A zoom step costs about a quarter of a second, so it is a deliberate press rather than a
 dial you hold. Stepping back out to a view you have already seen is instant — the crop is
@@ -96,6 +102,11 @@ per session rather than in a spec:
 
 - `:Hover links web on` while you are auditing links. Nothing leaves the machine at this
   level — host, path and decoded query are parsed offline.
+- `:Hover auto url` with it, and this is the one that is easy to miss. The switch above
+  says a link *may* hover; this says the trigger opens it without being asked, and it is
+  off by default like every type but pictures and PDFs. With only the first, `:Hover show`
+  answers and resting the cursor on a link does nothing — which reads as a broken switch.
+  The switch says so when you throw it, and `:Hover why` names this gate at the cursor.
 - `:Hover links web fetch on` on top of it when the question is "is this link still
   alive": you get the status code and the page title. **This is a disclosure**, so leave
   it in the session it belongs to. Every link the cursor rests on becomes a request from

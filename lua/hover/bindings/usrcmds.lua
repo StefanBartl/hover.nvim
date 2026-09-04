@@ -92,6 +92,29 @@ local function notify_status(status)
       table.concat(s.route, " ")
     )
   end
+
+  -- **The second axis, which this form used to leave out entirely.** The
+  -- board (`hover.status_view`) has drawn it since it was built; this
+  -- fallback listed the switches and stopped, so on a lib.nvim without the UI
+  -- kit `:Hover status` could report every switch on and every float shut.
+  -- The switches say what may hover; these say what opens *without being
+  -- asked*, and a report of one half is what made `:Hover links web on` look
+  -- broken.
+  if type(status.auto) == "table" and #status.auto > 0 then
+    local on, off = {}, {}
+    for _, entry in ipairs(status.auto) do
+      table.insert(entry.enabled and on or off, entry.name)
+    end
+    lines[#lines + 1] = ("opens by itself: %s"):format(
+      #on > 0 and table.concat(on, ", ") or "nothing"
+    )
+    if #off > 0 then
+      lines[#lines + 1] = ("  on request only: %s  --  :Hover auto <type>"):format(
+        table.concat(off, ", ")
+      )
+    end
+  end
+
   require("hover.notify").info(table.concat(lines, "\n"))
 end
 
@@ -308,6 +331,34 @@ function M.routes()
           require("hover.notify").info("no hover to pin")
         else
           require("hover.notify").info(now and "hover pinned" or "hover released")
+        end
+      end,
+    },
+    {
+      path = { "zen" },
+      -- Beside the borrowed `F` rather than instead of it, which is the house
+      -- rule: a borrow is undiscoverable until it has been seen once, and
+      -- `:Hover` completion is where the rest of this plugin is met. The same
+      -- argument `:Hover resize` and `:Hover nav` are here on.
+      desc = "Put the hover on screen full screen, or take it back",
+      args = {
+        {
+          name = "state",
+          enum = STATES,
+          optional = true,
+          -- Toggling is the gesture; the explicit form costs no typing
+          -- either, since the enum completes.
+          default = "toggle",
+        },
+      },
+      ---@param ctx table
+      run = function(ctx)
+        -- `zen` declines for three different situations and hands back the
+        -- reason for the two worth naming; the third is "it is already in
+        -- that state", which is what an explicit `on` twice means.
+        local _, why = hover().zen(to_bool(ctx and ctx.args and ctx.args.state))
+        if why then
+          require("hover.notify").info(why)
         end
       end,
     },

@@ -145,7 +145,7 @@ end
 --- argument stops being readable -- `borrow(c, f, g, h, true)` says nothing
 --- about which of them pans. A fourth condition is one key here.
 ---@param content Hover.Content|nil
----@param handlers { next_answer?: fun(), has_answers?: boolean, scroll?: fun(delta: integer), resize?: fun(delta: integer), nav?: fun(dx: integer, dy: integer), zoom?: fun(delta: integer), zoomed?: boolean, zoomable?: boolean }
+---@param handlers { next_answer?: fun(), has_answers?: boolean, scroll?: fun(delta: integer), resize?: fun(delta: integer), nav?: fun(dx: integer, dy: integer), zoom?: fun(delta: integer), zoomed?: boolean, zoomable?: boolean, zen?: fun() }
 ---@return nil
 function M.borrow(content, handlers)
   handlers = handlers or {}
@@ -172,6 +172,26 @@ function M.borrow(content, handlers)
     take(seen, lhs, function()
       hover().open()
     end, "hover: open what this hover is showing")
+  end
+
+  -- Full screen, for *any* hover, and before the scroll keys so a key in both
+  -- lists keeps the older meaning.
+  --
+  -- **The widest borrow condition here, and the argument is the same one the
+  -- narrow ones make: what does the key cost.** `resize_keys.larger` is
+  -- narrowed to a drawn hover because `+` is a real motion and taking it over
+  -- every float is not worth it. `F` is find-character-backwards: pressed on
+  -- its own it waits for a second character and completes nothing, so a
+  -- reader loses no finished operation for as long as the float lasts -- the
+  -- same trade `>` and `=` make. And a text preview is exactly where the room
+  -- is worth the most: twenty lines becomes fifty.
+  if handlers.zen then
+    local zn = type(cfg.zen_keys) == "table" and cfg.zen_keys or {}
+    for _, lhs in ipairs(M.keylist(zn.toggle)) do
+      take(seen, lhs, function()
+        handlers.zen()
+      end, "hover: full screen, and back")
+    end
   end
 
   local s = content and content.scroll

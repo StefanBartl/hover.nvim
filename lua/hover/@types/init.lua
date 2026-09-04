@@ -43,11 +43,13 @@
 ---@field positions? boolean # Whether a registered position preview may open a float. Default true.
 ---@field paths? Hover.PathsConfig
 ---@field office? Hover.OfficeConfig
+---@field zen? Hover.ZenConfig
 ---@field scroll_keys? Hover.ScrollKeys
 ---@field resize_keys? Hover.ResizeKeys
 ---@field nav_keys? Hover.NavKeys
 ---@field position_keys? Hover.PositionKeys
 ---@field zoom_keys? Hover.ZoomKeys
+---@field zen_keys? Hover.ZenKeys
 ---@field dismiss_keys? string|string[] # Keys that wave the hover on screen away. Default `{ "q", "<Esc>" }`; a configured list replaces the default, and an empty one binds nothing.
 ---@field open_keys? string|string[] # Keys that open what the float is showing, through open.nvim or `vim.ui.open`. Default `{ "gf" }`; an empty list binds nothing.
 ---@field keymaps? Hover.Keymaps
@@ -81,6 +83,13 @@
 ---@class Hover.ScopeFamilies
 ---@field prose? string[] # Treated as prose, alongside `@comment`, `@string`, `@markup`.
 ---@field code? string[] # Treated as executable code, alongside `@variable`, `@operator`.
+
+--- The float on (almost) the whole editor. Not a larger window: the
+--- previewer's own budget -- `max_lines`, `max_width` -- becomes the editor's
+--- size and the preview is built again against it, which is why a text hover
+--- shows more lines rather than the same twenty with margin.
+---@class Hover.ZenConfig
+---@field pin? boolean # Whether entering zen also pins the float. Default true: the float is `focusable = false` and the dismissal hangs on `CursorMoved`, so an unpinned full-screen hover closes on the first `j`. Leaving zen releases only a pin zen itself took.
 
 ---@class Hover.OfficeConfig
 ---@field convert? boolean # Default false. `:Hover office on`.
@@ -143,6 +152,13 @@
 ---@field out? string|string[] # Default `{ "|" }`.
 ---@field reset? string|string[] # Default `{ "=" }`.
 
+--- The key that puts the hover on screen full screen, and takes it back.
+--- Borrowed for *any* hover, unlike `resize_keys.larger`: `F` waits for a
+--- second character and completes nothing on its own, so holding it costs a
+--- reader nothing for as long as the float lasts.
+---@class Hover.ZenKeys
+---@field toggle? string|string[] # Default `{ "F" }`.
+
 ---@class Hover.Keymaps
 ---@field show? string|string[]|false # Show the hover for whatever is under the cursor, ignoring every volume switch. Default false: no key is claimed unless asked for.
 
@@ -178,6 +194,8 @@
 ---@field zoom_px? Hover.Preview.Dims # A picture's pixel size, read once so a level check costs no file read. Unset for a PDF page, which has no pixel ceiling to check against.
 ---@field canvas? Hover.Canvas # Size of the picture currently on screen, so `hover.resize` can tell a step that took effect from one the terminal refused.
 ---@field pinned? boolean # Taken out of the cursor's hands: the trigger neither replaces nor closes it.
+---@field zen? boolean # Rendered against the editor's own size rather than the configured box, and centred. Set by `hover.zen`; the resize level still multiplies on top of it.
+---@field zen_pinned? boolean # `zen` was what pinned this float, so leaving zen may unpin it again. Absent when the reader pinned it themselves, which zen must not undo.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
 
 -- #####################################################################
@@ -316,6 +334,7 @@
 ---@field max_width? integer
 ---@field max_height? integer
 ---@field canvas? Hover.Canvas # Blank float of this exact size; `lines`, `title` and `filetype` are ignored.
+---@field center? boolean # Centre the float on the editor instead of anchoring it at the cursor. Set by `hover.zen`, and the only case where a hover is not next to what it describes -- a float filling the screen annotates no particular line.
 ---@field border? string|string[]
 ---@field focusable? boolean
 ---@field highlight? string # Highlight group for the first line. `HoverMissing`/`HoverError` (-> `DiagnosticError`) and `HoverInfo` (-> `DiagnosticHint`) are defined on demand, with `default = true` so a colorscheme still wins.

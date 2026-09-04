@@ -27,6 +27,12 @@ the alternatives that were rejected, and the bugs that changed the design.
   called resize rather than zoom, why `+` and `-` are bound over a picture but
   the wheel is bound everywhere, and why the ceiling is found by stepping into
   it rather than carried as a number.
+- **[ZEN.md](ZEN.md)** — the third way to make a hover bigger, and the one that
+  is not a bigger window: why the previewer's *budget* becomes the screen
+  rather than the float merely opening larger, the measurement that made it a
+  prerequisite rather than a nicety, why it pins by default and why that
+  follows from `focusable = false`, and why `z` is the one key it could not
+  have.
 - **[ZOOM.md](ZOOM.md)** — the other operation: same box, a narrower view. Why
   a quarter of a second made it a route before it was a key, why a picture is
   cropped and a PDF page re-rendered at a higher DPI instead, why the panning

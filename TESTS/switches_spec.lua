@@ -426,6 +426,22 @@ describe("hover.why", function()
     assert.is_truthy(report:find("positions:", 1, true))
   end)
 
+  -- The gate `:Hover why` did not know about, which is the one it was written
+  -- for: a target that is found, allowed and not dismissed, and still does not
+  -- open, because its *type* waits to be asked for. The old report ended at
+  -- "this should hover. If it does not, that is a bug worth reporting."
+  it("names the type gate, the second one every target passes", function()
+    local report = why_at("see ./real.md ok", 4)
+    assert.is_truthy(report:find("do not open by themselves", 1, true))
+    assert.is_truthy(report:find("Hover auto markdown", 1, true))
+  end)
+
+  it("stops naming it once that type is allowed to open", function()
+    config.setup({ auto_hover = { markdown = true } })
+    local report = why_at("see ./real.md ok", 4)
+    assert.is_truthy(report:find("this should hover", 1, true))
+  end)
+
   it("says the position class is off when it is", function()
     require("hover.registry").register("p", {
       positions = {
@@ -744,6 +760,46 @@ describe("auto_hover, the third axis", function()
     assert.is_nil(said)
     assert.is_truthy(err and err:find("nonsense", 1, true))
     assert.is_truthy(err and err:find("image", 1, true), "the error does not name the valid set")
+  end)
+
+  -- **The bug this axis introduced, and the one nothing on screen could
+  -- explain.** `:Hover links web on` announced "web links hover" and then
+  -- nothing hovered: `auto_hover.url` is false, a second gate the switch knew
+  -- nothing about. Both halves were true, which is why it took a day to find
+  -- and why the announcement is the place to fix it -- the reader is looking
+  -- at exactly one line at that moment, and it was the wrong one.
+  it("says so when a switch it turns on still will not open by itself", function()
+    local report = switches.on_report("web")
+    assert.is_truthy(report:find("web links hover", 1, true), "the switch's own message is gone")
+    assert.is_truthy(report:find("Hover auto url", 1, true), "the second gate was not named")
+  end)
+
+  it("says nothing about the second gate once that gate is open", function()
+    config.setup({ auto_hover = { url = true } })
+    local report = switches.on_report("web")
+    assert.is_nil(report:find("Hover auto", 1, true), "the gate is open and was still named")
+  end)
+
+  -- The sixth hand-kept copy in this repository, held against its source the
+  -- moment it was written rather than after it fell behind. A switch whose
+  -- `auto_type` names a type that does not exist would report a gate nobody
+  -- can open and complete to nothing.
+  it("declares an auto_hover name that exists, wherever a switch declares one", function()
+    local names = {}
+    for _, name in ipairs(auto_types()) do
+      names[name] = true
+    end
+    local bad, declared = {}, 0
+    for _, s in ipairs(switches.status()) do
+      if s.auto_type then
+        declared = declared + 1
+        if not names[s.auto_type] then
+          bad[#bad + 1] = ("%s declares auto_type %q"):format(s.name, s.auto_type)
+        end
+      end
+    end
+    assert.same({}, bad)
+    assert.is_true(declared > 0, "no switch declares the second gate any more")
   end)
 end)
 

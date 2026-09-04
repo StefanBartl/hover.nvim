@@ -119,7 +119,7 @@ Six routes carry most of the daily use:
 | `:Hover status` | the mode, every switch and what opens by itself — a board where `<CR>` toggles the row and `?` lists the keys |
 | `:Hover mode manual` | nothing opens by itself any more; every preview still answers when asked |
 | `:Hover auto [<type>]` | which target types open by themselves |
-| `:Hover links web on` | let http(s) links hover too — off by default, because documentation is made of links |
+| `:Hover links web on` | let http(s) links hover too — off by default, because documentation is made of links. Pair it with `:Hover auto url` for the automatic trigger |
 
 Every route completes with `<Tab>` and the state argument may be omitted, which toggles.
 The full list is in [docs/commands.md](docs/commands.md), the keys in
@@ -144,6 +144,7 @@ contradicted the intuition it was meant to confirm.
 | [Contributions](docs/FEATURES/CONTRIBUTIONS.md) | The registry: what another plugin or your own config can add, what `on_request` is for, and the bug only a live wiring could find |
 | [Resizing](docs/FEATURES/RESIZE.md) | One operation with two honest answers, and why the ceiling is found by stepping into it rather than carried as a number |
 | [Zooming](docs/FEATURES/ZOOM.md) | Same box, a narrower view: why a picture is cropped and a PDF page re-rendered at a higher DPI instead |
+| [Zen](docs/FEATURES/ZEN.md) | The float on the whole editor — not a bigger window but a bigger *budget*, why it pins by default, and why `z` is the one key it could not have |
 
 [docs/FEATURES/README.md](docs/FEATURES/README.md) is the index, with a sentence on each.
 

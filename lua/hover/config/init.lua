@@ -421,6 +421,18 @@ function M.office_enabled()
   return type(office) == "table" and office.convert == true
 end
 
+--- Whether going full screen also pins the float.
+---
+--- Defaults to *true*, so the test is `~= false` rather than `== true`: the
+--- float is `focusable = false` and its dismissal hangs on `CursorMoved`, so
+--- an unpinned full-screen hover closes on the first key that is not
+--- borrowed. See `hover.zen`.
+---@return boolean
+function M.zen_pins()
+  local zen = M.get().zen
+  return type(zen) ~= "table" or zen.pin ~= false
+end
+
 --- Whether pictures are drawn into the float where a provider can.
 ---@return boolean
 function M.images_enabled()
