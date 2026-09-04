@@ -303,8 +303,9 @@ measured at 277–754 ms across two runs, so it could not be built at all until
 a contribution could declare its own answer expensive — see
 [when your answer is expensive](api.md#when-your-answer-is-expensive).
 It is also the one integration no CI can exercise, because answering needs a
-running container engine: the row, and the script that fills it, are in
-[manual evidence](MANUAL-EVIDENCE.md#a-contribution-asked-only-on-request).
+running container engine. `scripts/onrequest_probe.lua` is what exercises it —
+run from the repository root, it prints what happened and reading it is the
+check.
 
 **Each answers only where it has something to say**, and each enforces that
 itself rather than relying on a switch here:

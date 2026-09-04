@@ -121,7 +121,7 @@ closes it, and `:Hover pin` is still one command away.
 
 An Alt chord was not a candidate: on the machine this is developed on the
 terminal sends none, and a key that displaces nothing *and does nothing* is
-absent rather than cheap ([MANUAL-EVIDENCE.md](../MANUAL-EVIDENCE.md)).
+absent rather than cheap.
 
 Among plain characters the rule is the one `>` and `=` were chosen on: what
 does the key cost for as long as the float is up. `F` is

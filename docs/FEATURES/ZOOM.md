@@ -237,7 +237,7 @@ reset -> the whole picture;  pan while not zoomed -> false
 
 What nobody has seen yet is the result **in a terminal**, and whether `h/j/k/l`
 feel right while panning is not a question a spec can be asked at all. Both are
-tracked in [MANUAL-EVIDENCE.md](../MANUAL-EVIDENCE.md).
+checked by hand, because a terminal is the only thing that can answer it.
 
 **The crop itself is covered now, and was not for a while.** That check
 reported *pending* everywhere, which read as "no ImageMagick here" and was

@@ -1,6 +1,12 @@
 -- scripts/onrequest_probe.lua -- the `on_request` path, against a real engine.
 --
--- Run from the repo root:
+-- **Run from THIS repository's root** -- hover.nvim's checkout, not your
+-- Neovim configuration directory. `-l` resolves the script path relative to
+-- the working directory, and `vim.opt.rtp:append(vim.fn.getcwd())` below puts
+-- *this* plugin on the runtime path, so anywhere else the answer is
+-- `E5112: cannot open scripts/onrequest_probe.lua`.
+--
+--   cd /path/to/hover.nvim
 --   nvim --clean --headless -l scripts/onrequest_probe.lua
 --   nvim --clean --headless -l scripts/onrequest_probe.lua docker
 --
@@ -15,7 +21,7 @@
 --
 -- This exists so that run is repeatable rather than rebuilt each time. It
 -- asserts nothing and fails nothing; it prints what happened, and reading it
--- is the check. `docs/MANUAL-EVIDENCE.md` carries the row it fills.
+-- is the check.
 --
 -- With no argument it uses whatever sandbox.nvim's own detection picks, which
 -- is the case that matters -- that is what a user gets. An argument forces one

@@ -7,7 +7,7 @@
 -- **What is pinned here is the gating and the protections, not the render.**
 -- Whether Chrome produces a picture needs Chrome, a network and a terminal
 -- that can draw one; that is evidence a person collects
--- (`docs/MANUAL-EVIDENCE.md`). What a run can check is everything that
+-- by hand. What a run can check is everything that
 -- decides whether a browser is started at all -- and every one of those is a
 -- decision that costs seconds or a disclosure when it is wrong:
 --

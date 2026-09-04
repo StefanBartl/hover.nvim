@@ -135,8 +135,8 @@ let a held key run the level away after all.
 A PDF page is not re-rasterized, so making one bigger costs nothing and is
 correspondingly unsharp.
 
-Two things about this feature are only checkable by hand, and both are in
-[MANUAL-EVIDENCE.md](../MANUAL-EVIDENCE.md). The geometry is pinned all the way
+Two things about this feature are only checkable by hand, and both belong in
+whatever notes you keep about *your* machine. The geometry is pinned all the way
 to `nvim_win_get_config`, but a cell area is only a *request* to the terminal —
 whether the drawing followed it is visible and nothing else. And mouse input
 cannot be driven headlessly at all: measured, `nvim_input_mouse` fired **zero**

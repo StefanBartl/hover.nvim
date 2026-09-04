@@ -1,6 +1,8 @@
 -- scripts/pdfzoom_probe.lua -- the sharp PDF zoom, against a real document.
 --
--- Run from the repo root:
+-- Run from THIS repository's root -- hover.nvim's checkout, not your Neovim
+-- configuration directory; `-l` resolves the path relative to the working
+-- directory and the runtime path is appended from it:
 --   nvim --clean --headless -l scripts/pdfzoom_probe.lua path/to/file.pdf
 --   nvim --clean --headless -l scripts/pdfzoom_probe.lua path/to/file.pdf 7
 --
@@ -14,8 +16,7 @@
 -- detail in it.
 --
 -- So this prints what happened and reading it is the check, exactly like
--- `scripts/onrequest_probe.lua`. `docs/MANUAL-EVIDENCE.md` carries the row it
--- fills.
+-- `scripts/onrequest_probe.lua`.
 --
 -- What to look for, in the table it prints:
 --
