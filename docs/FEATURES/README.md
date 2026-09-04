@@ -47,10 +47,12 @@ the alternatives that were rejected, and the bugs that changed the design.
 - **[integrations.md](../integrations.md)** (one level up) — who is wired to
   whom, through which door, and what degrades when a plugin is absent.
 
-One neighbour is deliberately not in this directory:
-[MANUAL-EVIDENCE.md](../MANUAL-EVIDENCE.md) is what no CI can check and has to
-be seen by a person. These pages say why a decision was made; that one says
-whether the result was ever actually looked at, and when.
+One neighbour is deliberately **not in this repository at all**: the record of
+what a person actually saw, on which machine, and when. These pages say why a
+decision was made; that record says whether the result was ever looked at — and
+since it is one reader's account of one set of machines rather than
+documentation of the plugin, it belongs in their own notes. What no CI can
+reach is named in each page here instead, next to the decision it belongs to.
 
 ## The house rule these pages exist to record
 

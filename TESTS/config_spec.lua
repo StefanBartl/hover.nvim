@@ -157,7 +157,7 @@ end)
 -- The office conversion cache outlives the session now, which is only safe
 -- because something retires it. These pin the wiring of that policy; the
 -- sweep itself needs LibreOffice and a real cache directory, and is evidenced
--- by hand (docs/MANUAL-EVIDENCE.md).
+-- by hand, since only a terminal can answer it.
 describe("the office cache policy", function()
   after_each(function()
     config.reset()

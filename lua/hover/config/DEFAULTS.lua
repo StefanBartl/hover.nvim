@@ -554,7 +554,7 @@ return {
   --- does nothing* is not a cheap key, it is an absent one, and "the terminal
   --- sends Alt" was an assumption wearing an argument's clothes. The chords
   --- remain the right choice where they arrive, and that is a config away.
-  --- See `docs/MANUAL-EVIDENCE.md`.
+  --- Checked by hand; a terminal is the only thing that can answer it.
   ---
   --- **So the default is three plain characters that arrive everywhere**, and
   --- the three are not chosen on one argument but on two:
@@ -614,7 +614,7 @@ return {
   --- character, which after 2026-09-03 is a requirement rather than a
   --- preference -- an Alt chord is worth exactly as much as the terminal's
   --- willingness to send it, and the machine this is developed on sends none
-  --- (`docs/MANUAL-EVIDENCE.md`).
+  --- Checked by hand, since only a terminal can answer it.
   ---
   --- `z` was the obvious mnemonic and cannot be taken: it is a *prefix*, so
   --- borrowing it would swallow `zz`, `zt`, `zb` and every fold command for

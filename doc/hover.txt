@@ -406,7 +406,7 @@ worth displacing a motion already spoken for by `resize_keys`.
 They were `<M-z>`, `<M-Z>` and `<M-R>` until 2026-09-03, on the argument that
 an Alt chord displaces nothing -- worth exactly what the terminal's
 willingness to send the chord is worth, which on the development machine is
-nothing at all. See docs/MANUAL-EVIDENCE.md. Set `zoom_keys` back to the
+nothing at all. Set `zoom_keys` back to the
 chords wherever they do arrive.
 
 `>` and `=` are OPERATORS: over a float they move no cursor and complete

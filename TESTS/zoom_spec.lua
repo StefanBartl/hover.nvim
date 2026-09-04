@@ -25,7 +25,7 @@
 -- without it, the same stance images.nvim takes in its own `convert_spec`
 -- (and the crop is that plugin's own to prove). What no machine here can say
 -- is that the *detail* arrived on the terminal -- that is a row in
--- `docs/MANUAL-EVIDENCE.md`.
+-- by hand, since only a terminal can answer it.
 
 local config = require("hover.config")
 local media = require("hover.preview.media")

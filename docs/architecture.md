@@ -90,8 +90,9 @@ Two traps, both of which cost days:
   `images.testcard` builds it to whatever box it is handed. Reproduce with a real image.
 
 Neither of these is reachable by CI: what a terminal actually drew is visible and nothing
-else. [MANUAL-EVIDENCE.md](MANUAL-EVIDENCE.md) is where that gap is written down, with the
-date each path was last checked by hand.
+else. That gap is recorded by hand rather than by CI — in notes kept outside this
+repository, because what one person saw on one machine is their record and not this
+plugin's documentation.
 
 ---
 

@@ -28,7 +28,7 @@ short version of all of it; `:help hover` is the same ground offline.
 | [FEATURES/](FEATURES/README.md) | One page per feature, and each one is about the **decision** rather than the feature: the measurement it was built against, the alternatives that were rejected, and the bug that changed the design |
 | [integrations.md](integrations.md) | Who reaches whom and through which door, what degrades when a plugin is absent, and a table reading each symptom back to the plugin that owns it |
 | [architecture.md](architecture.md) | The module map, and the two invariants a plausible-looking change reintroduces a bug through |
-| [MANUAL-EVIDENCE.md](MANUAL-EVIDENCE.md) | The things no CI can check — a drawn image, a rasterized page, a converted document, a contribution asked only on request — with the date each was last seen by a person, and on what |
+| `scripts/onrequest_probe.lua`, `scripts/pdfzoom_probe.lua` | The two paths no CI can exercise — a contribution that costs a container engine, and a PDF page re-rendered at a higher DPI. Run from the repository root; they assert nothing, they print what happened |
 
 ## Here, but not prose
 

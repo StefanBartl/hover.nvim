@@ -31,7 +31,7 @@
 -- raises `max_width` and `max_lines` for one preview, and every previewer
 -- answers that in its own way. What is pinned here is that scaling and its
 -- edges, not the drawing, which needs a terminal and is evidenced by hand
--- (`docs/MANUAL-EVIDENCE.md`).
+-- by hand, since only a terminal can answer it.
 
 local config = require("hover.config")
 local media = require("hover.preview.media")
@@ -244,7 +244,7 @@ describe("hover.resize", function()
     -- one line `media.image` runs when a provider *is* there, so everything
     -- below it is the real path: the real `canvas_cells`, the real
     -- `hover.zoom`, the real float. Only `detect()` and the drawing itself
-    -- are missing, and the drawing needs a terminal (`MANUAL-EVIDENCE.md`).
+    -- are missing, and the drawing needs a terminal to be checked at all.
     registry.register("stand-in-provider", {
       previews = {
         image = function(target, opts)
@@ -415,7 +415,7 @@ describe("hover.resize", function()
   -- attached (measured: zero mappings fired, `#nvim_list_uis() == 0`), while
   -- `feedkeys` with the termcode does fire one. So the mapping and the gate
   -- are real below, and the wheel reaching Neovim is evidenced by hand
-  -- (`docs/MANUAL-EVIDENCE.md`).
+  -- by hand, since only a terminal can answer it.
   it("knows its own rectangle, border ring included", function()
     assert.is_true(show_at("see ./pic.png here", 5))
     -- `assert` rather than a nil check: `float.win()` is `integer|nil`, and
