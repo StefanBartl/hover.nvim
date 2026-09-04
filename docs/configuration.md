@@ -41,7 +41,7 @@ default rather than extending it, which is what a list should mean. `{}` binds n
 | `zen.pin` | `true` | Whether `:Hover zen` also pins the float. On, and this default follows from a mechanism rather than taste: the float is `focusable = false` and its dismissal hangs on `CursorMoved`, so an unpinned full-screen hover closes on the first key that is not borrowed. `false` gives exactly that transient reading back. Leaving zen releases only a pin zen itself took. See [ZEN.md](FEATURES/ZEN.md). |
 | `placeholder_grace_ms` | `250` | How long an async preview may take before a "rendering…" placeholder is allowed to interrupt. Below this, waiting quietly reads as instant; above it, silence reads as breakage. |
 
-## The eleven switches
+## The twelve switches
 
 Each of these has a `:Hover` route too, and the route is the way to throw one for the
 session — see [commands.md](commands.md). **Implication runs upward only:** `fetch` turns
@@ -54,6 +54,10 @@ clearing their flag, so turning it back on restores what you had.
 | `links.web` | `false` | Whether an http(s) link hovers. Implies `links.enabled`. Off because documentation is made of links: the offline preview shows host, path and query, all of which are already *in* the link. |
 | `links.fetch` | `false` | Fetch for status code, title, and — for an HTML page — **what the page says**. Implies `links.web`. Off a second time for a reason volume does not cover — it is a disclosure: every link the cursor rests on becomes a request from this machine to that host. There is no third switch for the page text: the body is downloaded either way, so it costs no request and no second disclosure. It is trimmed to the room the float has, which is what makes `:Hover zen` over a link worth pressing. |
 | `links.timeout_ms` | `2000` | |
+| `links.pdf.enabled` | `false` | Show a link that answers `application/pdf` as its first page, straight into the pdfport/`pdftoppm` pipeline a local PDF uses — paging and the sharp zoom included. Implies `links.fetch`, and that implication is a *mechanism*: the content type identifies it, and only a fetch produces one. See [WEBPDF.md](FEATURES/WEBPDF.md). |
+| `links.pdf.max_bytes` | `25000000` | Ceiling for the document download — a different question from the fetch's 2 MB, which bounds what a hover reads of a *page*. A PDF over this reports its size and names this option, rather than arriving truncated: half a PDF is not a smaller PDF, it is a file that will not open, and the error would read as a broken renderer. |
+| `links.pdf.timeout_ms` | `30000` | How long the download may take. |
+| `links.pdf.cache_days` | `7` | How long a downloaded document may survive between sessions. Keyed by URL and the length the server declared — the honest limit of what is available without an mtime: a replacement of exactly the same size is invisible to it. |
 | `links.shot.enabled` | `false` | Render a hovered link in a headless browser and draw the page into the float, instead of previewing it as text. Implies `links.web` and deliberately **not** `links.fetch` — a fetch is one `curl` GET with a 2 MB cap and no JavaScript, a render *executes* the page and fetches every subresource it names. See [SHOT.md](FEATURES/SHOT.md). |
 | `links.shot.eager` | `false` | Whether the **automatic trigger** may start a browser, or only `:Hover show`. A second switch because the two questions have different answers: fifty links scrolled past is fifty browser starts, and `auto_hover.url` cannot say it — the text preview and the screenshot are the same target type. |
 | `links.shot.timeout_ms` | `20000` | How long one render may take. Measured 2026-09-04: a browser start alone is ~0.7 s, and a real documentation page took 3.9–19.6 s — the same URL, at both ends. |

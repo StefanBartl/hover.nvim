@@ -27,6 +27,11 @@ the alternatives that were rejected, and the bugs that changed the design.
   called resize rather than zoom, why `+` and `-` are bound over a picture but
   the wheel is bound everywhere, and why the ceiling is found by stepping into
   it rather than carried as a number.
+- **[WEBPDF.md](WEBPDF.md)** — a link that answers with a PDF, shown as its
+  first page: the `text = true` in the fetch that quietly corrupts any binary
+  body and forced a second request, why that second request is what makes the
+  size cap answerable at all, and the one field that made paging and zooming
+  work with no code of their own.
 - **[SHOT.md](SHOT.md)** — a hovered link shown as a picture of the page: why
   that is a different *category* from fetching rather than a louder setting of
   it, why it is the one feature here whose trigger gets a switch of its own, the

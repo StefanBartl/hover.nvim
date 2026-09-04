@@ -22,7 +22,7 @@ plugin manager before anything else.
 
 `:Hover why` is the sharper tool whenever a hover fails to appear for one specific thing
 rather than for everything — it names the gate that declined, instead of leaving you to
-guess between eleven switches, a mode and a target type.
+guess between twelve switches, a mode and a target type.
 
 ## Acting on the float on screen
 
@@ -54,13 +54,14 @@ The type names `:Hover auto` takes are `image`, `pdf`, `office`, `markdown`, `fi
 about the place the cursor is in. See
 [configuration.md](configuration.md#what-opens-by-itself).
 
-## The eleven switches
+## The twelve switches
 
 | Command | Does |
 | --- | --- |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |
 | `:Hover links web [on\|off\|toggle]` | whether http(s) links hover. Implies `links on` |
 | `:Hover links web fetch [on\|off\|toggle]` | fetch a link for its status code, page title and — for an HTML page — what the page says. Implies `links web on` |
+| `:Hover links web fetch pdf [on\|off\|toggle]` | a link that answers `application/pdf` is downloaded and shown as its **first page**, paged and zoomable like a local one. Implies `links web fetch on` — the content type is what identifies it, and only a fetch produces one |
 | `:Hover links web shot [on\|off\|toggle]` | render a hovered link in a headless browser and draw the page into the float. Implies `links web on` — and deliberately **not** `fetch`: a fetch is one `curl` GET, this *executes* the page |
 | `:Hover links web shot eager [on\|off\|toggle]` | let the automatic trigger do that, not only `:Hover show`. Implies `links web shot on`. Off because fifty links scrolled past is fifty browser starts |
 | `:Hover paths [on\|off\|toggle]` | whether a path written in prose hovers |
@@ -85,12 +86,12 @@ later. Every change also drops the preview cache, which is keyed by what a targe
 rather than by how it was rendered.
 
 Their configured counterparts, and what each one costs when it is on, are in
-[configuration.md](configuration.md#the-eleven-switches); why the defaults fall where they
+[configuration.md](configuration.md#the-twelve-switches); why the defaults fall where they
 do is in [FEATURES/QUIET.md](FEATURES/QUIET.md).
 
 | Summary | Names |
 | --- | --- |
-| Eleven runtime switches | `links`, `links web`, `links web fetch`, `links web shot`, `links web shot eager`, `paths`, `paths missing`, `paths code`, `positions`, `images`, `office` |
+| Twelve runtime switches | `links`, `links web`, `links web fetch`, `links web fetch pdf`, `links web shot`, `links web shot eager`, `paths`, `paths missing`, `paths code`, `positions`, `images`, `office` |
 
 ---
 

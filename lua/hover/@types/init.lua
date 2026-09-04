@@ -64,7 +64,22 @@
 ---@field web? boolean # Whether an http(s) target hovers. Default false: the offline preview restates what the link already says, and documentation is made of links. Implies `enabled`.
 ---@field fetch? boolean # Fetch the page for its status code, title, description and — for an HTML page — its own text. Default false: a hover that silently fetches discloses every link brushed past to its host. Implies `web`.
 ---@field timeout_ms? integer # Fetch timeout. Default 2000.
+---@field pdf? Hover.WebPdfConfig
 ---@field shot? Hover.ShotConfig
+
+--- A link that answers with a PDF, shown as its first page.
+---
+--- No conversion: the bytes already are a PDF, so they go into the same
+--- pdfport/`pdftoppm` pipeline a local one uses — the same paging keys and the
+--- same sharp zoom. It is a *second* request, and that is why it is a switch:
+--- `lib.nvim.net.curl` runs `vim.system(..., { text = true })`, which rewrites
+--- CRLF in the output and would corrupt any binary body, so the document is
+--- downloaded again straight to a file.
+---@class Hover.WebPdfConfig
+---@field enabled? boolean # Default false. `:Hover links web fetch pdf`.
+---@field max_bytes? integer # Ceiling for the document download. Default 25000000 — a different question from the fetch's 2 MB, which bounds what a hover reads of a *page*. A PDF over this reports its size rather than arriving truncated: half a PDF is a file that will not open.
+---@field timeout_ms? integer # How long the download may take. Default 30000.
+---@field cache_days? integer # How long a downloaded document may survive between sessions. Default 7. Keyed by URL and declared length, which is the honest limit of what is available without an mtime.
 
 --- A hovered link rendered by a headless browser and drawn into the float
 --- like any other picture.
@@ -215,6 +230,7 @@
 ---@field canvas? Hover.Canvas # Size of the picture currently on screen, so `hover.resize` can tell a step that took effect from one the terminal refused.
 ---@field pinned? boolean # Taken out of the cursor's hands: the trigger neither replaces nor closes it.
 ---@field requested? boolean # This float was opened by an explicit request (`:Hover show`, a `keymaps.show` key) rather than by the trigger. Remembered rather than only passed, so a re-render is a continuation of it: a screenshot asked for stays a screenshot after `F`.
+---@field paged? boolean # This hover shows a *paged* document, so `scroll` turns pages rather than moving by lines and `zoom` re-renders rather than crops. Recorded by `present` from the content, because the target type stopped being an accurate proxy once a link could answer with a PDF.
 ---@field zen? boolean # Rendered against the editor's own size rather than the configured box, and centred. Set by `hover.zen`; the resize level still multiplies on top of it.
 ---@field zen_pinned? boolean # `zen` was what pinned this float, so leaving zen may unpin it again. Absent when the reader pinned it themselves, which zen must not undo.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
@@ -302,6 +318,10 @@
 ---@field office_convert? boolean # Convert an office document to a PDF for a real page preview, instead of showing a badge.
 ---@field office_timeout_ms? integer # Conversion timeout, passed to pdfport.
 ---@field office_cache_days? integer # How long a converted PDF may survive between sessions.
+---@field url_pdf? boolean # Show a link answering `application/pdf` as its first page.
+---@field url_pdf_max_bytes? integer # Ceiling for that download.
+---@field url_pdf_timeout_ms? integer # How long it may take.
+---@field url_pdf_cache_days? integer # How long the document may survive between sessions.
 ---@field shot_enabled? boolean # Render a hovered link in a headless browser instead of previewing it as text.
 ---@field shot_eager? boolean # Whether the automatic trigger may do that, or only an explicit request.
 ---@field shot_timeout_ms? integer # How long one render may take.

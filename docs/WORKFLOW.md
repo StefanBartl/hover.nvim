@@ -44,7 +44,7 @@ for good.
 ## When nothing hovers, ask before you guess
 
 `:Hover why` names which gate declined *at this cursor position*, and what to type about
-it. Reach for it first. There are eleven switches, three modes, eleven target types and a
+it. Reach for it first. There are twelve switches, three modes, eleven target types and a
 Treesitter scope check, and guessing between them is a bad use of anyone's afternoon.
 
 `:checkhealth hover` is the other half and answers a different question — about the

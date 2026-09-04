@@ -2,8 +2,8 @@
 
 Why so little of this plugin is on by default, and where the lines were drawn.
 For *what* the switches are and how to throw them, see
-[commands.md](../commands.md#the-eleven-switches) and
-[configuration.md](../configuration.md#the-eleven-switches); this page is the
+[commands.md](../commands.md#the-twelve-switches) and
+[configuration.md](../configuration.md#the-twelve-switches); this page is the
 reasoning underneath.
 
 ## What the complaint actually was

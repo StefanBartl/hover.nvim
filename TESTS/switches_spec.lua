@@ -34,6 +34,7 @@ describe("hover.switches", function()
       "links",
       "web",
       "fetch",
+      "pdf",
       "shot",
       "eager",
       "paths",
