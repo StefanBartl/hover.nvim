@@ -52,7 +52,7 @@ clearing their flag, so turning it back on restores what you had.
 | --- | --- | --- |
 | `links.enabled` | `true` | Whether link syntax hovers at all. |
 | `links.web` | `false` | Whether an http(s) link hovers. Implies `links.enabled`. Off because documentation is made of links: the offline preview shows host, path and query, all of which are already *in* the link. |
-| `links.fetch` | `false` | Fetch for status code and title. Implies `links.web`. Off a second time for a reason volume does not cover — it is a disclosure: every link the cursor rests on becomes a request from this machine to that host. |
+| `links.fetch` | `false` | Fetch for status code, title, and — for an HTML page — **what the page says**. Implies `links.web`. Off a second time for a reason volume does not cover — it is a disclosure: every link the cursor rests on becomes a request from this machine to that host. There is no third switch for the page text: the body is downloaded either way, so it costs no request and no second disclosure. It is trimmed to the room the float has, which is what makes `:Hover zen` over a link worth pressing. |
 | `links.timeout_ms` | `2000` | |
 | `paths.enabled` | `true` | Whether a path written without link syntax hovers. |
 | `paths.missing` | `true` | Whether a bare path resolving to nothing may be marked broken. Deliberately hard to satisfy — this is the only preview class whose value goes *negative* when it is wrong. |

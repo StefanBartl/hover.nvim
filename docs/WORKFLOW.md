@@ -108,9 +108,12 @@ per session rather than in a spec:
   answers and resting the cursor on a link does nothing — which reads as a broken switch.
   The switch says so when you throw it, and `:Hover why` names this gate at the cursor.
 - `:Hover links web fetch on` on top of it when the question is "is this link still
-  alive": you get the status code and the page title. **This is a disclosure**, so leave
-  it in the session it belongs to. Every link the cursor rests on becomes a request from
-  this machine to that host.
+  alive": you get the status code, the page title, and — for an HTML page — what the page
+  says, trimmed to the room the float has. **This is a disclosure**, so leave it in the
+  session it belongs to. Every link the cursor rests on becomes a request from this
+  machine to that host. The page text has no switch of its own because it costs nothing
+  extra: the body arrives with the status code either way. `F` is what gives it a
+  screenful instead of a handful of lines.
 
 If the float starts landing over every second paragraph while you read, that is
 `:Hover mode manual`, not `:Hover links off`.

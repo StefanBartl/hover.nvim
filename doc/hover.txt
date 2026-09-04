@@ -105,6 +105,13 @@ reading a README becomes a slideshow and the float lands over the paragraph
 being read. Fetching is off a second time on top of that, because it is a
 disclosure -- `:Hover links web on` alone never touches the network.
 
+Once fetching is on, the float carries the status line, the title, the
+description, the content type and -- for an HTML page -- the page's own text,
+trimmed to whatever room the float has left. That last part has no switch of
+its own, on purpose: the body is downloaded either way, so turning it into
+prose costs no request and no second disclosure. `F` over such a link is
+therefore worth pressing; see |hover-zen|.
+
                                                         *hover-auto-hover*
 WHAT OPENS BY ITSELF is a second axis, and it says what the list above cannot:
 those are organised by where a target was FOUND, this one by what it turned out
