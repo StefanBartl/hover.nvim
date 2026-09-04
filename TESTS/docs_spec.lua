@@ -7,8 +7,8 @@
 -- **The reason this file exists is counted, not feared.** On 2026-09-02 four
 -- documented claims were wrong at the same time: the switch list of
 -- `hover.set()` in the vimdoc named seven of nine, three hand-counted numbers
--- in `docs/INTEGRATIONS.md` were stale, a heading there said "the only
--- registry contributor today" with six of them, and `docs/ROADMAP.md` said
+-- in `docs/integrations.md` were stale, a heading there said "the only
+-- registry contributor today" with six of them, and the roadmap said
 -- "four of the candidates are built" with five.
 --
 -- That is the same class that hit the *code* three times (`usrcmds.route_path`,
@@ -23,7 +23,7 @@
 --      `switches.names()`, and every spelled-out count of switches in any
 --      document against how many there are.
 --   2. Every `:Hover` route, against what `usrcmds.routes()` declares -- both
---      directions, and for each of the three tables that carry the full list.
+--      directions, and for each of the documents that carry the full list.
 --   3. The target types a preview may claim, against the declared union and
 --      against the dispatch chain that actually consumes them.
 --   4. The augroups and highlight groups `docs/BINDINGS.md` tabulates,
@@ -303,10 +303,17 @@ local function all_documents()
   return out
 end
 
--- The three documents that each carry a *complete* route table. Each one is a
+-- The documents that each carry a *complete* route table. Each one is a
 -- separate copy of the same list, which is why each one is checked.
-local ROUTE_TABLES =
-  { ["README.md"] = false, ["doc/hover.txt"] = true, ["docs/BINDINGS.md"] = false }
+--
+-- The README dropped off this list on 2026-09-04, when the full route table
+-- moved to `docs/commands.md` -- a complete command reference is not what a
+-- README is for. `docs/BINDINGS.md` dropped off with it: it now names the
+-- routes as a cheatsheet and points at `commands.md` for what they do, so it
+-- is no longer a second full copy to hold. Adding a file here is how a new
+-- copy gets covered; the check below that runs over *every* document is what
+-- catches an invented route wherever it is written.
+local ROUTE_TABLES = { ["docs/commands.md"] = false, ["doc/hover.txt"] = true }
 
 describe("doc/hover.txt against the source", function()
   it("lists exactly the switches hover.set() accepts, in the same order", function()
@@ -350,11 +357,24 @@ describe("what the documents count", function()
     assert.same({}, wrong)
   end)
 
-  it("names every switch in the README's feature table", function()
+  it("names every switch, wherever a document summarises them in one row", function()
     -- The cell that carries the list, and the count in its own first column.
-    local counted, cell = read("README.md"):match("|%s*(%a+) runtime switches%s*|([^|]*)|")
-    assert.is_truthy(counted, "README.md no longer has a row for the runtime switches")
-    assert.equals(#switches.names(), NUMBER[counted:lower()])
+    --
+    -- Searched across the documents rather than in one named file: this row
+    -- lived in the README's capability table until 2026-09-04 and now lives in
+    -- `docs/commands.md`, and a check that has to be re-pointed by hand every
+    -- time a document moves is one more hand-kept copy of exactly the kind
+    -- this file exists against.
+    local counted, cell, where
+    for file in pairs(all_documents()) do
+      local a, b = read(file):match("|%s*(%a+) runtime switches%s*|([^|]*)|")
+      if a then
+        counted, cell, where = a, b, file
+        break
+      end
+    end
+    assert.is_truthy(counted, "no document has a row for the runtime switches")
+    assert.equals(#switches.names(), NUMBER[counted:lower()], where)
 
     local named = backticked(cell)
     local missing = {}
@@ -497,7 +517,10 @@ describe("the borrowed keys against the defaults", function()
     return out
   end
 
-  local FILES = { "README.md", "docs/BINDINGS.md" }
+  -- `docs/configuration.md` replaced the README here on 2026-09-04, when the
+  -- option table moved out of it. Both files still tabulate every key list --
+  -- one as the reference, one as the cheatsheet -- so both are held to it.
+  local FILES = { "docs/configuration.md", "docs/BINDINGS.md" }
 
   it("tabulates the keys each list actually holds", function()
     local wrong = {}
@@ -679,8 +702,9 @@ describe("docs/MANUAL-EVIDENCE.md against its own rules", function()
   end)
 
   it("counts its own rows, wherever a document spells that number out", function()
-    -- Two phrasings, in two files: "one of the five paths above" here, "the
-    -- five things no CI can check" in the README. Both are counted by hand
+    -- Two phrasings, in two files: "one of the five paths above" in
+    -- MANUAL-EVIDENCE itself, "the five things no CI can check" wherever a
+    -- document points at it. Both are counted by hand
     -- and neither has a consumer that would notice going stale -- which is
     -- how they came to say three while there were four.
     local want = #evidence_rows()

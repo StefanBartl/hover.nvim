@@ -6,8 +6,8 @@ a library that requires plugins to do its job has the dependency backwards.
 
 So plugins register *into* this one rather than this one reaching for plugins.
 For the API and its shapes see
-[the README](../../README.md#contributing-from-a-plugin) and
-[INTEGRATIONS.md](../INTEGRATIONS.md); this page is why there are three kinds,
+[api.md](../api.md#the-registry) and
+[integrations.md](../integrations.md); this page is why there are three kinds,
 why one of them can decline to be asked, and the bug that only a live wiring
 found.
 

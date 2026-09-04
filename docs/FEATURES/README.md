@@ -6,9 +6,11 @@ interesting part sits: nearly every one of those decisions was made against a
 measurement that contradicted the intuition it was meant to confirm.
 
 These pages carry that half. [The README](../../README.md) says what the plugin
-does and [BINDINGS.md](../BINDINGS.md) says which key does it. Here is **why
-each feature has the shape it has** — the numbers, the alternatives that were
-rejected, and the bugs that changed the design.
+does, [commands.md](../commands.md) and [configuration.md](../configuration.md)
+say what to type and what to set, and [BINDINGS.md](../BINDINGS.md) says which
+key does it. Here is **why each feature has the shape it has** — the numbers,
+the alternatives that were rejected, and the bugs that changed the design.
+[docs/README.md](../README.md) indexes all of it.
 
 - **[QUIET.md](QUIET.md)** — why so little is on by default: the noise
   diagnosis this started from, the two axes the opt-in model is built on, the
@@ -31,13 +33,13 @@ rejected, and the bugs that changed the design.
   keys have the narrowest borrow condition here and the best case for it, how
   a measurement took the Alt chords away again — and the name collision that
   survived a green suite.
-- **[INTEGRATIONS.md](../INTEGRATIONS.md)** (one level up) — who is wired to
+- **[integrations.md](../integrations.md)** (one level up) — who is wired to
   whom, through which door, and what degrades when a plugin is absent.
 
-Two neighbours are deliberately not in this directory.
-[ROADMAP.md](../ROADMAP.md) is what is *not* built and what would have to be
-settled first; [MANUAL-EVIDENCE.md](../MANUAL-EVIDENCE.md) is what no CI can
-check and has to be seen by a person.
+One neighbour is deliberately not in this directory:
+[MANUAL-EVIDENCE.md](../MANUAL-EVIDENCE.md) is what no CI can check and has to
+be seen by a person. These pages say why a decision was made; that one says
+whether the result was ever actually looked at, and when.
 
 ## The house rule these pages exist to record
 

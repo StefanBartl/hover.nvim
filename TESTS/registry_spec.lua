@@ -294,7 +294,8 @@ end)
 -- a deprecated call on this line, how often this token occurs, what this
 -- module is. It is the one contribution kind that hands back finished content
 -- instead of a target string, because there is nothing to classify -- and
--- four plugins in this ecosystem were waiting on it (see docs/ROADMAP.md).
+-- four plugins in this ecosystem were waiting on it (see
+-- docs/FEATURES/CONTRIBUTIONS.md).
 --
 -- Three properties are worth pinning, and each of them is a way the kind
 -- could be built wrong:

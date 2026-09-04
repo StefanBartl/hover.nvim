@@ -2,6 +2,11 @@
 
 ## Requirements
 
+> **Do not install this alongside [`lewis6991/hover.nvim`](https://github.com/lewis6991/hover.nvim).**
+> The repository names do not collide; the Lua module root does, and the loser is simply
+> not there — nothing is reported and nothing fails. Neither plugin can work around it
+> from inside. [NAME-COLLISION.md](NAME-COLLISION.md) is the whole story; it is short.
+
 - Neovim >= 0.10
 - [lib.nvim](https://github.com/StefanBartl/lib.nvim) — **required**, with no fallback.
   The `:Hover` command composer, the debounce behind `delay_ms`, the notifier, the LRU
@@ -12,8 +17,7 @@
 
 Four optional contributors, none required, each upgrading exactly one row of what the
 float can show: markdown.nvim, images.nvim, pdfport.nvim, gopath.nvim. What each brings
-and what its absence costs is in [the README's Integrations
-section](../README.md#integrations).
+and what its absence costs is in [integrations.md](integrations.md).
 
 ## Two rules that decide whether this works
 
@@ -153,13 +157,15 @@ if `:help hover` comes back empty.
 :checkhealth hover
 ```
 
-Four sections: lib.nvim, the configuration, the optional contributors, and the external
-tools. Each contributor check asks for the entry point that is actually called rather
-than for the module, so "installed" and "answers" cannot drift apart. The configuration
-section prints the mode and every switch, and warns where the two disagree with each
-other — `mode = "manual"` with no key bound to `show`, for instance, because from the
-outside that is indistinguishable from a broken plugin. The tools section looks for
-`pdftoppm` and — only when office rendering is on — `soffice`.
+Five sections: lib.nvim, the configuration, the optional contributors, the external tools,
+and — on a lib.nvim new enough to have `lib.nvim.deps` — the tools this plugin declares in
+[`install.json`](install.json). Each contributor check asks for the entry point that is
+actually called rather than for the module, so "installed" and "answers" cannot drift
+apart. The configuration section prints the mode and every switch, and warns where the two
+disagree with each other — `mode = "manual"` with no key bound to `show`, for instance,
+because from the outside that is indistinguishable from a broken plugin. The tools section
+looks for `pdftoppm` and — only when office rendering is on — `soffice`.
+[health.md](health.md) goes through all five, and through the warnings each one can raise.
 
 ### `soffice` on Windows: installing LibreOffice is not enough
 
@@ -212,8 +218,10 @@ command.
 
 ## Related
 
-- [Integrations](INTEGRATIONS.md) — what each optional plugin contributes, and what
+- [Integrations](integrations.md) — what each optional plugin contributes, and what
   degrades without it.
 - [Bindings](BINDINGS.md) — every keymap, user command, autocmd, highlight group and
   global variable this plugin installs.
-- [README](../README.md#configuration) — the full `setup()` option table.
+- [Configuration](configuration.md) — the full `setup()` option table.
+- [Commands](commands.md) — every `:Hover` route.
+- [Health](health.md) — what `:checkhealth hover` asks, section by section.

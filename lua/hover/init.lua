@@ -1165,8 +1165,8 @@ end
 --- apart -- a bigger box shows *more lines*, not larger ones, because the font
 --- size belongs to the terminal emulator and Neovim cannot change it. One
 --- operation, two honest answers, and only one of them is magnification. A
---- real zoom would mean cropping the source and panning it; see
---- `docs/ROADMAP.md`.
+--- real zoom means cropping the source and moving the crop around, which is
+--- `M.zoom` below rather than this function; see `docs/FEATURES/ZOOM.md`.
 ---
 --- **The ceiling is the terminal, and it is found rather than declared.**
 --- Measured against a real Neovim on 2026-09-02, 1200x675 image, defaults

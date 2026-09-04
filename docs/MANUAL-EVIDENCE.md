@@ -31,7 +31,7 @@ one thing work once, on one machine.
 | **Checked** | 2026-09-01 |
 | **On** | Windows 11, WezTerm, Neovim 0.12.2, images.nvim present |
 | **How** | Rest the cursor on a `./assets/*.png` path. The picture appears inside the float, fitted, not beside it. |
-| **Watch for** | The picture landing beside its own frame — that is the placement bug written up in [the README](../README.md#two-things-that-must-not-be-changed-casually), and it only shows with a sidebar open. Reproduce with a real image; a generated test card cannot reveal an aspect-ratio problem. |
+| **Watch for** | The picture landing beside its own frame — that is the placement bug written up in [architecture.md](architecture.md#two-things-that-must-not-be-changed-casually), and it only shows with a sidebar open. Reproduce with a real image; a generated test card cannot reveal an aspect-ratio problem. |
 
 ### A hover resized
 
