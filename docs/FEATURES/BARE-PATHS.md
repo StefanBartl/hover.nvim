@@ -6,7 +6,7 @@ preview class whose value goes **negative** when it is wrong: a float that says
 float at all, because it is a confident wrong answer rather than silence.
 
 Everything else here follows from that asymmetry. For the switches and their
-defaults see [configuration.md](../configuration.md#the-eleven-switches); this page is why the
+defaults see [configuration.md](../configuration.md#the-twelve-switches); this page is why the
 rules are as strict as they are, and the three numbers that set them.
 
 ## Recognising one

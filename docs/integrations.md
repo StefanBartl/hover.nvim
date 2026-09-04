@@ -347,6 +347,7 @@ them at once. Being quiet is the contributor's job.
 | a `.docx` shows a badge instead of its first page | `:Hover office on` was never typed — it is opt-in; or pdfport.nvim / `soffice` is missing, which the badge says |
 | a link does not hover at all | `:Hover links web on` — off by default, in every filetype, for both markdown links and bare URLs. That makes it hoverable; `:Hover auto url` is the second gate, and what makes the *trigger* open it |
 | a link hovers but shows no title or status code | that is `web on` without `web fetch on`; the offline preview never touches the network |
+| a link to a PDF shows its size, not its first page | `:Hover links web fetch pdf` was never typed — it is opt-in and implies `fetch`; or the document is over `links.pdf.max_bytes`, which the float says with both numbers |
 | a link shows text where a picture was expected | `:Hover links web shot` was never typed — it is opt-in, and separate from `fetch`; or there is no image provider / `images` is off, which the float says instead of rendering |
 | a rendered link never appears while scrolling | that is `shot` without `shot eager`: rendering is on for `:Hover show` and not for the trigger. Deliberate — a page of fifty links is fifty browser starts. `:Hover links web shot eager` |
 | screenshots say no browser was found, but one is installed | `chrome` is not on `PATH`, which is the normal case on Windows. The previewer looks in the usual install locations by itself; `:checkhealth hover` names what it would run, and `links.shot.command` names one outright |

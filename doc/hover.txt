@@ -204,6 +204,9 @@ toggles. >
   :Hover links web [on|off|toggle]       http(s) links hover
   :Hover links web fetch [on|off|toggle] fetch for status code, title and
                                          the page's own text
+  :Hover links web fetch pdf [on|off|toggle]
+                                         a link that answers with a PDF,
+                                         shown as its first page
   :Hover links web shot [on|off|toggle]  render the page in a headless
                                          browser and draw it into the float
   :Hover links web shot eager [on|off|toggle]
@@ -311,6 +314,32 @@ because 20 rows is already 'lines' minus four.
 
 A PDF page is not re-rasterized, so making one bigger is free and
 correspondingly unsharp.
+
+                                                                 *hover-webpdf*
+A LINK THAT ANSWERS WITH A PDF can be shown as its first page rather than as
+its size. `:Hover links web fetch pdf`, and from there it is a PDF like any
+other -- the same paging keys, the same sharp zoom, the same pipeline a local
+one uses. Nothing is converted; the bytes already are a PDF.
+
+It implies `fetch`, and that implication is a MECHANISM rather than a policy:
+the content type is what identifies the link, and only a fetch produces one.
+The server's content type decides, never the URL's extension -- a `.pdf` in a
+path is the author's word, and a `.pdf` that 404s to an HTML error page is
+common enough to matter.
+
+IT IS A SECOND REQUEST, and the reason is worth knowing. `lib.nvim.net.curl`
+runs `vim.system(..., { text = true })`, which replaces CRLF with LF in the
+output -- invisible for HTML, fatal for a binary body. A PDF rewritten that way
+is a file pdftoppm will not open, and the failure would look like a broken
+renderer. So the document is downloaded again with `curl -o`, where no text
+handling touches it.
+
+That second request is also what makes the size cap answerable. A fetch is
+capped at 2 MB, right for a page and far too small for a document -- and the
+content type is not known until the first response returns, so ONE request
+cannot carry both numbers. `links.pdf.max_bytes` (25 MB) is the second one, and
+a document over it is refused with both numbers named rather than truncated:
+half a PDF is not a smaller PDF, it is a file that will not open.
 
                                                                    *hover-shot*
 A LINK CAN BE SHOWN AS A PICTURE OF THE PAGE instead of as text.
@@ -542,6 +571,12 @@ worth asserting.
     -- the float and a 4000-pixel capture fits at 0.24.
     links = {
       enabled = true, web = false, fetch = false, timeout_ms = 2000,
+      -- A link that answers with a PDF, shown as its first page. Implies
+      -- `fetch` as a mechanism: the content type is what identifies it.
+      pdf = {
+        enabled = false, max_bytes = 25000000,
+        timeout_ms = 30000, cache_days = 7,
+      },
       shot = {
         enabled = false, eager = false, timeout_ms = 20000,
         width = 1280, height = 900, cache_days = 7, delay_ms = 1000,
@@ -676,8 +711,8 @@ hover.mode()                              The mode in effect right now.
 hover.toggle({on})                        Off, or back to "auto".
                                                                   *hover.set()*
 hover.set({name}, {on})                   Turn one switch on, off, or over.
-                                          Names: links, web, fetch, shot,
-                                          eager, paths, missing, code,
+                                          Names: links, web, fetch, pdf,
+                                          shot, eager, paths, missing, code,
                                           positions, images, office --
                                           hover.switches.names() is the list.
                                           Returns the state, or nil plus a

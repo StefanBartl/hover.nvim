@@ -182,6 +182,60 @@ return {
     ---@type integer
     timeout_ms = 2000,
 
+    --- A link that answers with a PDF, shown as its first page rather than as
+    --- its size.
+    ---
+    --- **The cheapest picture this plugin can produce, and the last one it
+    --- learned to.** There is no conversion in it: the bytes are already a
+    --- PDF, so they go straight into the pdfport/`pdftoppm` pipeline that a
+    --- local `.pdf` has always used -- the same rasterizing, the same paging,
+    --- the same sharp zoom.
+    ---
+    --- **It is a second request, and that is why it is a switch.** The plan
+    --- said it would need none, on the argument that `fetch` had already paid
+    --- for the bytes. That turned out to be false for a reason worth writing
+    --- down: `lib.nvim.net.curl` runs `vim.system(..., { text = true })`,
+    --- which replaces `\r\n` with `\n` in the output. Harmless for HTML and
+    --- fatal for a PDF -- every `\r\n` inside a binary stream is silently
+    --- rewritten, and what arrives is a file `pdftoppm` will not open. So the
+    --- document is downloaded again, straight to a file, where no text
+    --- handling touches it.
+    ---
+    --- That second request is also what makes the size cap tractable.
+    --- `links` fetches with a 2 MB ceiling, which is right for a page and far
+    --- too small for a document -- and the content type is not known until the
+    --- first response has come back, so one request cannot have both numbers.
+    --- Two requests can.
+    pdf = {
+      -- Off with everything that costs a round trip. `:Hover links web fetch pdf`.
+      ---@type boolean
+      enabled = false,
+
+      -- The ceiling for the *document* download, which is a different
+      -- question from `links.timeout_ms`'s 2 MB: that one bounds what a
+      -- hover will read of a page, this one bounds what it will pull down of
+      -- a file the reader is pointing at deliberately. A PDF over this shows
+      -- its size and says which number refused it, rather than arriving
+      -- truncated -- a half-downloaded PDF is not a smaller PDF, it is a file
+      -- that will not open, and the error would read as a broken renderer.
+      ---@type integer
+      max_bytes = 25000000,
+
+      -- Documents are slower than pages and a hover should not sit on one
+      -- for a minute.
+      ---@type integer
+      timeout_ms = 30000,
+
+      -- As `office.cache_days`, and for the same reason: a reader who looks
+      -- at a document once looks at it again. Keyed by URL and the size the
+      -- server declared -- a PDF that has been replaced with one of a
+      -- different length is fetched again, and one replaced with an
+      -- identically sized file is not, which is the honest limit of what a
+      -- key without an mtime can promise.
+      ---@type integer
+      cache_days = 7,
+    },
+
     --- The page itself, rendered by a headless browser and drawn into the
     --- float like any other picture.
     ---

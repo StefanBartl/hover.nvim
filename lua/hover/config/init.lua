@@ -352,6 +352,21 @@ function M.fetch_enabled()
   return M.web_enabled() and type(links) == "table" and links.fetch == true
 end
 
+--- Whether a link answering with a PDF is shown as its first page.
+---
+--- Implies `fetch_enabled`, and that is the one implication in this file that
+--- is a *mechanism* rather than a policy: the content type is what says the
+--- link is a PDF, and only a fetch produces one. See `hover.preview.webpdf`.
+---@return boolean
+function M.url_pdf_enabled()
+  local links = M.get().links
+  if not M.fetch_enabled() or type(links) ~= "table" then
+    return false
+  end
+  local pdf = links.pdf
+  return type(pdf) == "table" and pdf.enabled == true
+end
+
 --- Whether a hovered link is rendered by a headless browser.
 ---
 --- Implies `web_enabled` and deliberately **not** `fetch_enabled`: a fetch is
@@ -502,12 +517,17 @@ function M.preview_opts()
   local links = type(c.links) == "table" and c.links or {}
   local office = type(c.office) == "table" and c.office or {}
   local shot = type(links.shot) == "table" and links.shot or {}
+  local pdf = type(links.pdf) == "table" and links.pdf or {}
   return {
     max_lines = c.max_lines or DEFAULTS.max_lines,
     max_width = c.max_width or DEFAULTS.max_width,
     inline_images = M.images_enabled(),
     url_fetch = M.fetch_enabled(),
     url_timeout_ms = links.timeout_ms or DEFAULTS.links.timeout_ms,
+    url_pdf = M.url_pdf_enabled(),
+    url_pdf_max_bytes = pdf.max_bytes or DEFAULTS.links.pdf.max_bytes,
+    url_pdf_timeout_ms = pdf.timeout_ms or DEFAULTS.links.pdf.timeout_ms,
+    url_pdf_cache_days = pdf.cache_days or DEFAULTS.links.pdf.cache_days,
     shot_enabled = M.shot_enabled(),
     shot_eager = M.shot_eager(),
     shot_timeout_ms = shot.timeout_ms or DEFAULTS.links.shot.timeout_ms,

@@ -520,6 +520,14 @@ local function can_magnify(open)
   -- URL. Asked of the cache only, because `shot.cached` never starts a
   -- browser and "can this be zoomed" must not have a twenty-second answer.
   if target.type == "url" then
+    -- Two ways a link becomes a picture, and they magnify differently. A
+    -- rendered page is a PNG and is cropped; a downloaded PDF is re-rendered
+    -- at a higher DPI, exactly as a local one is. Both are asked of a cache
+    -- only -- neither may start a browser or a download to answer "can this be
+    -- zoomed".
+    if require("hover.preview.webpdf").cached(target) then
+      return media.can_zoom_pdf()
+    end
     return media.can_zoom() and require("hover.preview.shot").cached(target) ~= nil
   end
   if not target.path then
@@ -550,6 +558,23 @@ local function present(content)
   if not content then
     return
   end
+  -- **Whether this hover pages, recorded from the content rather than guessed
+  -- from the type.** `scroll` and `zoom` both need the answer, and both used to
+  -- derive it from `target.type == "pdf" or "office"` -- which was a proxy for
+  -- "this preview is paged" and stopped being an accurate one the moment a
+  -- *link* could answer with a PDF. The content already says so: only a paged
+  -- preview declares `scroll.page`.
+  --
+  -- The type test is kept alongside it, and not as a belt: a paged preview
+  -- whose first answer is a placeholder declares no `scroll` at all, and a
+  -- scroll during that moment would otherwise take the by-lines branch.
+  if _open then
+    local t = _open.target
+    _open.paged = (t and (t.type == "pdf" or t.type == "office")) == true
+      or (content.scroll ~= nil and content.scroll.page ~= nil)
+      or nil
+  end
+
   local c = config.get()
   local max_width, max_height = box()
 
@@ -1222,7 +1247,7 @@ function M.scroll(delta)
   -- the time anything is drawn -- the conversion is cached, so paging
   -- through a `.docx` costs one rasterize per page and no second LibreOffice
   -- start.
-  if target.type == "pdf" or target.type == "office" then
+  if _open.paged then
     local next_page = math.max(1, (_open.page or 1) + delta)
     if next_page == _open.page then
       return false
@@ -1408,6 +1433,13 @@ local function zoomable()
   -- is not `target.path`: the picture is a PNG in this plugin's cache, found
   -- by URL. Everything after it is the same crop.
   if target and target.type == "url" then
+    local doc = require("hover.preview.webpdf").cached(target)
+    if doc then
+      if not media.can_zoom_pdf() then
+        return nil, "a sharp page needs pdfport.nvim new enough to rasterize a window of one"
+      end
+      return doc, nil, open, target
+    end
     local png = require("hover.preview.shot").cached(target)
     if not png then
       return nil, "only a rendered page can be zoomed -- `:Hover links web shot` renders one"
@@ -1479,7 +1511,10 @@ function M.zoom(delta)
   end
 
   local media = require("hover.preview.media")
-  local is_page = target.type == "pdf"
+  -- A link that answered with a PDF is a page like any other: re-rendered at a
+  -- higher DPI rather than cropped. `_open.paged` is what `present` recorded
+  -- from the content, so this needs no second type test.
+  local is_page = target.type == "pdf" or (target.type == "url" and open.paged == true)
 
   -- A picture's ceiling is its own pixels, so they are read once and kept. A
   -- page has none -- it is re-rendered from the document at whatever DPI is

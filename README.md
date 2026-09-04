@@ -145,6 +145,7 @@ contradicted the intuition it was meant to confirm.
 | [Resizing](docs/FEATURES/RESIZE.md) | One operation with two honest answers, and why the ceiling is found by stepping into it rather than carried as a number |
 | [Zooming](docs/FEATURES/ZOOM.md) | Same box, a narrower view: why a picture is cropped and a PDF page re-rendered at a higher DPI instead |
 | [Zen](docs/FEATURES/ZEN.md) | The float on the whole editor — not a bigger window but a bigger *budget*, why it pins by default, and why `z` is the one key it could not have |
+| [PDF links](docs/FEATURES/WEBPDF.md) | A link that answers with a PDF, shown as its first page — and the `text = true` in the fetch that would have corrupted every one of them |
 | [Rendered pages](docs/FEATURES/SHOT.md) | A link shown as a picture of the page: why that is a different category from fetching, why the trigger gets a switch of its own, and the profile flag without which the render would go out as you |
 
 [docs/FEATURES/README.md](docs/FEATURES/README.md) is the index, with a sentence on each.

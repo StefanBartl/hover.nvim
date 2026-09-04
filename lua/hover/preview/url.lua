@@ -595,6 +595,34 @@ local function hook_reset()
   end)
 end
 
+---@internal
+--- Hand one answer to whichever previewer it belongs to.
+---
+--- **Written once and called from both paths**, which is the point: the kept
+--- response and a fresh one have to reach the same decision, and a document
+--- answered as text on the second render would be the shape of every
+--- hand-kept-copy bug in this repository.
+---
+--- A PDF goes to `preview.webpdf`, which may answer now or later; `on_result`
+--- is handed straight through, so the placeholder and the page both arrive by
+--- the same route `preview.office` uses.
+---@param target Hover.Target
+---@param opts Hover.PreviewOpts
+---@param ok boolean
+---@param response table|string|nil
+---@param callback fun(content: Hover.Content)
+---@return nil
+local function answer(target, opts, ok, response, callback)
+  if ok and opts.url_pdf and type(response) == "table" then
+    local webpdf = require("hover.preview.webpdf")
+    if webpdf.is_pdf(response) then
+      callback(webpdf.preview(target, response, opts, callback))
+      return
+    end
+  end
+  callback(content_for(target, opts, ok, response))
+end
+
 --- Fetch page metadata. Only called when `hover.url.fetch` is on.
 ---
 --- The callback always receives content, never nil: a failed request is an
@@ -623,7 +651,7 @@ function M.fetch(target, opts, callback)
   -- hand is the answer, and `content_for` rebuilds against the *new* box, so
   -- the page text grows without a second request.
   if _last and _last.url == url then
-    callback(content_for(target, opts, _last.ok, _last.response))
+    answer(target, opts, _last.ok, _last.response, callback)
     return
   end
 
@@ -649,7 +677,7 @@ function M.fetch(target, opts, callback)
     -- full timeout, and paying it again per keypress is the worse half of
     -- this: the float would go back to "rendering…" on every press.
     _last = { url = url, ok = ok, response = response }
-    callback(content_for(target, opts, ok, response))
+    answer(target, opts, ok, response, callback)
   end)
 end
 

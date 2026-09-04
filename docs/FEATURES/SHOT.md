@@ -17,7 +17,7 @@ the time anything is on screen it is a picture, and nothing downstream knows
 where it came from.
 
 Off, the link is previewed as text: the status line, the title, the
-description, and [the page's own prose](../configuration.md#the-eleven-switches).
+description, and [the page's own prose](../configuration.md#the-twelve-switches).
 Both exist because they answer different questions — *what does it say* against
 *what does it look like*.
 

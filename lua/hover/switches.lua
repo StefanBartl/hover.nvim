@@ -71,6 +71,17 @@ local SWITCHES = {
     off_msg = "web links are parsed offline only",
     desc = "fetch a hovered link for its status code and page title (implies `links web on`)",
   },
+  pdf = {
+    path = { "links", "pdf", "enabled" },
+    -- `fetch`, and this one is a mechanism rather than a policy: the content
+    -- type is what says a link is a PDF, and only a fetch produces one.
+    implies = "fetch",
+    auto_type = "url",
+    label = "PDF links",
+    on_msg = "a link that answers with a PDF is downloaded and shown as its first page",
+    off_msg = "a link to a PDF reports its type and size only",
+    desc = "show a link that answers with a PDF as its first page, paged and zoomable",
+  },
   shot = {
     path = { "links", "shot", "enabled" },
     -- `web`, and never `fetch`. A fetch is one `curl` GET with a 2 MB cap; a
@@ -149,6 +160,7 @@ local ORDER = {
   "links",
   "web",
   "fetch",
+  "pdf",
   "shot",
   "eager",
   "paths",
