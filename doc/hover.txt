@@ -98,6 +98,8 @@ Cost breaks the tie. That yields these defaults:
         directory listings; pictures drawn into the float
   OFF   http(s) links (the offline preview restates the link)
   OFF   fetching a link (a request to that host, per link brushed past)
+  OFF   rendering a link in a browser (the page RUNS; ~0.7 s to start one,
+        and 4-20 s for a page) -- and off a second time for the trigger
   OFF   office documents rendered (a LibreOffice start, per document)
 
 Web links are off because documentation is made of links: on permanently,
@@ -200,7 +202,13 @@ toggles. >
 
   :Hover links [on|off|toggle]           link syntax hovers at all
   :Hover links web [on|off|toggle]       http(s) links hover
-  :Hover links web fetch [on|off|toggle] fetch for status code and title
+  :Hover links web fetch [on|off|toggle] fetch for status code, title and
+                                         the page's own text
+  :Hover links web shot [on|off|toggle]  render the page in a headless
+                                         browser and draw it into the float
+  :Hover links web shot eager [on|off|toggle]
+                                         let the trigger do that, not only
+                                         an explicit request
   :Hover paths [on|off|toggle]           bare paths in prose hover
   :Hover paths missing [on|off|toggle]   a path resolving to nothing is
                                          marked broken
@@ -303,6 +311,45 @@ because 20 rows is already 'lines' minus four.
 
 A PDF page is not re-rasterized, so making one bigger is free and
 correspondingly unsharp.
+
+                                                                   *hover-shot*
+A LINK CAN BE SHOWN AS A PICTURE OF THE PAGE instead of as text.
+`:Hover links web shot` renders it in a headless Chromium at 1280x900 and
+hands the PNG to the same pipeline a photograph goes through -- the canvas
+sizing, the drawing, the `>` crop, the h/j/k/l panning.
+
+IT IS A DIFFERENT CATEGORY FROM FETCHING, not a louder setting of it, which is
+why it implies `web` and never `fetch`. A fetch is one curl GET with a 2 MB
+cap and no JavaScript. A render EXECUTES the page: the site's own scripts run,
+and every subresource it names is fetched from whatever host it is on. A
+reader who turned fetching on to ask "is this link still alive" must not
+thereby have turned on a browser.
+
+A SECOND SWITCH FOR THE TRIGGER, and it is not belt and braces. `shot` says a link may be
+rendered; `shot eager` says the TRIGGER may do it rather than only
+`:Hover show`. Measured 2026-09-04: a browser start alone is 710-735 ms with
+no network at all, and a real documentation page 3.9 s to 19.6 s -- the same
+URL, on different runs. A page of fifty links, scrolled through, is fifty of
+those. `auto_hover.url` cannot say this: the text preview and the screenshot
+are the same target type.
+
+The browser gets a THROWAWAY PROFILE. Without `--user-data-dir` pointing
+somewhere disposable, a headless Chrome can open the real one -- the reader's
+cookies would go to the hovered host, and whatever they are logged into would
+be rendered into the picture. There is deliberately no `--no-sandbox`: the
+page is untrusted by construction, and the sandbox is what stands between it
+and the machine.
+
+The default capture is 1280x900, the viewport, rather than a whole page. A
+picture is letterboxed into the float, so what decides legibility is the fit
+factor: on a 210x55 terminal a zen float is roughly 1850x970 px, where a
+1280x900 capture fits at about 1.0 and 16 px text stays 16 px, while 1280x4000
+is height-limited to 0.24 and the same text becomes 4 px. Raise `height` for a
+whole page and read it with `>`, which crops.
+
+`:checkhealth hover` names the browser it would run. It asks the previewer
+rather than PATH, because on Windows the Chrome installer does not extend PATH
+and a PATH-only answer is wrong on a machine with Chrome plainly installed.
 
                                                                     *hover-zen*
 ZEN IS THE SAME OPERATION WITH A DESTINATION. `F`, or `:Hover zen`, replaces
@@ -487,7 +534,23 @@ worth asserting.
     border = "rounded",
     inline_images = true,
     filetypes = "*",
-    links = { enabled = true, web = false, fetch = false, timeout_ms = 2000 },
+    -- `shot` renders the page in a headless browser and draws it into the
+    -- float. It implies `web` and never `fetch`: a fetch is one curl GET, a
+    -- render EXECUTES the page. `eager` is the second half -- whether the
+    -- trigger may do it, or only `:Hover show`. `height` is the viewport and
+    -- 900 rather than a whole page, because a picture is letterboxed into
+    -- the float and a 4000-pixel capture fits at 0.24.
+    links = {
+      enabled = true, web = false, fetch = false, timeout_ms = 2000,
+      shot = {
+        enabled = false, eager = false, timeout_ms = 20000,
+        width = 1280, height = 900, cache_days = 7, delay_ms = 1000,
+        -- Unset means "find one": the usual names on PATH, then the usual
+        -- install locations. Not a convenience -- on Windows the Chrome
+        -- installer does not extend PATH at all.
+        command = nil,
+      },
+    },
     -- `scope` teaches the code/prose gate a capture family for one grammar;
     -- empty is almost always right, since the gate falls open on anything it
     -- does not recognise.
@@ -613,11 +676,12 @@ hover.mode()                              The mode in effect right now.
 hover.toggle({on})                        Off, or back to "auto".
                                                                   *hover.set()*
 hover.set({name}, {on})                   Turn one switch on, off, or over.
-                                          Names: links, web, fetch, paths,
-                                          missing, code, positions, images,
-                                          office -- hover.switches.names() is
-                                          the list. Returns the state, or nil
-                                          plus a message.
+                                          Names: links, web, fetch, shot,
+                                          eager, paths, missing, code,
+                                          positions, images, office --
+                                          hover.switches.names() is the list.
+                                          Returns the state, or nil plus a
+                                          message.
                                                               *hover.enabled()*
 hover.enabled({name})                     Whether one switch is in effect,
                                           implications included.

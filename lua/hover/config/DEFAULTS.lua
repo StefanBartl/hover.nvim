@@ -181,6 +181,97 @@ return {
 
     ---@type integer
     timeout_ms = 2000,
+
+    --- The page itself, rendered by a headless browser and drawn into the
+    --- float like any other picture.
+    ---
+    --- **A different category from `fetch`, not a louder setting of it, and
+    --- that is why it implies `web` rather than `fetch`.** A fetch is one
+    --- `curl` GET with a 2 MB cap and no JavaScript. A screenshot *executes*
+    --- the page: the site's own scripts run, and every subresource it asks
+    --- for -- fonts, analytics, third-party frames -- is fetched from
+    --- whatever host it names. Turning `fetch` on must never imply this, and
+    --- the announcement says so out loud.
+    ---
+    --- **The browser is given a throwaway profile.** Without
+    --- `--user-data-dir` a headless Chrome can reuse the real one, which
+    --- would send the reader's cookies to the hovered host and render logged
+    --- in content into the picture. See `hover.preview.shot`.
+    shot = {
+      -- Off, for the category above. `:Hover links web shot`.
+      ---@type boolean
+      enabled = false,
+
+      -- Off a second time, and the second switch exists because the two
+      -- questions have different answers. `enabled` is "may a link be
+      -- rendered at all"; this is "may the *trigger* do it", and the trigger
+      -- is the expensive half: a document with fifty links, scrolled
+      -- through, is fifty browser starts.
+      --
+      -- `auto_hover.url` cannot say this. Text preview and screenshot are the
+      -- same target type, so "text automatically, a picture only when asked"
+      -- has no spelling on that axis. `:Hover links web shot eager`.
+      ---@type boolean
+      eager = false,
+
+      -- Measured 2026-09-04 on this machine: a browser start alone is
+      -- **710-735 ms** (three runs, `about:blank`, no network), and a real
+      -- documentation page took 3.9 s to 19.6 s -- the same URL, twice, at
+      -- both ends of that. So the timeout is generous for the same reason
+      -- `office.timeout_ms` is: one that fires on a slow page looks like a
+      -- broken feature rather than a slow one.
+      ---@type integer
+      timeout_ms = 20000,
+
+      -- The viewport the page is laid out in, and what is captured.
+      --
+      -- **900 rather than a full-page 4000, and that is a legibility
+      -- measurement rather than a preference.** A picture is letterboxed into
+      -- the float, so what decides whether it can be read is the fit factor.
+      -- On a 210x55 terminal a zen float is roughly 1850x970 px: a 1280x900
+      -- capture fits at about 1.0 and 16 px body text stays 16 px, while a
+      -- 1280x4000 one is height-limited to 0.24 and the same text becomes
+      -- 4 px. Raise it for a whole-page capture and read it with `>` -- the
+      -- zoom crops, so a tall picture is exactly what it is for.
+      ---@type integer
+      width = 1280,
+      ---@type integer
+      height = 900,
+
+      -- How long a rendered page may sit in the cache before the next session
+      -- sweeps it, exactly as `office.cache_days`. Keyed by URL and geometry
+      -- rather than by a file's mtime, so a page that has since changed still
+      -- answers with the old picture until this expires -- `0` keeps nothing
+      -- between sessions, and `:Hover links web shot` off and on again drops
+      -- the session's own table.
+      ---@type integer
+      cache_days = 7,
+
+      -- Stillness required before the trigger is allowed to start a browser,
+      -- on top of `delay_ms`.
+      --
+      -- **Its own number because `delay_ms = 250` is the wrong order of
+      -- magnitude to protect anything that costs seconds.** A quarter second
+      -- of quiet is what a *free* preview should wait for; hanging 0.7 s of
+      -- process start plus up to 20 s of page behind it means scrolling
+      -- through a page of links starts a browser for each one it pauses over.
+      -- Only the automatic path waits: `:Hover show` is a decision already
+      -- made, and making a reader wait a second to confirm it would be an
+      -- apology for the wrong thing.
+      ---@type integer
+      delay_ms = 1000,
+
+      -- The browser to run. Unset means "find one": every usual name on
+      -- PATH, then the usual install locations, in a fixed order that
+      -- prefers Chrome and Chromium over Edge.
+      --
+      -- **The path search is not a convenience.** Measured on this machine
+      -- 2026-09-04: Chrome is installed and `chrome` is on no PATH at all --
+      -- the Windows installer does not extend it, which is the same problem
+      -- `soffice` already documents in `docs/install.json`.
+      ---@type string|nil
+      command = nil,
+    },
   },
 
   --- Targets with no link syntax at all: a path in prose, in a code comment,

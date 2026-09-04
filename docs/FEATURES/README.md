@@ -27,6 +27,11 @@ the alternatives that were rejected, and the bugs that changed the design.
   called resize rather than zoom, why `+` and `-` are bound over a picture but
   the wheel is bound everywhere, and why the ceiling is found by stepping into
   it rather than carried as a number.
+- **[SHOT.md](SHOT.md)** — a hovered link shown as a picture of the page: why
+  that is a different *category* from fetching rather than a louder setting of
+  it, why it is the one feature here whose trigger gets a switch of its own, the
+  profile without which a render would go out as the reader, and the fit-factor
+  arithmetic that decides how tall a capture may be.
 - **[ZEN.md](ZEN.md)** — the third way to make a hover bigger, and the one that
   is not a bigger window: why the previewer's *budget* becomes the screen
   rather than the float merely opening larger, the measurement that made it a

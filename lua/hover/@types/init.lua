@@ -62,8 +62,28 @@
 ---@class Hover.LinksConfig
 ---@field enabled? boolean # Whether link targets hover at all. Default true.
 ---@field web? boolean # Whether an http(s) target hovers. Default false: the offline preview restates what the link already says, and documentation is made of links. Implies `enabled`.
----@field fetch? boolean # Fetch the page for its status code, title and description. Default false: a hover that silently fetches discloses every link brushed past to its host. Implies `web`.
+---@field fetch? boolean # Fetch the page for its status code, title, description and — for an HTML page — its own text. Default false: a hover that silently fetches discloses every link brushed past to its host. Implies `web`.
 ---@field timeout_ms? integer # Fetch timeout. Default 2000.
+---@field shot? Hover.ShotConfig
+
+--- A hovered link rendered by a headless browser and drawn into the float
+--- like any other picture.
+---
+--- **A different category from `fetch`, not a louder setting of it.** A fetch
+--- is one `curl` GET with a 2 MB cap and no JavaScript; a render *executes*
+--- the page, and every subresource it names is fetched from whatever host it
+--- names. So `enabled` implies `web` and never `fetch`, and the browser is
+--- given a throwaway profile — without one it could open the reader's real
+--- Chrome profile and render logged-in content with their cookies.
+---@class Hover.ShotConfig
+---@field enabled? boolean # Default false. `:Hover links web shot`.
+---@field eager? boolean # Whether the *automatic trigger* may start a browser, rather than only `:Hover show`. Default false, and a second switch because the two questions have different answers: fifty links scrolled past is fifty browser starts. `:Hover links web shot eager`.
+---@field timeout_ms? integer # How long one render may take. Default 20000 — measured 2026-09-04, a browser start alone is ~0.7 s and a real page 3.9–19.6 s.
+---@field width? integer # Viewport width the page is laid out in. Default 1280.
+---@field height? integer # Viewport height, and what is captured. Default 900 rather than a full page: a picture is letterboxed into the float, and a 1280×4000 capture is height-limited to a fit factor of 0.24, which turns 16 px body text into 4 px. Raise it for a whole-page capture and read it with the zoom, which crops.
+---@field cache_days? integer # How long a rendered page may survive between sessions. Default 7; 0 keeps nothing.
+---@field delay_ms? integer # Stillness the *automatic* path waits for before starting a browser, on top of `delay_ms`. Default 1000: a quarter second is the right wait for a free preview and the wrong one for seconds of work. An explicit request never waits.
+---@field command? string # The browser to run. Unset means "find one": the usual names on PATH, then the usual install locations. The search is not a convenience — measured, Chrome is installed on this machine and on no PATH.
 
 --- Targets with no link syntax at all.
 ---@class Hover.PathsConfig
@@ -194,6 +214,7 @@
 ---@field zoom_px? Hover.Preview.Dims # A picture's pixel size, read once so a level check costs no file read. Unset for a PDF page, which has no pixel ceiling to check against.
 ---@field canvas? Hover.Canvas # Size of the picture currently on screen, so `hover.resize` can tell a step that took effect from one the terminal refused.
 ---@field pinned? boolean # Taken out of the cursor's hands: the trigger neither replaces nor closes it.
+---@field requested? boolean # This float was opened by an explicit request (`:Hover show`, a `keymaps.show` key) rather than by the trigger. Remembered rather than only passed, so a re-render is a continuation of it: a screenshot asked for stays a screenshot after `F`.
 ---@field zen? boolean # Rendered against the editor's own size rather than the configured box, and centred. Set by `hover.zen`; the resize level still multiplies on top of it.
 ---@field zen_pinned? boolean # `zen` was what pinned this float, so leaving zen may unpin it again. Absent when the reader pinned it themselves, which zen must not undo.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
@@ -281,6 +302,15 @@
 ---@field office_convert? boolean # Convert an office document to a PDF for a real page preview, instead of showing a badge.
 ---@field office_timeout_ms? integer # Conversion timeout, passed to pdfport.
 ---@field office_cache_days? integer # How long a converted PDF may survive between sessions.
+---@field shot_enabled? boolean # Render a hovered link in a headless browser instead of previewing it as text.
+---@field shot_eager? boolean # Whether the automatic trigger may do that, or only an explicit request.
+---@field shot_timeout_ms? integer # How long one render may take.
+---@field shot_width? integer # Viewport width the page is laid out in.
+---@field shot_height? integer # Viewport height, and what is captured.
+---@field shot_cache_days? integer # How long a rendered page may survive between sessions.
+---@field shot_delay_ms? integer # Stillness the automatic path waits for before starting a browser.
+---@field shot_command? string # An explicit browser; absent means "find one".
+---@field requested? boolean # This preview was asked for outright (`:Hover show`, a `keymaps.show` key) rather than opened by the trigger. Read by anything whose cost makes that difference matter — today `hover.preview.shot`, which starts a browser for one and not for the other.
 ---@field line? integer # Text previews: 1-based line the target named (`init.lua:42`); the first view starts near it.
 ---@field line_end? integer # Text previews: last line of a named range (`init.lua:10-20`); shown exactly, without lead-in.
 ---@field offset? integer # Text previews: lines to skip. Set by `hover.scroll`.

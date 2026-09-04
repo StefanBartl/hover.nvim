@@ -352,6 +352,40 @@ function M.fetch_enabled()
   return M.web_enabled() and type(links) == "table" and links.fetch == true
 end
 
+--- Whether a hovered link is rendered by a headless browser.
+---
+--- Implies `web_enabled` and deliberately **not** `fetch_enabled`: a fetch is
+--- one `curl` GET, a render *executes* the page. They are different categories
+--- rather than two volumes of one, so neither may imply the other. See
+--- `hover.preview.shot`.
+---@return boolean
+function M.shot_enabled()
+  local links = M.get().links
+  if not M.web_enabled() or type(links) ~= "table" then
+    return false
+  end
+  local shot = links.shot
+  return type(shot) == "table" and shot.enabled == true
+end
+
+--- Whether the *automatic trigger* may start a browser, rather than only an
+--- explicit request.
+---
+--- The second half of the switch above, and separate because the two
+--- questions have different answers: rendering a link on request is a
+--- decision, rendering every link the cursor passes is a browser start per
+--- link. `auto_hover.url` cannot express it -- the text preview and the
+--- screenshot are the same target type.
+---@return boolean
+function M.shot_eager()
+  local links = M.get().links
+  if not M.shot_enabled() or type(links) ~= "table" then
+    return false
+  end
+  local shot = links.shot
+  return type(shot) == "table" and shot.eager == true
+end
+
 --- Whether a path written without link syntax may open a float.
 ---@return boolean
 function M.paths_enabled()
@@ -467,12 +501,23 @@ function M.preview_opts()
   local c = M.get()
   local links = type(c.links) == "table" and c.links or {}
   local office = type(c.office) == "table" and c.office or {}
+  local shot = type(links.shot) == "table" and links.shot or {}
   return {
     max_lines = c.max_lines or DEFAULTS.max_lines,
     max_width = c.max_width or DEFAULTS.max_width,
     inline_images = M.images_enabled(),
     url_fetch = M.fetch_enabled(),
     url_timeout_ms = links.timeout_ms or DEFAULTS.links.timeout_ms,
+    shot_enabled = M.shot_enabled(),
+    shot_eager = M.shot_eager(),
+    shot_timeout_ms = shot.timeout_ms or DEFAULTS.links.shot.timeout_ms,
+    shot_width = shot.width or DEFAULTS.links.shot.width,
+    shot_height = shot.height or DEFAULTS.links.shot.height,
+    shot_cache_days = shot.cache_days or DEFAULTS.links.shot.cache_days,
+    shot_delay_ms = shot.delay_ms or DEFAULTS.links.shot.delay_ms,
+    -- No default to fall back on, and that is the setting: unset means "find
+    -- one", which `hover.preview.shot` answers by searching.
+    shot_command = shot.command,
     office_convert = M.office_enabled(),
     office_timeout_ms = office.timeout_ms or DEFAULTS.office.timeout_ms,
     office_cache_days = office.cache_days or DEFAULTS.office.cache_days,

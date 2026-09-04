@@ -71,6 +71,28 @@ local SWITCHES = {
     off_msg = "web links are parsed offline only",
     desc = "fetch a hovered link for its status code and page title (implies `links web on`)",
   },
+  shot = {
+    path = { "links", "shot", "enabled" },
+    -- `web`, and never `fetch`. A fetch is one `curl` GET with a 2 MB cap; a
+    -- render *executes* the page. Implying it from `fetch` would mean a
+    -- reader who asked for a status code got a browser, which is the one
+    -- thing this must not be able to do.
+    implies = "web",
+    auto_type = "url",
+    label = "page screenshots",
+    on_msg = "a hovered link is rendered by a headless browser -- its JavaScript runs, and every subresource it names is fetched",
+    off_msg = "links are previewed as text; no browser is started",
+    desc = "render a hovered link in a headless browser and draw the page into the float",
+  },
+  eager = {
+    path = { "links", "shot", "eager" },
+    implies = "shot",
+    auto_type = "url",
+    label = "screenshots unasked",
+    on_msg = "the trigger may start a browser by itself -- measured 0.7 s to start, and 4-20 s for a page",
+    off_msg = "a page is rendered only for `:Hover show`",
+    desc = "let the automatic trigger render a page, not only an explicit request",
+  },
   paths = {
     path = { "paths", "enabled" },
     label = "bare paths",
@@ -123,8 +145,19 @@ local SWITCHES = {
 --- The order `status` and `:checkhealth` list them in: the hierarchy, read
 --- top down, rather than whatever `pairs` happens to produce.
 ---@type string[]
-local ORDER =
-  { "links", "web", "fetch", "paths", "missing", "code", "positions", "images", "office" }
+local ORDER = {
+  "links",
+  "web",
+  "fetch",
+  "shot",
+  "eager",
+  "paths",
+  "missing",
+  "code",
+  "positions",
+  "images",
+  "office",
+}
 
 --- Every switch name, in display order.
 ---@return string[]

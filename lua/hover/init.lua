@@ -463,7 +463,18 @@ local function build(target, bufnr, opts, emit)
     end, emit)
   elseif target.type == "url" then
     local url = require("hover.preview.url")
-    if opts.url_fetch then
+    -- **Two gates, and the second one is what `auto_hover` could not say.**
+    -- `shot_enabled` is "may a link be rendered at all"; `shot_eager` is "may
+    -- the *trigger* do it". Without the second, a document made of links is a
+    -- browser start per link while scrolling -- and `auto_hover.url` cannot
+    -- express the difference, because the text preview and the screenshot are
+    -- the same target type. `requested` carries "this was asked for" down
+    -- from `show`, which is the only other thing that opens the gate.
+    if opts.shot_enabled and (opts.shot_eager or opts.requested) then
+      build_async(function(on_result)
+        return require("hover.preview.shot").preview(target, opts, on_result)
+      end, emit)
+    elseif opts.url_fetch then
       build_async(function(on_result)
         url.fetch(target, opts, function(content)
           -- curl's exit lands in a fast event context, where opening a
@@ -499,10 +510,21 @@ end
 ---@return boolean
 local function can_magnify(open)
   local target = open and open.target
-  if not (target and target.path) then
+  if not target then
     return false
   end
   local media = require("hover.preview.media")
+  -- A rendered page is a third source for the same gesture, and the one that
+  -- does not fit the `target.path` test above: what is on screen is a PNG in
+  -- this plugin's cache, not a file the target names -- the target names a
+  -- URL. Asked of the cache only, because `shot.cached` never starts a
+  -- browser and "can this be zoomed" must not have a twenty-second answer.
+  if target.type == "url" then
+    return media.can_zoom() and require("hover.preview.shot").cached(target) ~= nil
+  end
+  if not target.path then
+    return false
+  end
   -- Two kinds of magnification behind one key, because they are the same
   -- gesture and a different mechanism. A picture is cropped: the file at
   -- `target.path` is the source and already carries every pixel there will
@@ -695,7 +717,17 @@ function M.show(opts)
   local generation = _generation
 
   keys.release()
-  _open = { target = target, bufnr = bufnr, offset = 0, page = 1 }
+  -- `requested` is remembered rather than only passed, because a re-render is
+  -- a continuation of whatever opened this float: a screenshot asked for with
+  -- `:Hover show` must still be a screenshot after `F`, and not fall back to
+  -- the text preview because the second render came from a keypress.
+  _open = {
+    target = target,
+    bufnr = bufnr,
+    offset = 0,
+    page = 1,
+    requested = opts.force == true or nil,
+  }
 
   -- Deliberately not widened by `force`. Volume gates open for an explicit
   -- request; the fetch does not, because a keypress asking "what is this"
@@ -706,6 +738,11 @@ function M.show(opts)
   -- about. Sources that name no line leave this nil and nothing changes.
   preview_opts.line = found.line
   preview_opts.line_end = found.line_end
+  -- Not the same question as `force`, which opens the *volume* gates. This
+  -- one says the reader asked, and it is read by anything whose cost makes
+  -- that difference matter -- today the screenshot, which starts a browser
+  -- for a request and waits to be told it may for a trigger.
+  preview_opts.requested = opts.force == true
 
   local key = cache.key(target)
   local cached = cache.get(key)
@@ -1140,6 +1177,7 @@ local function current_preview_opts()
     opts.zoom = _open.zoom
     opts.zoom_cx = _open.zoom_cx
     opts.zoom_cy = _open.zoom_cy
+    opts.requested = _open.requested
   end
   return opts
 end
@@ -1364,13 +1402,28 @@ local function zoomable()
     return nil, nil
   end
   local target = open.target
+  local media = require("hover.preview.media")
+
+  -- A rendered page, and the branch that has to come first because its source
+  -- is not `target.path`: the picture is a PNG in this plugin's cache, found
+  -- by URL. Everything after it is the same crop.
+  if target and target.type == "url" then
+    local png = require("hover.preview.shot").cached(target)
+    if not png then
+      return nil, "only a rendered page can be zoomed -- `:Hover links web shot` renders one"
+    end
+    if not media.can_zoom() then
+      return nil, "zoom needs images.nvim with `images.convert.crop`, and ImageMagick on PATH"
+    end
+    return png, nil, open, target
+  end
+
   -- The two halves of "can this be zoomed" are asked separately only so each
   -- can name its own reason; `can_magnify` above is the same test without the
   -- messages, for the borrow site that needs a boolean.
   if not (target and target.path and (target.type == "image" or target.type == "pdf")) then
     return nil, "only a picture or a PDF page can be zoomed"
   end
-  local media = require("hover.preview.media")
   if target.type == "pdf" then
     if not media.can_zoom_pdf() then
       return nil, "a sharp page needs pdfport.nvim new enough to rasterize a window of one"
