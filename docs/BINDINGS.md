@@ -41,6 +41,7 @@ require("hover").setup({ keymaps = { show = false } })
 | --- | --- | --- | --- |
 | `dismiss_keys` | `q`, `<Esc>` | **every** hover | dismiss this hover until the cursor reaches another target |
 | `open_keys` | `gf` | hovers with a target | open what the float is showing, then close it |
+| `zen_keys.toggle` | `F` | hovers with a target | the float on (almost) the whole editor, and back; pins by default |
 | `scroll_keys.down` | `<M-PageDown>`, `<C-Down>` | scrollable hovers only | next screenful of lines, or next PDF page |
 | `scroll_keys.up` | `<M-PageUp>`, `<C-Up>` | scrollable hovers only | back |
 | `resize_keys.larger` | `+` | hovers with a picture only | the float one step (×1.25) larger |
@@ -122,6 +123,20 @@ fall behind.
   only while it is: `out` and `reset` decline at level 0 anyway, and a pair
   that appears only after a successful press would be worse than one that is
   simply there.
+- **`F` is bound for every hover with a target, which is the *widest*
+  condition here — on the same argument the narrowest ones make.** What
+  decides a borrow is what the key costs while it is held, and `F` is
+  find-character-backwards: pressed on its own it waits for a second character
+  and completes nothing, so no finished operation is displaced for as long as
+  the float lasts. That is the trade `>` and `=` make. And unlike `+`, the
+  thing it buys is worth the most on a *text* hover — twenty lines becomes
+  fifty, which is most of a screenful of the file being pointed at. `z` was
+  the mnemonic and cannot be taken: it is a prefix, so the borrow would
+  swallow `zz`, `zt`, `zb` and every fold command — and a broken prefix does
+  not announce itself the way a displaced key does, it hangs waiting for a
+  second character that now means something else. Withheld for a *position*
+  hover, where zen only declines, because a key bound to a refusal is worse
+  than an unbound one.
 - **The wheel is bound for every hover, and gated on the pointer instead.**
   `+` is a motion in normal mode, and displacing a motion for every text
   float costs more than the feature is worth there; `<M-ScrollWheel>` costs

@@ -29,14 +29,16 @@ brings it straight back.
 | --- | --- |
 | `hover.scroll(delta)` | Next/previous screenful of lines, or PDF page. Does not re-resolve the cursor — the hover keeps showing what it was showing |
 | `hover.resize(delta)` | Multiply the box the previewer is given by 1.25 per step. A picture is drawn larger, a text preview shows more lines |
+| `hover.zen(on)` | The same box, set to the editor's own size, and the float centred; omitted, it toggles. Returns `asked`, plus the reason where a refusal is worth naming. Pins by default — see [ZEN.md](FEATURES/ZEN.md) |
+| `hover.zenned()` | Whether the hover on screen is full screen |
 | `hover.zoom(delta)` | Magnify a *detail*: the box stays, the view narrows by 1.5 per step. Not an alias for `resize` |
 | `hover.nav(dx, dy)` | Move the magnified view. `dx` is -1 left, 1 right; `dy` is -1 up, 1 down |
 | `hover.next_position()` | Step to the next plugin answering for this place |
 | `hover.set_border(name)` | Change the frame of the float already on screen |
 
-`resize` declines for a *position* preview, whose content came from another plugin and
-cannot be asked again at a larger size. `zoom` declines when there is no picture, or no
-detail left.
+`resize` and `zen` decline for a *position* preview, whose content came from another
+plugin and cannot be asked again at a larger size. `zoom` declines when there is no
+picture, or no detail left.
 
 ## Mode and switches
 

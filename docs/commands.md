@@ -28,6 +28,7 @@ guess between nine switches, a mode and a target type.
 
 | Command | Does |
 | --- | --- |
+| `:Hover zen [on\|off\|toggle]` | the float on (almost) the whole editor, and back. Not a larger window: the previewer's own budget becomes the screen and the preview is built again against it. Pins by default, because a full-screen float would otherwise close on the first `j` — see [ZEN.md](FEATURES/ZEN.md) |
 | `:Hover resize [bigger\|smaller]` | make the hover on screen bigger or smaller — a picture is drawn larger, a text preview shows *more lines*. Omitted, bigger. Declines for a *position* preview, which cannot be asked again at another size |
 | `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture or PDF page on screen, or step back out. Omitted, in. A picture is cropped, a page re-rendered at a higher DPI |
 | `:Hover nav {left\|right\|up\|down}` | move the magnified view |

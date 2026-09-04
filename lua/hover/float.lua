@@ -385,7 +385,21 @@ function M.open(lines, opts)
   -- given. The float lands in the same place as before; only the number it
   -- reports afterwards becomes trustworthy.
   local anchor_row, anchor_col
-  do
+  if opts.center then
+    -- **The one place a hover is deliberately not next to the cursor.** Every
+    -- argument for cursor-relative positioning is about a small float
+    -- annotating the line under it; a float that fills the screen annotates
+    -- nothing, and anchoring it at the cursor would only decide which edge it
+    -- is cut off at. See `hover.zen`.
+    --
+    -- `row`/`col` are the origin of the *text* area and the ring is drawn
+    -- around it, so the centred origin is one cell in from the centred frame
+    -- -- and never less than 1, which is where the ring itself would land off
+    -- the screen. Same arithmetic in both axes, and both against the editor
+    -- grid this float is already relative to.
+    anchor_row = math.max(1, math.floor((vim.o.lines - height) / 2))
+    anchor_col = math.max(1, math.floor((vim.o.columns - width) / 2))
+  else
     local cur_win = api.nvim_get_current_win()
     local cursor = api.nvim_win_get_cursor(cur_win)
     -- screenpos() is 1-based and returns {row=0, col=0} when the position is

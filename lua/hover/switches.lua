@@ -38,6 +38,7 @@ local M = {}
 ---@class Hover.Switch
 ---@field path string[] # Key path into the merged options table.
 ---@field implies? string # Switch that must also be on for this one to mean anything.
+---@field auto_type? string # The `auto_hover` name that *also* has to be on before the automatic trigger opens anything for this switch. A second axis, not an implication: see `M.set`.
 ---@field label string # Short noun phrase, used by `status` and `:checkhealth`.
 ---@field on_msg string # Announced when it is switched on.
 ---@field off_msg string # Announced when it is switched off.
@@ -55,6 +56,7 @@ local SWITCHES = {
   web = {
     path = { "links", "web" },
     implies = "links",
+    auto_type = "url",
     label = "web links",
     on_msg = "web links hover (offline: host, path, query -- nothing leaves the machine)",
     off_msg = "web links do not hover",
@@ -63,6 +65,7 @@ local SWITCHES = {
   fetch = {
     path = { "links", "fetch" },
     implies = "web",
+    auto_type = "url",
     label = "link fetching",
     on_msg = "web links hover, fetching status code and page title",
     off_msg = "web links are parsed offline only",
@@ -78,6 +81,7 @@ local SWITCHES = {
   missing = {
     path = { "paths", "missing" },
     implies = "paths",
+    auto_type = "missing",
     label = "broken-target marker",
     on_msg = "text that is unambiguously a path is marked when it resolves to nothing",
     off_msg = "a path that resolves to nothing stays silent",
@@ -93,6 +97,7 @@ local SWITCHES = {
   },
   positions = {
     path = { "positions" },
+    auto_type = "position",
     label = "position previews",
     on_msg = "registered plugins may answer for a position with no target",
     off_msg = "only targets hover",
@@ -107,6 +112,7 @@ local SWITCHES = {
   },
   office = {
     path = { "office", "convert" },
+    auto_type = "office",
     label = "office rendering",
     on_msg = "office documents render via PDF (the first use starts LibreOffice)",
     off_msg = "office documents show a badge only",
@@ -308,10 +314,49 @@ function M.set(name, on, opts)
     -- tells a switched-off preview apart from a line that simply has no
     -- target on it, and a switch whose state cannot be seen gets reported as
     -- a broken feature a week later.
-    require("hover.notify").info(on and spec.on_msg or spec.off_msg)
+    require("hover.notify").info(on and M.on_report(name) or spec.off_msg)
   end
 
   return on
+end
+
+--- What switching `name` on actually gets you, second axis included.
+---
+--- **The message this replaces was true and useless.** `:Hover links web on`
+--- announced "web links hover" and then nothing hovered, because
+--- `auto_hover.url` is `false` -- a *second* gate that arrived with the
+--- `auto_hover` axis on 2026-09-03 and that no switch knew about. Both
+--- statements were correct: web links do hover, and the trigger does not open
+--- them. From the reader's chair that is a broken feature, and the only way
+--- to find out was to read `DEFAULTS`.
+---
+--- **Not folded into `implies`, and that is the whole point of the field.**
+--- Implication runs upward through switches that answer the same question --
+--- "may this hover at all" -- and turning a parent on is free of surprises.
+--- `auto_hover` answers a different one, "may this open *without being
+--- asked*", and a switch silently flipping it would undo a standing
+--- preference the reader set on purpose. So it is said rather than done:
+--- `:Hover show` already answers in full, and one command turns the trigger
+--- on for good.
+---
+--- Public because two callers want the same sentence -- the announcement
+--- here, and `:checkhealth hover`, which lists the switches without setting
+--- any of them.
+---@param name string
+---@return string
+function M.on_report(name)
+  local spec = SWITCHES[name]
+  if not spec then
+    return ("unknown switch %q"):format(tostring(name))
+  end
+  if not spec.auto_type or require("hover.config").auto_hover_for(spec.auto_type) then
+    return spec.on_msg
+  end
+  return spec.on_msg
+    .. ("\n  ...but %s targets still do not open by themselves: `:Hover auto %s`, or `:Hover show`."):format(
+      spec.auto_type,
+      spec.auto_type
+    )
 end
 
 --- Every switch's current state, in display order, for `:Hover status` and
@@ -327,7 +372,13 @@ end
 ---
 --- `route` is the words to type at it. A row labelled `broken-target marker`
 --- is a fact the reader cannot act on; `:Hover paths missing` is.
----@return { name: string, label: string, enabled: boolean, flag: boolean, implies: string|nil, route: string[] }[]
+---
+--- `auto_type` is the third state this report can be in, and the one that
+--- reads as a defect: a switch that is on while the type it produces is not
+--- in `auto_hover`, so the preview exists and the trigger never asks for it.
+--- Carried here rather than re-derived by each reader -- the reason every
+--- other field is.
+---@return { name: string, label: string, enabled: boolean, flag: boolean, implies: string|nil, auto_type: string|nil, route: string[] }[]
 function M.status()
   local out = {}
   for _, name in ipairs(ORDER) do
@@ -338,6 +389,7 @@ function M.status()
       enabled = effective(name),
       flag = flag_at(spec.path) == true,
       implies = spec.implies,
+      auto_type = spec.auto_type,
       route = M.route(name),
     }
   end

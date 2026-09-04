@@ -92,6 +92,38 @@ local function resize_factor()
   return RESIZE_STEP ^ ((_open and _open.resize) or 0)
 end
 
+---@internal
+--- The box the hover on screen is currently asking for: `max_width` and
+--- `max_height`, in cells.
+---
+--- **Three readers, and they used to be three derivations.** `present` tells
+--- the float how large it may be, `current_preview_opts` tells the previewer
+--- how large an answer to build, and `resize` compares the size a step would
+--- produce against the one on screen. The first two each did the multiply
+--- themselves, which is the hand-kept-copy shape this file has been bitten by
+--- repeatedly -- and zen is a second input on the same number, so keeping them
+--- apart would have meant a full-screen float showing twenty lines.
+---
+--- **Zen replaces the base; resize still multiplies on top of it.** The base
+--- is the editor's own size rather than a configured one, and the ceiling
+--- `float.size_for` clamps against is exactly the same expression -- so `+` in
+--- zen produces the identical float, `resize` sees that and steps back off,
+--- and `-` shrinks from full screen without leaving zen. That is the whole
+--- interaction between the two, and it needed no code of its own.
+---@return integer max_width
+---@return integer max_height
+local function box()
+  local c = config.get()
+  local width, height = c.max_width or 80, c.max_lines or 20
+  if _open and _open.zen then
+    width = math.max(20, vim.o.columns - 4)
+    height = math.max(3, vim.o.lines - 4)
+  end
+  local factor = resize_factor()
+  return math.max(1, math.floor(width * factor + 0.5)),
+    math.max(1, math.floor(height * factor + 0.5))
+end
+
 -- ---------------------------------------------------------------------------
 -- Configuration
 -- ---------------------------------------------------------------------------
@@ -497,20 +529,18 @@ local function present(content)
     return
   end
   local c = config.get()
-  local factor = resize_factor()
-  ---@param n integer
-  ---@return integer
-  local function scaled(n)
-    return math.max(1, math.floor(n * factor + 0.5))
-  end
+  local max_width, max_height = box()
 
   float.open(content.lines, {
     title = content.title,
     filetype = content.filetype,
     canvas = content.canvas,
     highlight = content.highlight,
-    max_width = scaled(c.max_width or 80),
-    max_height = scaled(c.max_lines or 20),
+    max_width = max_width,
+    max_height = max_height,
+    -- A full-screen float annotates no particular line, so it stops being
+    -- anchored to one. See `hover.float`.
+    center = (_open and _open.zen) == true,
     border = c.border,
     -- The float dismisses itself on the next cursor move, through an autocmd
     -- this module never hears about. Without a hook there, the keys it
@@ -519,6 +549,16 @@ local function present(content)
     -- float they belonged to is gone.
     on_close = keys.release,
   })
+
+  -- **Re-applied, because `float.open` closes and reopens the window.** The
+  -- marker is a prefix on the border title and lives on the window, while
+  -- `pinned` lives on `_open` -- so every re-render (a scroll, a resize, a
+  -- zoom step) put a pinned float back on screen with the pin invisible. That
+  -- was survivable while pinning was a deliberate, rare gesture; zen pins by
+  -- default, which makes it the ordinary case.
+  if _open and _open.pinned then
+    float.set_pinned(true)
+  end
 
   -- An image target draws over the float it just opened.
   if content.image_path then
@@ -538,6 +578,12 @@ local function present(content)
     zoom = M.zoom,
     zoomed = ((_open and _open.zoom) or 0) > 0,
     zoomable = can_magnify(_open),
+    -- Handed over for every target hover, and withheld for a position one --
+    -- `M.zen` would only decline there, and a key bound to a refusal is worse
+    -- than an unbound one.
+    zen = (_open and _open.target) and function()
+      M.zen()
+    end or nil,
     next_answer = M.next_position,
     -- Registered, not answering: see `registry.position_count`. Only a
     -- *position* hover has other answers to step to at all.
@@ -875,6 +921,22 @@ function M.why()
     say("target: %s (%s, via %s)", found.target, target.type, found.kind or "source")
     if target.type == "url" and not config.web_enabled() then
       say("  but web links are off. `:Hover links web on`.")
+    elseif not config.auto_hover_for(target.type) then
+      -- The gate `:Hover links web on` used to walk straight into. Both
+      -- statements were true at once -- web links hover, and the trigger does
+      -- not open them -- and this report knew only the first, so the one
+      -- command written to answer "why is nothing happening" answered "this
+      -- should hover. If it does not, that is a bug worth reporting."
+      --
+      -- After the web check and before the dismissal, because that is the
+      -- order `show` asks them in: a URL with `web` off never reaches the type
+      -- gate at all, and a report that named the second reason would send the
+      -- reader to fix something that is not what stopped them.
+      say(
+        "  but %s targets do not open by themselves. `:Hover auto %s`, or `:Hover show`.",
+        target.type,
+        target.type
+      )
     elseif _suppressed and _suppressed == identity(target) then
       say("  but it was dismissed. Move off it, or `:Hover show`.")
     else
@@ -958,6 +1020,10 @@ function M.pin(on)
     on = not _open.pinned
   end
   _open.pinned = on and true or nil
+  -- Whatever the pin was before, it is the reader's now. `zen` sets this flag
+  -- again immediately after its own call, so the only thing this clears is a
+  -- pin someone changed by hand -- and leaving zen must not undo that.
+  _open.zen_pinned = nil
   float.set_pinned(_open.pinned == true)
   return _open.pinned == true
 end
@@ -1060,12 +1126,14 @@ end
 --- resized hover reset it to the configured size**, because `scroll` never
 --- knew about the resize level. One place now, and adding a fifth piece of
 --- state is one line rather than four.
+---
+--- Zen was that fifth piece, and it went in without a line here at all: the
+--- box is `box()`'s answer, and that function is where both the resize factor
+--- and the full-screen base already live.
 ---@return Hover.PreviewOpts
 local function current_preview_opts()
   local opts = config.preview_opts()
-  local factor = RESIZE_STEP ^ ((_open and _open.resize) or 0)
-  opts.max_width = math.max(1, math.floor((opts.max_width or 80) * factor + 0.5))
-  opts.max_lines = math.max(1, math.floor((opts.max_lines or 20) * factor + 0.5))
+  opts.max_width, opts.max_lines = box()
   if _open then
     opts.page = _open.page
     opts.offset = _open.offset
@@ -1436,6 +1504,96 @@ function M.nav(dx, dy)
 
   open.zoom_cx, open.zoom_cy = cx, cy
   return rerender(open, target)
+end
+
+--- Put the hover on screen full screen, or take it back.
+---
+--- **This is not "make the window bigger", and everything about the feature
+--- follows from that.** Every previewer renders against a budget --
+--- `max_lines` and `max_width` decide how many lines are read, at what DPI a
+--- PDF page is rasterized, how large a picture is drawn. A float that merely
+--- opened larger would show the same twenty lines with a great deal of
+--- margin. So zen replaces the *base* of that budget with the editor's own
+--- size and builds the preview again against it, which is the same machinery
+--- `resize` uses with a factor where this has a destination (`box`).
+---
+--- **It is why the screenshot preview is worth having at all**, and the
+--- reason it was built first. Measured 2026-09-04: a page screenshot is
+--- 1280x900 px, a default float 80x20 cells is roughly 640x340 -- fitting one
+--- into the other is height-limited at about 0.38, which turns 16 px body
+--- text into 6 px. Unreadable. The same problem exists in weaker form for
+--- every picture, every PDF page and every office document, which is why this
+--- applies to all of them rather than to pages.
+---
+--- **Two honest answers, the same pair `resize` gives.** A picture or a page
+--- is drawn larger; a text preview shows *more lines*, because the font size
+--- belongs to the terminal emulator. Twenty lines becomes fifty, which is
+--- most of a screenful of the file being pointed at.
+---
+--- **Pinning, and why it is coupled but not fused.** The float is
+--- `focusable = false` and the dismissal hangs on `CursorMoved`, so every key
+--- that is not borrowed takes it away -- correct for a small annotation, and
+--- absurd for a float filling the screen, which would close on the first `j`.
+--- So `zen.pin` (on by default) pins on the way in, and leaving zen releases
+--- that pin **only when zen was what took it**: a float the reader pinned
+--- before going full screen stays pinned afterwards. `zen.pin = false` is for
+--- anyone who wants the transient reading instead.
+---
+--- Declines for a position preview, and for the reason `resize` does: there
+--- is no target to ask again, only an id, and its content was produced once
+--- by the plugin that answered.
+--- Returns the reason alongside the refusal rather than emitting it, the way
+--- `why` and `status` already do (`ERR-04`): the three ways this declines are
+--- not one answer, and only two of them are worth a message. "It is already
+--- full screen" is what an explicit `:Hover zen on` twice means, and saying
+--- so would be noise.
+---@param on? boolean explicit state; omitted toggles
+---@return boolean asked `false` when there is no hover this can act on. `true` says the re-render was started, not that the float grew.
+---@return string|nil why present only where the refusal is worth reporting
+function M.zen(on)
+  -- The safety net `scroll` and `resize` carry: a mapping that outlived its
+  -- float takes itself away rather than swallowing the key from then on.
+  if not (_open and float.win()) then
+    keys.release()
+    _open = nil
+    return false, "no hover to put full screen"
+  end
+
+  local open = _open
+  local target = open.target
+  if not target then
+    return false, "a position preview has no target to render again, so no zen"
+  end
+
+  if on == nil then
+    on = not (open.zen == true)
+  end
+  if on == (open.zen == true) then
+    return false
+  end
+
+  open.zen = on or nil
+
+  -- Before the re-render, not after: `present` reads `_open.pinned` to put the
+  -- marker back on the window it is about to open, so the pin has to be
+  -- decided by the time it draws.
+  if on then
+    if config.zen_pins() and not open.pinned then
+      M.pin(true)
+      open.zen_pinned = true
+    end
+  elseif open.zen_pinned then
+    M.pin(false)
+    open.zen_pinned = nil
+  end
+
+  return rerender(open, target)
+end
+
+--- Whether the hover on screen is full screen.
+---@return boolean
+function M.zenned()
+  return (_open and _open.zen) == true
 end
 
 --- Close any open hover.

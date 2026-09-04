@@ -248,8 +248,15 @@ local function check_config()
     if s.enabled then
       any = true
     end
+    -- Three states, not two. "On, and the trigger still does not ask for it"
+    -- is the one that gets reported as a broken feature: the switch is on,
+    -- the preview exists, and `auto_hover` -- a different axis, set somewhere
+    -- else -- is what keeps the float shut. See `switches.on_report`.
     local state = s.enabled and "on"
       or (s.flag and "off (held by " .. tostring(s.implies) .. ")" or "off")
+    if s.enabled and s.auto_type and not config.auto_hover_for(s.auto_type) then
+      state = ("on, %s on request"):format(s.auto_type)
+    end
     health.info(("%-22s %-24s :Hover %s"):format(s.label, state, table.concat(s.route, " ")))
   end
 

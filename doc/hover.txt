@@ -58,7 +58,8 @@ the hover falls back to without it (-): >
 <
 Without any of them you still get file heads, directory listings, image and
 PDF metadata, the binary badge, the "does not exist" answer, and -- once
-`:Hover links web on` -- URL details.
+`:Hover links web on` (plus `:Hover auto url`, the second gate) -- URL
+details.
 
 ==============================================================================
 3. SETUP                                                          *hover-setup*
@@ -172,6 +173,8 @@ toggles. >
                                          the keys, y yanks its command
   :Hover pin                             keep this float while the cursor
                                          goes elsewhere; again releases it
+  :Hover zen [on|off|toggle]             the float on almost the whole
+                                         editor, and back; pins by default
   :Hover resize [bigger|smaller]         the hover bigger or smaller;
                                          omitted, bigger
   :Hover zoom [in|out|reset]             magnify a detail of the picture
@@ -230,6 +233,8 @@ never hold a mapping of its own.
 >
   q, <Esc>                    dismiss this hover until the cursor reaches
                               another target. Bound for EVERY hover.
+  F                           full screen, and back. Bound for every hover
+                              that has a target
   <M-PageDown>, <C-Down>      next screenful of lines, or next PDF page
   <M-PageUp>, <C-Up>          back
   +, -                        the picture, larger or smaller
@@ -291,6 +296,40 @@ because 20 rows is already 'lines' minus four.
 
 A PDF page is not re-rasterized, so making one bigger is free and
 correspondingly unsharp.
+
+                                                                    *hover-zen*
+ZEN IS THE SAME OPERATION WITH A DESTINATION. `F`, or `:Hover zen`, replaces
+the BASE of that box with the editor's own size -- 'columns' and 'lines' minus
+four each, which is exactly the ceiling the float clamps against anyway -- and
+builds the preview again against it. The resize level still multiplies on top,
+so `+` in zen is refused and stepped back off like any other step at the edge,
+and `-` shrinks from full screen without leaving zen. `F` again is what leaves
+it.
+
+It is NOT a larger window. Every previewer renders against `max_lines` and
+`max_width`: they decide how many lines are read, at what DPI a page is
+rasterized, how large a picture is drawn. A float that merely opened larger
+would show the same twenty lines with a great deal of margin.
+
+The float is centred rather than anchored at the cursor -- the one place in
+this plugin where that is true, because a float filling the screen annotates
+no particular line.
+
+IT PINS BY DEFAULT, and that follows from a mechanism rather than from taste:
+the float is not focusable and its dismissal hangs on CursorMoved, so every
+key that is not borrowed takes it away. Correct for a twenty-line annotation,
+absurd for one filling the screen, which would close on the first `j`. Leaving
+zen releases only a pin zen itself took. `zen = { pin = false }` gives the
+transient reading back.
+
+`z` was the mnemonic and could not be taken: it is a PREFIX, so the borrow
+would swallow `zz`, `zt`, `zb` and every fold command -- and unlike a
+displaced key, a broken prefix does not announce itself. `F` is
+find-character-backwards: on its own it waits for a second character and
+completes nothing, so the borrow displaces no finished operation.
+
+Declines for a position preview, and the key is not bound there: there is no
+target to ask again, only the content one plugin produced for this place once.
 
                                                                    *hover-zoom*
 ZOOM IS THE OTHER OPERATION, and the difference is the framing. `resize`
@@ -453,6 +492,12 @@ worth asserting.
     -- `cache_days` is how long a converted PDF may sit in the cache before
     -- the next session sweeps it; 0 keeps nothing between sessions.
     office = { convert = false, timeout_ms = 60000, cache_days = 7 },
+    -- `pin` is on because the float is not focusable and its dismissal hangs
+    -- on CursorMoved: unpinned, a full-screen hover closes on the first `j`.
+    zen = { pin = true },
+    -- Full screen and back, for every hover with a target. `F` waits for a
+    -- second character and completes nothing, so the borrow costs nothing.
+    zen_keys = { toggle = { "F" } },
     -- Step to the next plugin answering for this place. Borrowed only for a
     -- position hover with more than one contribution registered.
     position_keys = { next = { "<M-n>" } },
@@ -520,6 +565,22 @@ hover.resize({delta})                     Make the open hover bigger or
                                           that the float grew -- the terminal
                                           may have no room left.
                                           See |hover-resize|.
+                                                                  *hover.zen()*
+hover.zen({on})                           The same box, set to the editor's
+                                          own size, and the float centred;
+                                          omitted, it toggles. Not a larger
+                                          window: the previewer builds its
+                                          answer again against the screen, so
+                                          a text hover shows more lines rather
+                                          than the same twenty with margin.
+                                          Pins by default -- `zen.pin = false`
+                                          turns that off. Returns whether it
+                                          asked, plus the reason where a
+                                          refusal is worth naming.
+                                          See |hover-zen|.
+                                                               *hover.zenned()*
+hover.zenned()                            Whether the hover on screen is full
+                                          screen.
                                                                  *hover.zoom()*
 hover.zoom({delta})                       Magnify a detail of the picture on
                                           screen by {delta} steps of 1.5, or

@@ -38,6 +38,7 @@ default rather than extending it, which is what a list should mean. `{}` binds n
 | `max_width` | `80` | Float width cap, in columns. |
 | `border` | `"rounded"` | The frame's look. Every `nvim_open_win` name — `none` `single` `double` `rounded` `solid` `shadow` — plus `heavy` (a thick line), `ascii` (`+-\|`, for a font or terminal without box-drawing characters), `dashed` and `block`, which Neovim has no names for. An eight-character list works too, clockwise from the top-left. A name that does not exist is **reported and ignored** rather than passed on: `nvim_open_win` refuses one, and a hover that never opens again over a typo is a bad way to find out. `:Hover border [style]` changes the float already on screen, so a style can be tried. |
 | `inline_images` | `true` | Draw pictures / PDF pages into the float when a provider can. Off degrades an image to its format, dimensions and size as text — which is also what happens with no provider installed. |
+| `zen.pin` | `true` | Whether `:Hover zen` also pins the float. On, and this default follows from a mechanism rather than taste: the float is `focusable = false` and its dismissal hangs on `CursorMoved`, so an unpinned full-screen hover closes on the first key that is not borrowed. `false` gives exactly that transient reading back. Leaving zen releases only a pin zen itself took. See [ZEN.md](FEATURES/ZEN.md). |
 | `placeholder_grace_ms` | `250` | How long an async preview may take before a "rendering…" placeholder is allowed to interrupt. Below this, waiting quietly reads as instant; above it, silence reads as breakage. |
 
 ## The nine switches
@@ -74,6 +75,7 @@ borrow condition is in [BINDINGS.md](BINDINGS.md).
 | `keymaps.show` | `false` | Owned, kept. A key for `:Hover show`. No key is claimed unless asked for. |
 | `dismiss_keys` | `{ "q", "<Esc>" }` | **every** hover — anything can be waved away, a picture included |
 | `open_keys` | `{ "gf" }` | Open what the float is showing — through [open.nvim](https://github.com/StefanBartl/open.nvim) when installed, else `vim.ui.open` |
+| `zen_keys.toggle` | `{ "F" }` | **any** hover with a target. `F` is find-character-backwards: on its own it waits for a second character and completes nothing, so the borrow displaces no finished operation. `z` was the mnemonic and cannot be taken — it is a prefix, and a swallowed `zz` does not announce itself |
 | `scroll_keys.down` | `{ "<M-PageDown>", "<C-Down>" }` | scrollable hovers only. Two pairs, because a key that is not on the keyboard cannot be pressed |
 | `scroll_keys.up` | `{ "<M-PageUp>", "<C-Up>" }` | as above |
 | `resize_keys.larger` | `{ "+" }` | a hover with a **picture** only — these are real motions, and displacing one is worth it over a picture and not over every text float |

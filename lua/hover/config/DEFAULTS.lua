@@ -271,6 +271,42 @@ return {
     cache_days = 7,
   },
 
+  --- The float on (almost) the whole editor, and back again.
+  ---
+  --- **Zen is not "make the window bigger", and that distinction is the whole
+  --- feature.** Every previewer renders against a budget: `max_lines` and
+  --- `max_width` decide how many lines are read, at what DPI a PDF page is
+  --- rasterized, and how large a picture is drawn. A float that merely opened
+  --- larger would show the same twenty lines with a great deal of margin. So
+  --- the budget itself becomes the screen, and the preview is built again
+  --- against it -- which is exactly what `resize` already does, with a factor
+  --- where this has a destination.
+  ---
+  --- It applies to every preview type rather than to pictures alone, and the
+  --- answers differ the same way `resize`'s do: a picture and a PDF page are
+  --- drawn larger, a text preview shows *more lines*.
+  ---
+  --- `:Hover zen`, and `F` while a float is up.
+  zen = {
+    -- **On, and this is the one setting here whose default follows from a
+    -- mechanism rather than from taste.** The float is `focusable = false`,
+    -- so it never receives a keystroke, and the dismissal hangs on
+    -- `CursorMoved` -- which means every key that is not borrowed moves the
+    -- cursor in the document underneath and takes the float away. For a
+    -- twenty-line preview that is correct and is the point. For a float
+    -- filling the screen it means the thing closes on the first `j`, and
+    -- nobody wants a full-screen preview for the length of one keystroke.
+    --
+    -- `false` is for the reader who wants exactly that: zen opens, and the
+    -- next move closes it. `:Hover pin` is then still one command away.
+    --
+    -- Leaving zen releases the pin again -- but only when zen was what took
+    -- it. A float pinned before zen stays pinned after it, because that pin
+    -- was the reader's and not this setting's.
+    ---@type boolean
+    pin = true,
+  },
+
   --- Keys borrowed globally while a hover is on screen, and handed back --
   --- restoring whatever they shadowed -- the moment it closes. The float is
   --- `focusable = false`, so it can never hold a mapping of its own.
@@ -469,6 +505,34 @@ return {
     out = { "|" },
     ---@type string|string[]
     reset = { "=" },
+  },
+
+  --- Full screen and back, borrowed for *any* hover on screen.
+  ---
+  --- **Bound for every hover rather than for a drawn one**, which is the
+  --- opposite of `resize_keys.larger`. That pair is narrowed because `+` and
+  --- `-` are real motions and taking them over a text float is not worth it;
+  --- this key costs nothing to hold (see below), and a text preview is
+  --- precisely where the extra room buys the most -- twenty lines becomes
+  --- fifty.
+  ---
+  --- **`F`, and it is chosen on the same rule `>` and `=` were.** `F` is
+  --- find-character-backwards: pressed on its own it waits for a second
+  --- character and does nothing until one arrives, so borrowing it displaces
+  --- no completed operation for as long as the float lasts. It is a plain
+  --- character, which after 2026-09-03 is a requirement rather than a
+  --- preference -- an Alt chord is worth exactly as much as the terminal's
+  --- willingness to send it, and the machine this is developed on sends none
+  --- (`docs/MANUAL-EVIDENCE.md`).
+  ---
+  --- `z` was the obvious mnemonic and cannot be taken: it is a *prefix*, so
+  --- borrowing it would swallow `zz`, `zt`, `zb` and every fold command for
+  --- as long as a float is up -- and unlike a displaced key, a broken prefix
+  --- does not announce itself, it just hangs waiting for a second character
+  --- that now means something else.
+  zen_keys = {
+    ---@type string|string[]
+    toggle = { "F" },
   },
 
   --- Keymaps this plugin sets in the user's namespace. Every entry is a
