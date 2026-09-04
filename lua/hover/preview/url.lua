@@ -15,8 +15,16 @@
 --- host, and a document with fifty links becomes a request storm while
 --- scrolling. With it on, the response's **status line comes first** — a
 --- `404` or a `500` is the single most useful thing a hover can say about a
---- link — followed by `<title>`, `<meta name="description">` and the content
---- type.
+--- link — followed by `<title>`, `<meta name="description">`, the content
+--- type, and — for an HTML page — **what the page actually says**.
+---
+--- **That last part is not a third switch, and deliberately so.** The body is
+--- already downloaded: the title and the description are read out of it
+--- either way. Turning it into prose costs no request, no round trip and no
+--- second disclosure, so a switch for it would be a switch over something
+--- already paid for. It is trimmed to whatever room the float has left, which
+--- means `:Hover zen` over a link shows a screenful of the page rather than
+--- twenty lines of it. See `M.page_text`.
 ---
 --- Fetching goes through `lib.nvim.net.curl`, and results are cached by the
 --- hover for the session: a URL is not re-fetched every time the cursor
@@ -97,6 +105,274 @@ local function extract_meta(body)
   end
 
   return title, description
+end
+
+---@internal
+--- Named character references a documentation page actually produces, and
+--- nothing else.
+---
+--- Deliberately a short list rather than the full HTML5 set of two and a half
+--- thousand: the numeric forms below cover everything exotic, an unknown name
+--- is left standing as written rather than turned into a question mark, and a
+--- hover does not justify shipping a table it would read once.
+---@type table<string, string>
+local ENTITIES = {
+  amp = "&",
+  lt = "<",
+  gt = ">",
+  quot = '"',
+  apos = "'",
+  nbsp = " ",
+  ensp = " ",
+  emsp = " ",
+  thinsp = " ",
+  shy = "",
+  hellip = "…",
+  mdash = "—",
+  ndash = "–",
+  minus = "-",
+  lsquo = "‘",
+  rsquo = "’",
+  ldquo = "“",
+  rdquo = "”",
+  laquo = "«",
+  raquo = "»",
+  bull = "•",
+  middot = "·",
+  times = "×",
+  divide = "÷",
+  deg = "°",
+  copy = "©",
+  reg = "®",
+  trade = "™",
+  euro = "€",
+  pound = "£",
+  yen = "¥",
+  cent = "¢",
+  sect = "§",
+  para = "¶",
+  dagger = "†",
+  larr = "←",
+  rarr = "→",
+  uarr = "↑",
+  darr = "↓",
+  harr = "↔",
+  ne = "≠",
+  le = "≤",
+  ge = "≥",
+  plusmn = "±",
+  frac12 = "½",
+  frac14 = "¼",
+  sup2 = "²",
+  sup3 = "³",
+}
+
+---@internal
+--- Character references resolved, in one pass.
+---
+--- **One `gsub` per form, and the named one last, because a pass does not
+--- rescan what it wrote.** Decoding `&amp;` first would turn `&amp;lt;` --
+--- which is how a page writes a *literal* `&lt;` -- into `&lt;` and then into
+--- `<`, inventing markup that was never there.
+---@param s string
+---@return string
+local function unescape(s)
+  s = s:gsub("&#[xX](%x+);", function(hex)
+    local cp = tonumber(hex, 16)
+    return cp and vim.fn.nr2char(cp, 1) or ""
+  end)
+  s = s:gsub("&#(%d+);", function(dec)
+    local cp = tonumber(dec)
+    return cp and vim.fn.nr2char(cp, 1) or ""
+  end)
+  return (
+    s:gsub("&(%a[%w]*);", function(name)
+      return ENTITIES[name] or ("&" .. name .. ";")
+    end)
+  )
+end
+
+---@internal
+--- Elements dropped with everything inside them. Not "not interesting" --
+--- actively misleading: a nav block reads as a list of unrelated page
+--- headings, and a `<script>` body is source code the reader did not ask to
+--- see.
+---@type string[]
+local DROP = {
+  "script",
+  "style",
+  "noscript",
+  "template",
+  "svg",
+  "nav",
+  "header",
+  "footer",
+  "aside",
+  "form",
+  "button",
+  "select",
+  "iframe",
+  "figure",
+}
+
+---@internal
+--- Elements whose boundary is a line break. Everything else collapses into
+--- the run of text around it, which is what an inline element is.
+---@type string[]
+local BLOCK = {
+  "p",
+  "div",
+  "section",
+  "article",
+  "main",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "ul",
+  "ol",
+  "dl",
+  "dt",
+  "dd",
+  "table",
+  "tr",
+  "blockquote",
+  "pre",
+  "figcaption",
+  "hr",
+}
+
+---@internal
+--- Break `line` at `width` display columns, on word boundaries.
+---
+--- The float sets `wrap` and `linebreak`, so a long line *looks* right
+--- already -- and the height would be wrong, because `float.measure` counts
+--- entries in the list rather than the rows they occupy on screen. A
+--- paragraph handed over as one string would be one row of float showing four
+--- rows of text.
+---
+--- A single word wider than the box is handed over whole rather than cut:
+--- cutting by columns means cutting inside a multi-byte character, and the
+--- float wraps it correctly by itself. Only the *count* has to be right, and
+--- one over-long word costs one row of accuracy.
+---@param line string
+---@param width integer
+---@return string[]
+local function wrap(line, width)
+  local width_of = require("lib.lua.strings.width").display_width
+  if width_of(line) <= width then
+    return { line }
+  end
+
+  local out, current = {}, ""
+  for word in line:gmatch("%S+") do
+    local candidate = current == "" and word or (current .. " " .. word)
+    if width_of(candidate) <= width then
+      current = candidate
+    else
+      if current ~= "" then
+        out[#out + 1] = current
+      end
+      current = word
+    end
+  end
+  if current ~= "" then
+    out[#out + 1] = current
+  end
+  return out
+end
+
+--- What the page actually says, as lines.
+---
+--- **Free, and that is why it is not a switch.** The body was already
+--- downloaded -- `fetch` reads it for `<title>` and `<meta description>`
+--- either way -- so this costs no request, no round trip and no second
+--- disclosure. It is what `links.fetch` was paying for and then throwing
+--- away.
+---
+--- **Pattern-based, deliberately, and the same argument `extract_meta` makes
+--- one function up.** A hover does not justify an HTML parser, and the
+--- failure mode is right: a page this reads badly produces prose with some
+--- navigation in it, not an error. The reader still has the status line, the
+--- title and the URL above it.
+---
+--- **The order is four decisions, and each one is silently reversible.**
+--- Comments go first *and before the extract*, or a commented-out `</main>`
+--- ends it at a boundary the author did not write. The dropped elements go
+--- before the block breaks, because a `<nav>` that has already had its `</p>`s
+--- turned into newlines is no longer one string to remove. Source whitespace
+--- collapses before any break is inserted, or an indented paragraph arrives as
+--- five lines. And entities go *last*, so a decoded `&lt;` cannot be mistaken
+--- for a tag by the strip that follows.
+---@param body string
+---@param opts { max_width?: integer, max_lines?: integer }
+---@return string[]
+function M.page_text(body, opts)
+  opts = opts or {}
+  local max_width = opts.max_width or 80
+  local max_lines = opts.max_lines or 20
+  if max_lines < 1 then
+    return {}
+  end
+
+  -- **Comments first, and before the extract rather than after it.** A
+  -- commented-out `</main>` is ordinary in generated HTML, and it ends the
+  -- match below at a boundary the author did not write -- so the extract would
+  -- be the first paragraph of the page and nothing else, silently.
+  local html = (body:gsub("<!%-%-.-%-%->", " "))
+
+  -- `<main>` and `<article>` are the author saying which part of the page is
+  -- the page. Where neither is marked up, `<body>` at least drops the head.
+  html = html:match("<main[^>]*>(.-)</main%s*>")
+    or html:match("<article[^>]*>(.-)</article%s*>")
+    or html:match("<body[^>]*>(.-)</body%s*>")
+    or html
+
+  -- `%f[%W]` is the frontier: the tag name has to end where it is written, or
+  -- `nav` would take `<navbar>` and `header` would take `<header-nav>` with it.
+  for _, tag in ipairs(DROP) do
+    html = html:gsub("<" .. tag .. "%f[%W][^>]*>.-</" .. tag .. "%s*>", " ")
+    html = html:gsub("<" .. tag .. "%f[%W][^>]*/>", " ")
+  end
+
+  -- **Every run of source whitespace becomes one space, before any break is
+  -- inserted.** A newline in HTML is whitespace and nothing more -- an author
+  -- who indents a paragraph over five lines wrote one paragraph -- so a
+  -- newline that survives to the split below is indistinguishable from a break
+  -- this function put there, and one paragraph arrives as five. `<pre>` loses
+  -- its own line structure to this, which is the price: a hover is not a
+  -- source viewer, and the alternative is that every ordinary page reads as
+  -- ragged fragments.
+  html = html:gsub("%s+", " ")
+
+  -- A list is the one structure worth keeping, because losing it turns a list
+  -- of options into a sentence that reads as nonsense.
+  html = html:gsub("<li%f[%W][^>]*>", "\n• ")
+  html = html:gsub("<br%s*/?>", "\n")
+  for _, tag in ipairs(BLOCK) do
+    html = html:gsub("<" .. tag .. "%f[%W][^>]*>", "\n")
+    html = html:gsub("</" .. tag .. "%s*>", "\n")
+  end
+
+  html = unescape((html:gsub("<[^>]*>", " ")))
+
+  local out = {}
+  for _, raw in ipairs(vim.split(html, "\n", { plain = true })) do
+    -- One space for any run of whitespace: HTML's own rule, and what keeps a
+    -- source file's indentation from arriving as a ragged left margin.
+    local line = vim.trim((raw:gsub("%s+", " ")))
+    if line ~= "" then
+      for _, piece in ipairs(wrap(line, max_width)) do
+        out[#out + 1] = piece
+        if #out >= max_lines then
+          return out
+        end
+      end
+    end
+  end
+  return out
 end
 
 ---@internal
@@ -254,6 +530,32 @@ function M.fetch(target, opts, callback)
     local ctype = type_line(response.headers, response.body)
     if ctype then
       lines[#lines + 1] = ctype
+    end
+
+    -- **What the page says, between the header block and the URL.**
+    --
+    -- Placed here rather than appended, and the reason is the float's height:
+    -- it is `min(#lines, max_lines)`, so anything past the budget is not
+    -- scrolled to, it is simply absent. Last would mean the URL parts push the
+    -- text off a small float; below the text they are always the last thing in
+    -- the box, and the *budget* is what the text is trimmed to.
+    --
+    -- Only `text/html`: a JSON API or a tarball has no prose in it, and
+    -- running the tag stripper over one would produce a line of punctuation
+    -- with the reader's cursor on it.
+    local body = response.body
+    if body and body ~= "" and (ctype or ""):find("text/html", 1, true) then
+      -- One blank above, one below, and room for the URL that follows. Reads
+      -- the box `opts` carries rather than the configured one, so a hover put
+      -- full screen shows a screenful of the page and not twenty lines of it.
+      local budget = (opts.max_lines or 20) - #lines - #offline.lines - 2
+      local text = M.page_text(body, { max_width = opts.max_width or 80, max_lines = budget })
+      if #text > 0 then
+        lines[#lines + 1] = ""
+        for _, line in ipairs(text) do
+          lines[#lines + 1] = line
+        end
+      end
     end
 
     lines[#lines + 1] = ""

@@ -60,7 +60,7 @@ about the place the cursor is in. See
 | --- | --- |
 | `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |
 | `:Hover links web [on\|off\|toggle]` | whether http(s) links hover. Implies `links on` |
-| `:Hover links web fetch [on\|off\|toggle]` | fetch a link for its status code and page title. Implies `links web on` |
+| `:Hover links web fetch [on\|off\|toggle]` | fetch a link for its status code, page title and — for an HTML page — what the page says. Implies `links web on` |
 | `:Hover paths [on\|off\|toggle]` | whether a path written in prose hovers |
 | `:Hover paths missing [on\|off\|toggle]` | whether a path resolving to nothing is marked broken |
 | `:Hover paths code [on\|off\|toggle]` | whether a bare path hovers inside executable code, not just comments and strings. Implies `paths on` |

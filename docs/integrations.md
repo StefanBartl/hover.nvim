@@ -346,6 +346,7 @@ them at once. Being quiet is the contributor's job.
 | a `.docx` shows a badge instead of its first page | `:Hover office on` was never typed — it is opt-in; or pdfport.nvim / `soffice` is missing, which the badge says |
 | a link does not hover at all | `:Hover links web on` — off by default, in every filetype, for both markdown links and bare URLs. That makes it hoverable; `:Hover auto url` is the second gate, and what makes the *trigger* open it |
 | a link hovers but shows no title or status code | that is `web on` without `web fetch on`; the offline preview never touches the network |
+| a fetched link shows a status line and no page text | the response was not `text/html` — a JSON API or a download has no prose in it — or the box had no rows left for it. `F` (`:Hover zen`) is what gives it room |
 | a fetched link keeps showing an old status | fetch results are cached for the session; `:Hover links web off` then `on` drops the cache |
 | nothing hovers anywhere | `enable()` never ran from a non-lazy spec, `:Hover mode off` was typed and forgotten, or `vim.g.hover_disable` is set |
 | a path in source code does not hover, but the same text in a comment does | the position gate — **hover.nvim**. `:Hover paths code on` turns it off; see [Where one is looked for](FEATURES/BARE-PATHS.md#where-one-is-looked-for) |
