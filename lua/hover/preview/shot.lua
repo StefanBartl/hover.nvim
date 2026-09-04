@@ -300,7 +300,16 @@ end
 local function picture_of(png, opts, on_result)
   local media = require("hover.preview.media")
   if (opts.zoom or 0) > 0 then
-    return media.zoomed(png, opts, on_result)
+    -- **`zoomed` answers nil when it cannot cut the picture at all** -- an
+    -- unreadable PNG, or no `images.convert` to run the crop -- and nil is not
+    -- an answer either caller can use: both hand this straight back as
+    -- `M.preview`'s content. The page rendered; the plain picture is still
+    -- correct, only not magnified, so that is what is shown.
+    --
+    -- It is also what `zoomed` itself does when the crop fails *after* it has
+    -- returned: `on_result(nil)`, and the picture on screen stays. The two
+    -- answers should not differ by which half of the run noticed.
+    return media.zoomed(png, opts, on_result) or media.canvas_for(png, opts)
   end
   return media.canvas_for(png, opts)
 end

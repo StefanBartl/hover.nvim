@@ -182,16 +182,23 @@ local ENTITIES = {
 --- rescan what it wrote.** Decoding `&amp;` first would turn `&amp;lt;` --
 --- which is how a page writes a *literal* `&lt;` -- into `&lt;` and then into
 --- `<`, inventing markup that was never there.
+---
+--- `nr2char`'s second argument is `true` rather than the `1` a Vimscript
+--- caller would write. Both work -- `vim.fn` hands a Lua boolean over as
+--- `v:true` and the function only tests truthiness -- but the Lua meta
+--- declares it `boolean?`, so `1` is a type error for an identical result.
+--- Checked against an emoji, an ASCII character and a Latin-1 one: same
+--- output either way.
 ---@param s string
 ---@return string
 local function unescape(s)
   s = s:gsub("&#[xX](%x+);", function(hex)
     local cp = tonumber(hex, 16)
-    return cp and vim.fn.nr2char(cp, 1) or ""
+    return cp and vim.fn.nr2char(cp, true) or ""
   end)
   s = s:gsub("&#(%d+);", function(dec)
     local cp = tonumber(dec)
-    return cp and vim.fn.nr2char(cp, 1) or ""
+    return cp and vim.fn.nr2char(cp, true) or ""
   end)
   return (
     s:gsub("&(%a[%w]*);", function(name)
