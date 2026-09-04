@@ -77,7 +77,7 @@ The three plain characters that replaced them do not rest on one argument:
 | --- | --- |
 | `>` in | an **operator**: over a float it moves no cursor and completes nothing on its own, so the borrow costs a reader nothing for exactly as long as the float lasts |
 | `=` reset | the same, and already the shape of "back to normal" |
-| `\|` out | a **motion** — and that is the argument *for* borrowing it. Unbound, it jumps the cursor to column one, the dismissal hangs on `CursorMoved`, and so the press takes the picture away. The same case [`nav_keys`](#moving-around-once-you-are-in) makes for `h` |
+| `\|` out | a **motion** — and that is the argument *for* borrowing it. Unbound, it jumps the cursor to column one, the dismissal hangs on `CursorMoved`, and so the press takes the picture away. The same case [`nav_keys`](#navigating-the-narrowest-borrow-in-the-plugin-and-the-strongest-case) makes for `h` |
 
 **Two rejections, and neither is about taste.**
 
@@ -104,8 +104,7 @@ which is the one thing a zoom is for.
 
 The honest answer is a second render at a higher DPI, and it was parked here
 with a price on it: **3.3 s a step**, against 258 ms for a crop. That number
-is why this sat on [ROADMAP.md](../ROADMAP.md) as a decision rather than a
-ticket.
+is why this sat on the roadmap as a decision rather than a ticket.
 
 **The number was for the wrong operation, and measuring the right one settled
 it.** 3.3 s is what re-rendering a *whole page* costs, and a whole page is not
@@ -157,8 +156,7 @@ measurement.
 
 **Every view is kept for the session**, keyed by file, mtime, page, DPI *and*
 window. Without the last two the sharp view and the plain one overwrite each
-other, which [ROADMAP.md](../ROADMAP.md) named as the obstacle before this was
-built. How many are worth keeping answers itself: the ceiling bounds the levels,
+other, which the roadmap named as the obstacle before this was built. How many are worth keeping answers itself: the ceiling bounds the levels,
 a few hundred KB each, and they go at `VimLeavePre` with everything else.
 
 **pdftoppm does the cutting, not ImageMagick.** `pdfport.render_page` grew an

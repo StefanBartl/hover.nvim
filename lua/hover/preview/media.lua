@@ -583,8 +583,8 @@ end
 --- So are the DPI and the window, for the same reason one level up: a
 --- magnified view *is* a second rasterization of the same page, and without
 --- them in the key the sharp view and the plain one overwrite each other --
---- which `docs/ROADMAP.md` named as the obstacle to this feature before it
---- was built.
+--- which the roadmap named as the obstacle to this feature before it was
+--- built.
 ---@param path string
 ---@param page integer
 ---@param dpi integer
@@ -741,7 +741,7 @@ end
 --- size).
 ---
 --- **How many resolutions are worth keeping** — the second half of the
---- obstacle `docs/ROADMAP.md` named. Every view that has been on screen is
+--- obstacle the roadmap named. Every view that has been on screen is
 --- kept for the session, because stepping back out to one already rendered
 --- must not pay for it twice, and the count is bounded by the ceiling above
 --- rather than by a sweep: a few hundred KB per view, a handful of views per

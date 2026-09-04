@@ -279,7 +279,7 @@ is magnification: the same picture drawn into a larger cell area. For text it
 is not, because the font size belongs to the terminal emulator: a bigger box
 shows MORE lines rather than larger ones. One operation, two honest answers,
 and only one of them is zoom. A real zoom -- a cropped detail that can be
-panned -- is a different feature and is on docs/ROADMAP.md.
+moved around -- is a different feature and is built; see |hover-zoom|.
 
 The ceiling is the terminal, and it is found rather than declared: a step that
 changes nothing is stepped back off, which is why holding a key does not run
@@ -352,7 +352,7 @@ knowing how many would answer means asking every contribution on every
 hover, which is the cost 'on_request' exists to avoid.
 
 A zoom step divides the visible rectangle by 1.5 and keeps its centre, so
-going deeper keeps looking at the same place. A pan step is a quarter of what
+going deeper keeps looking at the same place. A move step is a quarter of what
 is visible. Stepping back to a view already seen is instant -- the crop is
 cached for the session and swept at exit.
 
@@ -427,6 +427,10 @@ worth asserting.
 >lua
   require("hover").setup({
     mode = "auto",                  -- "auto" | "manual" | "off"
+    -- Which target types the automatic trigger opens a float for. A list of
+    -- type names, `true` for every type, or `false` for none. Gates the
+    -- trigger only: `:Hover show` answers for every type regardless.
+    auto_hover = { "image", "pdf" },
     trigger = { "CursorHold" },     -- or { "cursor" }, or { "mouse" }
     delay_ms = 250,
     placeholder_grace_ms = 250,
@@ -436,9 +440,20 @@ worth asserting.
     inline_images = true,
     filetypes = "*",
     links = { enabled = true, web = false, fetch = false, timeout_ms = 2000 },
-    paths = { enabled = true, missing = true, code = false },
+    -- `scope` teaches the code/prose gate a capture family for one grammar;
+    -- empty is almost always right, since the gate falls open on anything it
+    -- does not recognise.
+    paths = {
+      enabled = true, missing = true, code = false,
+      scope = { prose = {}, code = {} },
+    },
     positions = true,
-    office = { convert = false, timeout_ms = 60000 },
+    -- `cache_days` is how long a converted PDF may sit in the cache before
+    -- the next session sweeps it; 0 keeps nothing between sessions.
+    office = { convert = false, timeout_ms = 60000, cache_days = 7 },
+    -- Step to the next plugin answering for this place. Borrowed only for a
+    -- position hover with more than one contribution registered.
+    position_keys = { next = { "<M-n>" } },
     scroll_keys = {
       down = { "<M-PageDown>", "<C-Down>" },
       up = { "<M-PageUp>", "<C-Up>" },
@@ -509,11 +524,16 @@ hover.zoom({delta})                       Magnify a detail of the picture on
                                           step back out. Returns false when
                                           there is no picture to zoom, or no
                                           detail left. See |hover-zoom|.
-                                                                  *hover.pan()*
-hover.pan({dx}, {dy})                     Move the magnified view. {dx} is -1
+                                                                  *hover.nav()*
+hover.nav({dx}, {dy})                     Move the magnified view. {dx} is -1
                                           left, 1 right; {dy} is -1 up, 1
                                           down. Returns false when nothing is
                                           zoomed.
+                                                                  *hover.pin()*
+hover.pin({on})                           Keep this float on screen while the
+                                          cursor goes elsewhere; omitted, it
+                                          toggles. While pinned the trigger
+                                          opens nothing. Returns the state.
                                                              *hover.set_mode()*
 hover.set_mode({mode})                    "auto" | "manual" | "off". Returns
                                           the mode, or nil plus a message.

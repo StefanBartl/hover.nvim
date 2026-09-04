@@ -30,7 +30,7 @@ code, guarded so a missing plugin is a `nil` rather than an error.
 A `sources` or `positions` entry may also be a table —
 `{ fn = …, on_request = true }` — which asks to be consulted only for an
 explicit request. That is for a contribution whose answer costs a process
-start; see [the README](../README.md#when-your-answer-is-expensive).
+start; see [api.md](api.md#when-your-answer-is-expensive).
 
 Door 1 is the better shape; door 2 is the honest one. A *capability* can be
 registered: "here is a function that previews an anchor" says everything the
@@ -78,8 +78,7 @@ would be deleting a contribution that is not its own.
 arrived — and its absence from that list is the confirmation that it did not.
 
 So the table below lists who *ships* a contribution, not what is able to make
-one. See [contributing from your own
-config](../README.md#contributing-from-your-own-config) for the whole shape,
+one. See [the registry API](api.md#the-registry) for the whole shape,
 including `on_request` for an answer that costs a process start.
 
 ## Who is wired to what
@@ -120,7 +119,7 @@ markdown.nvim also calls `require("hover").enable()` from
 switch: markdown.nvim is normally `ft`-lazy, so in a session that never opens
 a `.md` file nothing would ever turn the hover on, and a path in a `.txt` or a
 code comment would silently do nothing. Call `enable()` from a spec that is
-not lazy-loaded — see [README.md](../README.md#quickstart).
+not lazy-loaded — see [installation.md](installation.md).
 
 Registration is keyed by plugin name, so a second `setup()` replaces this
 contribution rather than stacking a second link scanner onto every hover.
@@ -172,7 +171,7 @@ looks like a resolver bug and is not: gopath declined, `<cfile>` declined, and
 what put the float on screen was the hover deciding for itself that the text
 was unambiguously a path. Those rules live in `bare_path.lua`
 (`is_unambiguous_path`) and are documented under
-[Bare paths](../README.md#bare-paths). Read them before opening a gopath issue.
+[Bare paths](FEATURES/BARE-PATHS.md). Read them before opening a gopath issue.
 
 ## images.nvim — the picture, and the geometry around it
 
@@ -202,7 +201,7 @@ existing window:
 
 Two invariants here are load-bearing, and both have been bugs already: the
 editor-relative float, and the inset subtraction. They are written up in
-[README.md](../README.md#two-things-that-must-not-be-changed-casually), and
+[architecture.md](architecture.md#two-things-that-must-not-be-changed-casually), and
 images.nvim ships the measurements as `:Image debug`. Read both before
 touching placement.
 
@@ -302,7 +301,7 @@ trigger, which fires after every keystroke followed by quiet.
 sandbox.nvim was waiting on a second one. Its answer costs an engine start,
 measured at 277–754 ms across two runs, so it could not be built at all until
 a contribution could declare its own answer expensive — see
-[when your answer is expensive](../README.md#when-your-answer-is-expensive).
+[when your answer is expensive](api.md#when-your-answer-is-expensive).
 It is also the one integration no CI can exercise, because answering needs a
 running container engine: the row, and the script that fills it, are in
 [manual evidence](MANUAL-EVIDENCE.md#a-contribution-asked-only-on-request).
@@ -342,14 +341,14 @@ them at once. Being quiet is the contributor's job.
 | `file.md#heading` shows the file's head instead of the section | markdown.nvim missing |
 | a link does not hover, but the bare path in it does | markdown.nvim's source is not registered — usually `setup()` never ran |
 | an image shows as text | no provider installed, or one that is not images.nvim on a terminal without Kitty graphics |
-| the picture lands beside its own frame | placement — see the two invariants in [README.md](../README.md#two-things-that-must-not-be-changed-casually) |
+| the picture lands beside its own frame | placement — see the two invariants in [architecture.md](architecture.md#two-things-that-must-not-be-changed-casually) |
 | a PDF shows its size but no page | pdfport.nvim missing, or `pdftoppm` not on `PATH` |
 | a `.docx` shows a badge instead of its first page | `:Hover office on` was never typed — it is opt-in; or pdfport.nvim / `soffice` is missing, which the badge says |
 | a link does not hover at all | `:Hover links web on` — off by default, in every filetype, for both markdown links and bare URLs |
 | a link hovers but shows no title or status code | that is `web on` without `web fetch on`; the offline preview never touches the network |
 | a fetched link keeps showing an old status | fetch results are cached for the session; `:Hover links web off` then `on` drops the cache |
 | nothing hovers anywhere | `enable()` never ran from a non-lazy spec, `:Hover mode off` was typed and forgotten, or `vim.g.hover_disable` is set |
-| a path in source code does not hover, but the same text in a comment does | the position gate — **hover.nvim**. `:Hover paths code on` turns it off; see [Where a bare path is looked for](../README.md#where-a-bare-path-is-looked-for) |
+| a path in source code does not hover, but the same text in a comment does | the position gate — **hover.nvim**. `:Hover paths code on` turns it off; see [Where one is looked for](FEATURES/BARE-PATHS.md#where-one-is-looked-for) |
 | one path stopped hovering while everything else still works | it was dismissed with `q`/`<Esc>`. It re-arms at the next target the cursor resolves, or immediately via `show({ force = true })` |
 | `q` starts no macro, or `<Esc>` does nothing | a hover is on screen and has borrowed that key — **hover.nvim**, and only until the float closes, which hands it back rather than deleting it |
 

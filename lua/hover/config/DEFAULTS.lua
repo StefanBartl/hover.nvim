@@ -298,8 +298,9 @@ return {
   --- text preview shows *more lines*, because the font size belongs to the
   --- terminal emulator and Neovim cannot change it. That is why this is
   --- `resize` and not `zoom`: only one of the two is magnification, and a
-  --- real zoom -- a cropped detail that can be panned -- is a different
-  --- feature (`docs/ROADMAP.md`).
+  --- real zoom -- a cropped detail that can be moved around -- is a different
+  --- feature, which is built and configured by `zoom_keys` below
+  --- (`docs/FEATURES/ZOOM.md`).
   ---
   --- **`larger` / `smaller` are bound only for a *drawn* hover.** They are
   --- real motions in normal mode, and displacing them is worth it over a

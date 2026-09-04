@@ -56,10 +56,27 @@ require("hover").setup({ keymaps = { show = false } })
 | `nav_keys.up` | `k` | as above | up |
 | `nav_keys.down` | `j` | as above | down |
 
-Three things follow from "borrowed", and each has been a bug at some point:
+What follows from "borrowed" is below, and each of these has been a bug at some
+point. No count in that sentence on purpose: the list has grown with every new
+pair of keys, and a number in front of it would be one more hand-kept copy to
+fall behind.
 
 - **A key already mapped is restored, not deleted.** `maparg(..., true)`
   captures it before the mapping is set; `mapset` puts it back after.
+- **`dismiss_keys` dismiss rather than close, and the difference is not
+  cosmetic.** Under the `CursorHold` trigger the event fires again after any
+  keystroke followed by `'updatetime'` of quiet — cursor movement or not — so
+  a key bound to `hide()` makes the float vanish and then brings it straight
+  back, while the reader is still standing where they wanted it gone. The
+  dismissal instead holds for as long as the cursor stays on that target, and
+  the next target it resolves — another one, or none at all — clears it.
+  Unlike the scroll keys they are bound for **every** hover, because anything
+  can be waved away, including a picture, which has nothing to scroll.
+- **Both scroll pairs are bound, because a key that is not on the keyboard
+  cannot be pressed.** Laptop and 60% layouts often reach PageUp/PageDown only
+  through an Fn chord, and nothing at runtime can tell whether *this* keyboard
+  has them; the arrows are on every keyboard there is. Ctrl rather than Alt on
+  them, because `<M-Up>`/`<M-Down>` is a widespread "move this line" binding.
 - **The same key listed twice is taken once.** A key that is both a dismiss
   key and a scroll key would otherwise be "restored" to one of our own
   mappings and outlive the float forever. Dismiss wins: the binding that
@@ -133,32 +150,17 @@ hover, so either is safe to bind unconditionally.
 
 ## User commands
 
-One compound verb, `<Tab>`-completed at every level. The state argument may be
-omitted, which toggles.
+One compound verb, `:Hover`, `<Tab>`-completed at every level. The state
+argument may be omitted, which toggles. **[commands.md](commands.md) is the
+reference** — what each route does, what it takes, and what happens when it is
+left out. The list itself, so this cheatsheet is one:
 
-| Command | Does |
+| Group | Routes |
 | --- | --- |
-| `:Hover show` | one hover, here, now, ignoring every volume switch |
-| `:Hover status` | the mode and every switch — a chooser where `<CR>` toggles the picked line, falling back to one message without lib.nvim`s UI kit |
-| `:Hover why` | why nothing hovered at the cursor -- which gate refused, and what to type about it |
-| `:Hover pin` | take this float out of the cursor's hands. While pinned the trigger opens nothing; `:Hover show` replaces it, `q`/`<Esc>` take it away |
-| `:Hover resize [bigger\|smaller]` | make the hover on screen bigger or smaller -- a picture is drawn larger, a text preview shows more lines. Omitted, bigger. Declines for a *position* preview, which cannot be asked again at another size |
-| `:Hover zoom [in\|out\|reset]` | magnify a detail of the picture or PDF page on screen, or step back out. Omitted, in. A picture is cropped, a page re-rendered at a higher DPI; either way a step costs a fraction of a second, which is why it is a route as well as a key |
-| `:Hover next` | step to the next plugin with something to say about this place. Wraps past the last one, and says so when there is only one |
-| `:Hover nav {left\|right\|up\|down}` | move the magnified view. The keyboard counterpart to `nav_keys`, which are a borrow and therefore undiscoverable until one has been seen |
-| `:Hover auto [<type>\|all\|none]` | which target types open by themselves. A type toggles it; omitted, it lists what does and what waits to be asked |
-| `:Hover border [<style>]` | the frame's look: `rounded` `single` `double` `heavy` `ascii` `dashed` `block` `solid` `shadow` `none`. Omitted, it reports the current one and lists the rest |
-| `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
-| `:Hover toggle` | off if it is on, back to `auto` if it is off |
-| `:Hover links [on\|off\|toggle]` | whether link syntax hovers at all |
-| `:Hover links web [on\|off\|toggle]` | whether http(s) links hover. Implies `links on` |
-| `:Hover links web fetch [on\|off\|toggle]` | fetch a link for its status code and title. Implies `links web on` |
-| `:Hover paths [on\|off\|toggle]` | whether a path written in prose hovers |
-| `:Hover paths missing [on\|off\|toggle]` | whether a path resolving to nothing is marked broken |
-| `:Hover paths code [on\|off\|toggle]` | whether a bare path hovers inside executable code, not just comments and strings. Implies `paths on` |
-| `:Hover positions [on\|off\|toggle]` | whether a registered plugin may answer for a cursor position that points at nothing |
-| `:Hover images [on\|off\|toggle]` | whether pictures are drawn into the float, or described |
-| `:Hover office [on\|off\|toggle]` | whether office documents render through a PDF |
+| asking | `:Hover show` &middot; `:Hover why` &middot; `:Hover pin` &middot; `:Hover next` |
+| the float on screen | `:Hover resize` &middot; `:Hover zoom` &middot; `:Hover nav` &middot; `:Hover border` |
+| volume | `:Hover mode` &middot; `:Hover toggle` &middot; `:Hover auto` &middot; `:Hover status` |
+| switches | `:Hover links` &middot; `:Hover links web` &middot; `:Hover links web fetch` &middot; `:Hover paths` &middot; `:Hover paths missing` &middot; `:Hover paths code` &middot; `:Hover positions` &middot; `:Hover images` &middot; `:Hover office` |
 
 `:Hover` is registered from `plugin/hover.lua`, so it exists before `setup()`
 runs and even in a session where nothing turned the hover on. That is the
@@ -166,18 +168,14 @@ point: `:Hover mode auto` has to be reachable from exactly the state where
 someone is most likely to type it.
 
 The routes are **generated** from `hover.switches`, not written out. Dispatch,
-completion, the descriptions above and `:Hover status` all read the same
-table, so they cannot drift apart.
+completion, the descriptions and `:Hover status` all read the same table, so
+they cannot drift apart.
 
-No keymap is offered for these. A setting thrown a few times a week, from
-wherever you happen to be, does not need to be one keystroke away.
-
-### No range support, deliberately
-
-Every route here acts on the cursor position or on a session-wide switch.
-Neither has a meaningful reading over a line range, and a `:'<,'>Hover links
-on` that silently ignored its range would be worse than one that does not
-accept it.
+No keymap is offered for these, and none accepts a range. A setting thrown a
+few times a week, from wherever you happen to be, does not need to be one
+keystroke away; and every route acts on the cursor position or on a
+session-wide switch, neither of which has a meaningful reading over a line
+range.
 
 ---
 

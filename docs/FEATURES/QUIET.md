@@ -2,7 +2,8 @@
 
 Why so little of this plugin is on by default, and where the lines were drawn.
 For *what* the switches are and how to throw them, see
-[the README](../../README.md#what-is-opt-in-and-why); this page is the
+[commands.md](../commands.md#the-nine-switches) and
+[configuration.md](../configuration.md#the-nine-switches); this page is the
 reasoning underneath.
 
 ## What the complaint actually was
@@ -14,8 +15,12 @@ which matters because fixing the loudest one would have left the other two.
 1. **The trigger fires more often than "the cursor moved."** `CursorHold`
    fires after *any* keystroke followed by quiet — cursor movement or not — and
    with `updatetime = 200` plus `delay_ms = 250` that is a float about 450 ms
-   after every pause. `trigger = { "cursor" }` exists for exactly this and is
-   not the default; see [ROADMAP.md](../ROADMAP.md).
+   after every pause. [`trigger = { "cursor" }`](../configuration.md#what-opens-a-float-and-when)
+   exists for exactly this — CursorMoved plus this plugin's own debounce, so
+   `delay_ms` is absolute and nothing fires while the cursor stands still. It is
+   not the default, because `CursorHold` is what every reader's muscle memory
+   and every other plugin's timing is already calibrated against, and changing
+   that would alter the feel of the plugin for everyone who never asked.
 
 2. **The opt-in line was drawn in the wrong place.** The argument "a document
    is made of links, so links must be opt-in" had only ever been applied to
@@ -45,6 +50,36 @@ network round trip, so it is off even where the answer would be worth having.
 The value of the model is that it **derives every default that already
 existed** and disagrees with exactly two of them — which is what made it worth
 adopting rather than an opinion competing with an opinion.
+
+### The third axis, added when the first two could not express it
+
+Those two are organised by where a target was *found* — link syntax, bare
+prose, a plugin answering for a position. `auto_hover` is organised by what the
+target turned out to **be**, and the two cross: a markdown link can point at a
+picture or at a text file, so "pictures only, however they were written" was
+not sayable at all before it existed.
+
+It resolves to `{ "image", "pdf" }`, and the argument is the same one the other
+two axes make, applied per type rather than per source. **A picture or a
+rendered page is the only thing this plugin shows that cannot be read off the
+line the cursor is on.** A file's first lines are a *shortcut* — useful, and a
+shortcut for something you could also just open, while the float lands over the
+paragraph you were reading to give it to you. The value per interruption is
+very unevenly spread across the target types, and this is the axis it is spread
+along.
+
+Two things about it are easy to get wrong:
+
+- **It gates the trigger, not the plugin.** `paths.enabled = false` means a bare
+  path is not a target at all, so nothing finds it; leaving `file` out of
+  `auto_hover` means it *is* found and waits to be asked for. `:Hover show`
+  answers for every type regardless.
+- **It saves the float, not the work before it.** To know that something is a
+  picture, the path still has to be resolved. What it buys is quiet, not speed.
+
+`mode` and `auto_hover` were one setting until 2026-09-03 and are two because
+they answer different questions: one is a switch for right now, the other a
+standing preference.
 
 ## Three modes, and what outranks what
 
@@ -87,8 +122,8 @@ hand-kept number and went stale twice before this sentence replaced it.
 - `preview/office.lua` (`a5531e5`) — a badge advertised a command that no
   longer existed.
 - **The documents** (2026-09-02) — the vimdoc listed seven of the nine switch
-  names, `docs/INTEGRATIONS.md` carried four hand-counted numbers that were all
-  stale, and `docs/ROADMAP.md` said "four of the candidates are built" with
+  names, `docs/integrations.md` carried four hand-counted numbers that were all
+  stale, and the roadmap said "four of the candidates are built" with
   five. One step worse than the code ones: in code a spec eventually trips over
   it, in a document nobody does.
 - `init.scroll` (`9fba190`) — it assembled its own `preview_opts` and therefore

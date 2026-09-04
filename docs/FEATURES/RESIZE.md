@@ -3,7 +3,7 @@
 Why the float can be made bigger, why that is called **resize** and not zoom,
 and why one key pair is bound for pictures while the other two ways in work
 everywhere. For *how* to use it, see
-[the README](../../README.md#resizing-the-hover); this page is the reasoning
+[BINDINGS.md](../BINDINGS.md) and [commands.md](../commands.md); this page is the reasoning
 underneath.
 
 ## One operation, two honest answers
@@ -39,17 +39,22 @@ So the rename was not a matter of taste, and it did not cost anything — it
 - one special case leaves the media previewer, and text works with no second
   path at all.
 
-`zoom_keys` is folded into `resize_keys` by `config.normalize()` the way
-`enabled`, `bare_paths` and `url` already are, and `hover.zoom(delta)` remains
-as a deprecated alias. Neither costs a branch at runtime.
+**Neither name is an alias for the other, and that is the part worth stating
+once.** `zoom_keys` was briefly the old spelling of `resize_keys`, and it is
+not any more: it configures the real zoom, and a configuration still written in
+the old shape (`zoom_keys.larger` / `.smaller`) is reported on startup and
+ignored rather than quietly rebound. `hover.zoom(delta)` is likewise its own
+function and not a deprecated pointer at `hover.resize(delta)`. An alias for a
+renamed operation is exactly what produced the collision this repository paid
+for.
 
 **A real zoom is a different mechanism**, not a larger version of this one:
 same box, more of the picture cut away, and keys to move the cut around. It
-needs a cropped temporary file per step, panning keys, and a centre to zoom
-about. **It is built** for pictures — `:Hover zoom`, `h/j/k/l` to pan, and a
-step that costs 258 ms rather than nothing; see [ZOOM.md](ZOOM.md). What
-remains on [ROADMAP.md](../ROADMAP.md) is the **sharp PDF zoom**, because for
-a rasterized page the answer is a second render rather than a crop.
+needs a cropped temporary file per step, navigation keys, and a centre to zoom
+about. **It is built** — `:Hover zoom`, `h`/`j`/`k`/`l` to move the view, and a
+step that costs 258 ms rather than nothing. The PDF half is built too, and is a
+re-render at a higher DPI rather than a crop, because cropping a rasterization
+gives you bigger and not sharper. Both are in [ZOOM.md](ZOOM.md).
 
 ## The keys split by what they cost
 
