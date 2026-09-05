@@ -26,6 +26,7 @@ default rather than extending it, which is what a list should mean. `{}` binds n
 | --- | --- | --- |
 | `mode` | `"auto"` | `auto` \| `manual` \| `off`. The switch above every other switch — see [Modes](#modes). |
 | `auto_hover` | `{ "image", "pdf" }` | Which target types the automatic trigger opens a float for. A list of type names, `true` for every type, or `false` for none. Gates the **trigger** only: `:Hover show` answers for every type regardless. See [What opens by itself](#what-opens-by-itself). |
+| `persist` | `false` | Write `mode`, `auto_hover` and every switch back over this configuration the next time `enable()` runs, so a runtime change outlives the session it was made in. See [Persisting runtime changes](#persisting-runtime-changes). |
 | `trigger` | `{ "CursorHold" }` | `"CursorHold"` follows `'updatetime'` and adds `delay_ms` on top. `"cursor"` is CursorMoved plus this plugin's own debounce — `delay_ms` is then absolute, and nothing fires while the cursor stands still. `"mouse"` also needs `:set mousemoveevent`, which is never set for you. |
 | `delay_ms` | `250` | Debounce before the float opens. |
 | `filetypes` | `"*"` | `FileType` pattern the hover attaches on. A non-empty `'buftype'` is excluded regardless — a picker, a file tree, a terminal or a dashboard has no document to hover in. |
@@ -160,6 +161,33 @@ to ask. Two consequences worth knowing before you keep the default:
   insights.nvim saying who imports it — those answer on `:Hover show` and not on their own.
 - **It saves the float, not the work before it.** To know that something is a picture, the
   path still has to be resolved. What you get is quiet, not speed.
+
+## Persisting runtime changes
+
+`mode`, `auto_hover` and the twelve switches are a *runtime* fact by default: `:Hover
+links web on` while chasing a broken link ends when Neovim does, the same way scrolling
+to the top of a file does not change what the file starts open at. `persist = true` is
+the reader saying the opposite — "this is not for right now, this is how I want it" —
+without editing the installation spec by hand every time a preference changes:
+
+```lua
+require("hover").enable({ persist = true })
+```
+
+On, the mode, `auto_hover` and every switch — exactly what [`:Hover status`](commands.md)
+reports — are written to disk on `VimLeavePre` and read back over this configuration the
+next time `enable()` runs, **after** the installation spec's own options are merged. So
+the order becomes DEFAULTS → installation spec → the last session's own switches, and a
+runtime toggle really does win over a static default until it is toggled back.
+
+**What is not carried.** `border`, `max_lines`, every `_keys` table and any other layout
+or keybinding option stay exactly where they are: read once, from the installation spec.
+A reader who cannot see a state file should not have it override what their own config
+says — only the three axes a *report* already shows them are eligible.
+
+Stored through `lib.nvim.cache.disk`, one JSON file under `stdpath("cache")`;
+`:checkhealth hover` warns if `persist` is on and that module is not reachable (an older
+lib.nvim), in which case nothing breaks — switches simply stop surviving a restart.
 
 ## When two plugins answer
 

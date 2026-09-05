@@ -551,6 +551,12 @@ worth asserting.
 >lua
   require("hover").setup({
     mode = "auto",                  -- "auto" | "manual" | "off"
+    -- Write mode, auto_hover and every switch back over this configuration
+    -- on the next enable() -- so a runtime change (`:Hover status`, `:Hover
+    -- links web on`, ...) outlives the session it was made in. Off by
+    -- default. `border`, key tables and every layout option are never
+    -- carried -- only what `:Hover status` itself reports.
+    persist = false,
     -- Which target types the automatic trigger opens a float for. A list of
     -- type names, `true` for every type, or `false` for none. Gates the
     -- trigger only: `:Hover show` answers for every type regardless.

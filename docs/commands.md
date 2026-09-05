@@ -49,6 +49,9 @@ be tried rather than decided.
 | `:Hover auto [<type>\|all\|none]` | which target types open by themselves. A type toggles it; omitted, it lists what does and what waits to be asked |
 | `:Hover status` | the mode, every switch and what opens by itself — as a board where `<CR>` toggles the row under the cursor, `?` lists its keys, and every row carries the command that acts on it. One message where lib.nvim has no UI kit |
 
+Whatever this board shows survives a restart when [`persist = true`](configuration.md#persisting-runtime-changes)
+is set — it is written on `VimLeavePre` and read back the next time `enable()` runs.
+
 The type names `:Hover auto` takes are `image`, `pdf`, `office`, `markdown`, `file`,
 `directory`, `url`, `anchor`, `missing` and `git`, plus `position` for a plugin answering
 about the place the cursor is in. See
