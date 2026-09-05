@@ -106,12 +106,20 @@ return {
     position = false,
   },
 
-  -- Off: `mode`, `auto_hover` and every switch in `hover.switches` are a
-  -- *runtime* fact by default, thrown for the session and gone the moment
-  -- Neovim is. On, the last session's own values are written back over
-  -- whatever this table and the installation spec say, the next time
-  -- `enable()` runs -- so `:Hover links web on` while chasing a broken link
-  -- can also be "for good, until toggled back" rather than "until :qa".
+  -- On: `mode`, `auto_hover` and every switch in `hover.switches` are
+  -- written back over whatever this table and the installation spec say, the
+  -- next time `enable()` runs -- so `:Hover links web on` while chasing a
+  -- broken link is "for good, until toggled back" rather than "until :qa".
+  --
+  -- **On by default, unlike the switches above.** Those default off because
+  -- they cost something -- a request, a browser, a LibreOffice start -- the
+  -- first time a reader never asked for. Remembering a switch the reader
+  -- already set costs nothing and undoes nothing they did not do themselves;
+  -- the failure mode this default avoids is the more common one, where a
+  -- preference set once is expected to still be there next week. `persist =
+  -- false` is for a reader who wants a session-only override instead --
+  -- `:Hover links web on` while chasing one broken link, meant to end when
+  -- Neovim does.
   --
   -- **What is carried, and what is not.** Exactly the three axes `:Hover
   -- status` reports -- see `hover.persist`. Layout and keybinding options
@@ -119,7 +127,7 @@ return {
   -- from the installation spec, and a reader who cannot see a state file
   -- should not have it override what their own config says.
   ---@type boolean
-  persist = false,
+  persist = true,
 
   -- "CursorHold" follows 'updatetime', a global usually set for something
   -- else entirely (gitsigns' blame, a statusline). It also fires after any

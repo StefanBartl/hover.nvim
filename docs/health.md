@@ -40,11 +40,13 @@ Two more arrive with page screenshots, and only while that switch is on:
 - **Screenshots on while `images` is off.** A rendered page *is* a picture; with nothing to
   draw it there is no browser worth starting, and the float says so instead of rendering.
 
-One more arrives only with [`persist`](configuration.md#persisting-runtime-changes) on:
+One more arrives with [`persist`](configuration.md#persisting-runtime-changes) on, which
+is the default:
 
 - **`persist` is on, but `lib.nvim.cache.disk` is not reachable.** An older lib.nvim,
   most likely. Nothing else breaks — switches simply stop surviving a restart until it is
-  updated.
+  updated. `persist = false` also silences it, for anyone who wants a session-only plugin
+  on purpose.
 
 Two more come from the keys rather than from the switches:
 

@@ -2,10 +2,11 @@
 -- The test body is the guard; see the note in TESTS/bare_path_spec.lua
 -- (`LLS-42`).
 
--- TESTS/persist_spec.lua -- `persist`, and the one property that makes it
--- safe to add: off by default, a snapshot shaped exactly like the `opts` an
--- installation spec would pass, and a round trip through disk that changes
--- nothing this plugin does not already merge every `setup()` call.
+-- TESTS/persist_spec.lua -- `persist`, on by default, and the two properties
+-- that make that safe: `false` genuinely turns it off again, and a snapshot
+-- shaped exactly like the `opts` an installation spec would pass, so a round
+-- trip through disk changes nothing this plugin does not already merge on
+-- every `setup()` call.
 
 local config = require("hover.config")
 local switches = require("hover.switches")
@@ -26,15 +27,29 @@ describe("hover.persist", function()
     vim.fn.delete(dir, "rf")
   end)
 
-  describe("off by default", function()
-    it("writes nothing when persist is not set", function()
+  describe("on by default", function()
+    it("is true straight out of DEFAULTS", function()
+      assert.is_true(config.get().persist)
+    end)
+
+    it("writes a snapshot with nothing configured at all", function()
+      switches.set("web", true, { silent = true })
+      persist.save({ dir = dir })
+      assert.is_truthy(require("lib.nvim.cache.disk").load("hover/status", { dir = dir }))
+    end)
+  end)
+
+  describe("persist = false", function()
+    it("writes nothing", function()
+      config.setup({ persist = false })
       switches.set("web", true, { silent = true })
       persist.save({ dir = dir })
       assert.is_nil(require("lib.nvim.cache.disk").load("hover/status", { dir = dir }))
     end)
 
-    it("loads nothing when persist is not set", function()
+    it("loads nothing", function()
       require("lib.nvim.cache.disk").save("hover/status", { mode = "off" }, { dir = dir })
+      config.setup({ persist = false })
       persist.load({ dir = dir })
       assert.equals("auto", config.mode())
     end)
