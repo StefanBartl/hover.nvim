@@ -92,8 +92,17 @@ function M.snapshot()
   local raw = require("hover.config").raw()
   local switches = require("hover.switches")
 
+  -- `auto_hover` is `table<string,boolean>|boolean|string[]` -- a `true`/
+  -- `false` override is a valid value, not just the table forms, and
+  -- `vim.deepcopy` only takes a table. Only the table shapes need copying to
+  -- begin with, since a boolean has no shared identity to protect.
+  local auto_hover = raw.auto_hover
+  if type(auto_hover) == "table" then
+    auto_hover = vim.deepcopy(auto_hover)
+  end
+
   ---@type Hover.Config
-  local out = { mode = raw.mode, auto_hover = vim.deepcopy(raw.auto_hover) }
+  local out = { mode = raw.mode, auto_hover = auto_hover }
   for _, name in ipairs(switches.names()) do
     local spec = switches.spec(name)
     if spec then
