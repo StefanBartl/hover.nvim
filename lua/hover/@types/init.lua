@@ -30,7 +30,7 @@
 
 ---@class Hover.Config
 ---@field mode? Hover.Mode # Default "auto".
----@field persist? boolean # Default false. Write `mode`, `auto_hover` and every switch back over this configuration on the next `enable()`, so a runtime change (`:Hover status`, `:Hover links web on`, ...) outlives the session it was made in. See `hover.persist`.
+---@field persist? boolean # Default true. Write `mode`, `auto_hover` and every switch back over this configuration on the next `enable()`, so a runtime change (`:Hover status`, `:Hover links web on`, ...) outlives the session it was made in. `false` for a session-only override instead. See `hover.persist`.
 ---@field auto_hover? table<string, boolean>|boolean|string[] # Which target types the *automatic* trigger opens a float for. A list is a closed set (`{ "image", "pdf" }`, the default); a table is additive (`{ file = true }` adds one); `true`/`false` are every type and none. Names are `Hover.Target.type` plus `"position"`. **Gates the trigger only** -- `:Hover show` answers for every type regardless, which is what separates this from `paths.enabled` and its neighbours: those decide whether something is a target at all. See `hover.config.DEFAULTS`.
 ---@field trigger? Hover.Trigger[] # Default `{ "CursorHold" }`.
 ---@field delay_ms? integer # Debounce before the float opens. Default 250.

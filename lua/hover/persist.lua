@@ -1,12 +1,13 @@
 ---@module 'hover.persist'
 ---@brief Carry a session's `:Hover status` toward the next one.
 ---@description
---- Every switch, `mode` and `auto_hover` are a *runtime* fact by default:
---- `:Hover links web on` while chasing a broken link is meant to end when
---- Neovim does, the same way scrolling to the top of a file does not change
---- what the file starts open at. `persist = true` is the reader saying the
---- opposite -- "this is not for right now, this is how I want it" -- without
---- editing the installation spec by hand every time a preference changes.
+--- Every switch, `mode` and `auto_hover` are written back over the
+--- installation spec's own `opts` on the next `enable()`, by default:
+--- `:Hover links web on` outlives the session it was toggled in, rather than
+--- ending the moment Neovim does. `persist = false` is the reader saying the
+--- opposite -- "this is for right now only" -- for a session-only override
+--- (`:Hover links web on` while chasing one broken link) that a config edit
+--- would be the wrong tool for.
 ---
 --- **What is carried, and what is not.** Exactly what `hover.switches`
 --- already declares a `path` for, plus `mode` and `auto_hover` -- the same
@@ -32,8 +33,10 @@
 ---
 --- Stored through `lib.nvim.cache.disk`, `pcall`-guarded like every other
 --- reach into lib.nvim's optional surface (`hover.status_view`'s UI kit,
---- `hover.cache`'s LRU): a present-but-older lib.nvim without it must not
---- break `enable()` over a feature nobody has asked for yet.
+--- `hover.cache`'s LRU): on by default, so a present-but-older lib.nvim
+--- without it must not break `enable()` for everyone who never configured
+--- this at all -- it only stops switches from surviving a restart, which
+--- `:checkhealth hover` says outright.
 ---
 ---@see hover.switches
 ---@see hover.config
