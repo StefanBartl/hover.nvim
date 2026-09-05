@@ -245,9 +245,12 @@ Three rules decide whether a per-buffer group is created at all:
   terminal or a dashboard has no document to hover in, and a float opening
   over one is always wrong. One check catches all of them, which a filetype
   blocklist could never keep up with.
-- **Nothing that could answer means no autocmd.** With `paths.enabled = false`
-  and no registered source, there is nothing to say, so no `CursorHold` is
-  installed rather than one that wakes to find that out.
+- **Nothing that could answer means no autocmd.** With `paths.enabled = false`,
+  no registered source, and no registered **position** preview with the
+  `positions` switch on, there is nothing to say, so no `CursorHold` is
+  installed rather than one that wakes to find that out. Missing the third
+  question is how the whole position-preview kind would silently do nothing
+  in exactly the configuration someone would build to try it out.
 - **`mode = "manual"` installs the hide autocmds and no trigger.** That is the
   whole mode: every preview still available, none of them unprompted.
 
