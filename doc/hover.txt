@@ -1,4 +1,4 @@
-*hover.txt*   Preview whatever the cursor is resting on
+*hover.txt*   Preview whatever the cursor is resting on           *hover.nvim*
 
 ==============================================================================
 CONTENTS                                                       *hover-contents*
