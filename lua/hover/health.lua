@@ -178,6 +178,23 @@ local function check_config()
     end
   end
 
+  -- `persist` reaches into `lib.nvim.cache.disk`, a module never touched by
+  -- any other path through this plugin -- so a present-but-older lib.nvim
+  -- (`check_lib` above only checks what `enable()` always needs) can be
+  -- missing exactly this one and nothing else would say so before the first
+  -- `VimLeavePre` silently wrote nothing.
+  if config.get().persist == true then
+    local ok = pcall(require, "lib.nvim.cache.disk")
+    if ok then
+      health.ok("persist: on -- mode, auto_hover and every switch are written back on exit")
+    else
+      health.warn("persist: on, but lib.nvim.cache.disk is not there to write to", {
+        "Your lib.nvim is probably pinned to an older commit than this plugin expects.",
+        "Nothing breaks: switches simply stop surviving a restart until it is updated.",
+      })
+    end
+  end
+
   if mode == "manual" then
     local keymaps = config.get().keymaps
     local show = type(keymaps) == "table" and keymaps.show

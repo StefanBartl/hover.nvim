@@ -224,8 +224,8 @@ range.
 
 ## Autocmds
 
-Four augroups. The first two are the trigger and are cleared and rebuilt on
-every `enable()` — which is what makes `enable()` idempotent. The other two
+Five augroups. The first two are the trigger and are cleared and rebuilt on
+every `enable()` — which is what makes `enable()` idempotent. The other three
 belong to a float that is on screen, or to the session, and are created the
 first time they are needed.
 
@@ -237,6 +237,7 @@ first time they are needed.
 | `HoverBuf<n>` | `BufLeave`, `InsertEnter` | one buffer | `hide_unless_pinned()` — leaving the buffer and entering insert are exactly the moments something was pinned *for* |
 | `HoverDismiss` | `CursorMoved`, `CursorMovedI`, `InsertEnter`, `BufLeave`, `WinScrolled` | global, `once` | close the float that is open. `CursorMoved` alone would not do: leaving insert or switching windows must clear it too, or a stale float outlives what it described |
 | `HoverMedia` | `VimLeavePre` | global, once per session | delete the PNGs rasterized from PDF pages |
+| `HoverPersist` | `VimLeavePre` | global, once per session | write `mode`, `auto_hover` and every switch to disk, when `persist` is on |
 
 Three rules decide whether a per-buffer group is created at all:
 

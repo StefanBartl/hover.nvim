@@ -106,6 +106,21 @@ return {
     position = false,
   },
 
+  -- Off: `mode`, `auto_hover` and every switch in `hover.switches` are a
+  -- *runtime* fact by default, thrown for the session and gone the moment
+  -- Neovim is. On, the last session's own values are written back over
+  -- whatever this table and the installation spec say, the next time
+  -- `enable()` runs -- so `:Hover links web on` while chasing a broken link
+  -- can also be "for good, until toggled back" rather than "until :qa".
+  --
+  -- **What is carried, and what is not.** Exactly the three axes `:Hover
+  -- status` reports -- see `hover.persist`. Layout and keybinding options
+  -- (`border`, the `_keys` tables, `max_lines`) are not: those are read once,
+  -- from the installation spec, and a reader who cannot see a state file
+  -- should not have it override what their own config says.
+  ---@type boolean
+  persist = false,
+
   -- "CursorHold" follows 'updatetime', a global usually set for something
   -- else entirely (gitsigns' blame, a statusline). It also fires after any
   -- keystroke followed by quiet -- cursor movement or not. "cursor" is

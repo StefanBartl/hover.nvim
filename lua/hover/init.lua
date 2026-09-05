@@ -186,6 +186,12 @@ function M.enable(opts)
   if type(opts) == "table" then
     M.setup(opts)
   end
+  -- After the installation spec's own `opts`, and before the `is_enabled`
+  -- check below: a persisted `mode = "off"` has to be able to take effect on
+  -- the very check that reads it. See `hover.persist`.
+  local persist = require("hover.persist")
+  persist.load()
+  persist.setup()
   require("hover.bindings.usrcmds").setup()
   if not config.is_enabled() then
     return
