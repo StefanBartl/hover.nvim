@@ -1660,7 +1660,7 @@ function M.zen(on)
   end
 
   if on == nil then
-    on = not (open.zen == true)
+    on = open.zen ~= true
   end
   if on == (open.zen == true) then
     return false
