@@ -117,7 +117,12 @@ end
 ---@return table|nil
 local function disk()
   local ok, mod = pcall(require, "lib.nvim.cache.disk")
-  if ok and type(mod) == "table" and type(mod.save) == "function" and type(mod.load) == "function" then
+  if
+    ok
+    and type(mod) == "table"
+    and type(mod.save) == "function"
+    and type(mod.load) == "function"
+  then
     return mod
   end
   return nil
