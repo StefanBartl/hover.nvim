@@ -204,6 +204,14 @@ local function replace_key_lists(opts)
 
   -- Tables of key lists: whatever direction the user named is replaced, and
   -- the ones they did not name keep their default.
+  --- CDX: `dismiss_keys`/`open_keys` also end in `_keys` and are `table`-typed
+  --- (flat arrays), so the generic scan above pulls them into this by-index
+  --- merge too, even though they are not direction maps -- a partial
+  --- `dismiss_keys` here merges by index (leaving stray default entries)
+  --- before the flat-list pass below unconditionally overwrites both with
+  --- the user's array. The final state is correct either way since the flat
+  --- pass always wins, but the by-index pass over them is dead work worth a
+  --- second look if `key_tables` is ever used for anything besides this loop.
   for _, name in ipairs(key_tables) do
     if type(opts[name]) == "table" and type(_options[name]) == "table" then
       for key, value in pairs(opts[name]) do

@@ -188,8 +188,8 @@ end
 ---
 --- Measured, and both halves recorded because the second is a real cost:
 ---
----     dieselbe Position erneut      8.2 us  ->  0.2 us
----     wandernde Spalte (Fehlgriff)  8.2 us  ->  9.5 us
+---     the same position again        8.2 us  ->  0.2 us
+---     a column on the move (a miss)  8.2 us  ->  9.5 us
 ---
 --- The miss pays ~1.3 us for the `changedtick` lookup. It is worth it because
 --- the hit is not the rare case here: under `CursorHold` the trigger fires

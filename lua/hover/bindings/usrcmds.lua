@@ -121,8 +121,8 @@ end
 ---@internal
 --- The board first, the message if it cannot be drawn.
 ---
---- **Why a board and not a report.** Nine switches read as a message tell you
---- the state and then leave you to type a command at it -- and the command is
+--- **Why a board and not a report.** Twelve switches read as a message tell
+--- you the state and then leave you to type a command at it -- and the command is
 --- not the label you just read: `broken-target marker` is
 --- `:Hover paths missing`, and `web links` is `:Hover links web`, which is
 --- exactly the confusion that produced this. Acting on the line you are
