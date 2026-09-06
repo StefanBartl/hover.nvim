@@ -61,6 +61,7 @@ jobs:
         with:
           repository: StefanBartl/lib.nvim
           path: .deps/lib.nvim
+          ref: ci-verified
       - uses: actions/checkout@v5
         with:
           repository: nvim-lua/plenary.nvim
@@ -76,3 +77,18 @@ jobs:
       - run: bash scripts/test.sh
         env:
           HOVER_ALLOW_PENDING: "1"
+
+  # See lib.nvim's own templates/README.md ("Pinning lib.nvim in CI") for why:
+  # ci-verified only moves once stylua+luacheck+tests are green here, so this
+  # repo's own consumers (currently markdown.nvim) can pin ref: ci-verified
+  # instead of main and never see a red build that's actually this repo's WIP.
+  publish-ci-verified:
+    name: publish ci-verified branch
+    needs: [stylua, luacheck, tests]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - run: git push origin HEAD:refs/heads/ci-verified --force
