@@ -1931,8 +1931,8 @@ function M.toggle(on)
 end
 
 --- Turn one feature switch on, off, or over. Names come from
---- `hover.switches`: `links`, `web`, `fetch`, `paths`, `missing`, `images`,
---- `office`.
+--- `hover.switches.names()` -- twelve today, and stale to enumerate here
+--- since that list grows without touching this file.
 ---@param name string
 ---@param on? boolean explicit state; omitted flips the current one
 ---@return boolean|nil on, string|nil err

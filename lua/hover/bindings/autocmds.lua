@@ -41,11 +41,12 @@ end
 --- Whether anything installed could actually produce a hover.
 ---
 --- hover.nvim can be installed with none of its optional contributors, so a
---- user must not pay for autocmds that can never show anything. Two ways to
---- be useful, and at least one has to hold:
+--- user must not pay for autocmds that can never show anything. Three ways
+--- to be useful, and at least one has to hold:
 ---
----  * a registered source (markdown.nvim's link scanner), or
----  * bare-path detection, which needs nothing installed at all.
+---  * a registered source (markdown.nvim's link scanner),
+---  * bare-path detection, which needs nothing installed at all, or
+---  * a registered position preview, with the `positions` switch on.
 ---
 --- Previews are deliberately *not* checked. Every target type has a built-in
 --- answer here -- a file gets its first lines, a directory its entries, an

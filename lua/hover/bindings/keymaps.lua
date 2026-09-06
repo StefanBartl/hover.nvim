@@ -363,6 +363,8 @@ end
 --- Drop the owned keymaps, so a re-`setup()` binds them afresh. Paired with
 --- `setup()` for a teardown-then-setup cycle (`PRIN-01`: the flag is
 --- module-local, never a global).
+--- CDX: no caller anywhere in lua/ or TESTS/ -- verify this is still wanted
+--- as public API (e.g. for a host's reload cycle) before trimming it.
 ---@return nil
 function M.teardown()
   if not _owned then

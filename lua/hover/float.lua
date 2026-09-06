@@ -86,7 +86,7 @@ local NATIVE_BORDERS = { "none", "single", "double", "rounded", "solid", "shadow
 ---
 --- Public because three callers need the same list and none of them should
 --- keep its own: the route's completion, the validator below, and the health
---- section. A seventh style is one entry in `BORDERS` and nothing else.
+--- section. A new custom style is one entry in `BORDERS` and nothing else.
 ---@return string[]
 function M.border_names()
   local out = {}
