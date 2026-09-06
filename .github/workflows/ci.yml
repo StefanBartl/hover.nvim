@@ -10,23 +10,23 @@ jobs:
     name: stylua (format check)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: JohnnyMorganz/stylua-action@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          version: latest
+          version: v2.5.2
           args: --check lua/ plugin/ TESTS/ scripts/
 
   luacheck:
     name: luacheck (lint)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: leafo/gh-actions-lua@v10
         with:
           luaVersion: "5.1"
       - uses: leafo/gh-actions-luarocks@v4
-      - run: luarocks install luacheck
+      - run: luarocks install luacheck 1.2.0
       - run: luacheck lua plugin
 
   # Both platforms, because REL-19 asks for both and only one of them was
@@ -53,15 +53,15 @@ jobs:
       run:
         shell: bash
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       # Both are resolved by scripts/minimal_init.lua from .deps/ -- see the
       # three lookup paths it documents. lib.nvim is a hard dependency, so a
       # run without it is not a degraded run, it is no run at all.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: StefanBartl/lib.nvim
           path: .deps/lib.nvim
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           repository: nvim-lua/plenary.nvim
           path: .deps/plenary.nvim
