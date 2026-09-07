@@ -44,3 +44,9 @@ author has, not one a reader of this plugin has. It lives outside the repository
 
 **`docs/map/`.** `:DocMap` builds a browsable module map there. It is generated and
 gitignored, so it is not in the checkout — run it when you want it.
+
+## Working on it
+
+| Page | Answers |
+| --- | --- |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Ground rules, project layout, and how to add a preview type |
