@@ -241,7 +241,10 @@ local function canvas_cells(image_px, opts)
       inset, inner_cols, inner_rows = 0, max_cols, max_rows
     end
 
-    local cols, rows = scale.fit_cells(inner_cols, inner_rows, image_px)
+    -- Hover.Preview.Dims is this file's own stand-in for images.nvim's
+    -- Images.Scale.MaybeDims -- same shape, different name (images.nvim is
+    -- a soft dep, so no @class inheritance without it in the workspace).
+    local cols, rows = scale.fit_cells(inner_cols, inner_rows, image_px --[[@as Images.Scale.MaybeDims?]])
     return math.min(cols + 2 * inset, max_cols), math.min(rows + 2 * inset, max_rows)
   end
 
