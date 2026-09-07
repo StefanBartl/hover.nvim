@@ -86,6 +86,8 @@ sandbox.setup(forced and { engine = forced } or {})
 -- ---------------------------------------------------------------------------
 local calls = 0
 local real_get_engine = sandbox.get_engine
+-- Deliberate probe wrap of sandbox's own accessor, not a redefinition.
+---@diagnostic disable-next-line: duplicate-set-field
 sandbox.get_engine = function(...)
   local engine = real_get_engine(...)
   if type(engine) ~= "table" then

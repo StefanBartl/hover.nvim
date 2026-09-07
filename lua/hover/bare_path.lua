@@ -238,8 +238,9 @@ local function via_gopath()
     return nil
   end
   -- gopath resolves `:line:col` suffixes as part of its job, so the line is
-  -- already known here. It used to be thrown away.
-  return res.path, type(res.line) == "number" and res.line or nil
+  -- already known here -- under res.range, not res.line. It used to be
+  -- thrown away, and the fix that was meant to stop that never actually did.
+  return res.path, res.range and type(res.range.line) == "number" and res.range.line or nil
 end
 
 ---@internal
