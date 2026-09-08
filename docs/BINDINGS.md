@@ -200,6 +200,22 @@ implication chain — `web links` sits under `link targets` because
 off. That last one is the state a flat on/off list cannot express, and the
 reason it earns a glyph is that it comes back the moment the parent does.
 
+The top row, `everything`, is the whole board in one key — `:Hover all`. Its
+state column counts rather than guesses: `on` only when every row below it is
+on, `off` only when none is, and a fraction (`8/25`) the rest of the time.
+Turning it on means mode `auto` **and** page screenshots, which render a
+hovered link in a headless browser; turning it off leaves the plugin quiet.
+The board never opens with the cursor on it — a reflexive `<CR>` there is not
+a small mistake — so it is one `<S-Tab>` away.
+
+Toggling on this board is **silent**. The same setters announce themselves from
+the command line, where a thrown switch leaves no trace on screen; here the
+glyph is the report and it is redrawn on the same keypress. `everything` is the
+exception, because it is two dozen writes and one disclosure behind one key.
+The sentence the announcements used to carry about the second axis — a switch
+that is on while the type it feeds is not — is drawn instead: in the row's
+three-second explanation, and in a `!` footer naming the types.
+
 ---
 
 ## User commands
@@ -213,7 +229,7 @@ left out. The list itself, so this cheatsheet is one:
 | --- | --- |
 | asking | `:Hover show` &middot; `:Hover why` &middot; `:Hover pin` &middot; `:Hover next` |
 | the float on screen | `:Hover resize` &middot; `:Hover zoom` &middot; `:Hover nav` &middot; `:Hover border` |
-| volume | `:Hover mode` &middot; `:Hover toggle` &middot; `:Hover auto` &middot; `:Hover dashboard` |
+| volume | `:Hover mode` &middot; `:Hover toggle` &middot; `:Hover all` &middot; `:Hover auto` &middot; `:Hover dashboard` |
 | switches | `:Hover links` &middot; `:Hover links web` &middot; `:Hover links web fetch` &middot; `:Hover links web fetch pdf` &middot; `:Hover links web shot` &middot; `:Hover links web shot eager` &middot; `:Hover paths` &middot; `:Hover paths missing` &middot; `:Hover paths code` &middot; `:Hover positions` &middot; `:Hover images` &middot; `:Hover office` |
 
 `:Hover` is registered from `plugin/hover.lua`, so it exists before `setup()`

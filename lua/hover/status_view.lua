@@ -29,10 +29,19 @@
 --- is. Both the legend and the panel are generated from one table, so neither
 --- can advertise a key that is not bound.
 ---
---- Every write goes through `hover.switches.set`, `hover.set_mode` or
---- `hover.set_auto`. There is no second toggle path: the implication chain,
---- the cache drop and the announcement live there, and a board that wrote
---- flags directly would skip all three.
+--- Every write goes through `hover.switches.set`, `hover.set_mode`,
+--- `hover.set_auto` or `hover.set_all`. There is no second toggle path: the
+--- implication chain, the cache drop and the announcement live there, and a
+--- board that wrote flags directly would skip all three.
+---
+--- **And every write asks for silence.** Those setters announce themselves
+--- because a switch thrown from the command line leaves no trace on screen.
+--- Here it leaves a glyph, redrawn on the same keypress -- so the
+--- announcement is the same fact twice, and walking the board once produced a
+--- notification per row. The one thing that stays audible is `everything`,
+--- which is every row at once and one disclosure (`shot` runs a page's
+--- JavaScript) behind a single key. The gate note the toggle announcements
+--- used to carry is drawn instead: in the row's explanation, and in a footer.
 ---
 --- **`pcall` around the UI kit, though lib.nvim is a hard dependency.** It is
 --- pinned by commit, so a present-but-older lib.nvim without the kit is a
@@ -115,7 +124,7 @@ local STATE_W = 7
 ---@internal
 --- One actionable line of the board.
 ---@class Hover.Status.Row
----@field kind "switch"|"mode"|"auto" # which setter acts on it
+---@field kind "switch"|"mode"|"auto"|"all" # which setter acts on it
 ---@field name string # switch name, target type, or the current mode
 ---@field route string # the command shown on the row, and what `y` yanks
 ---@field desc? string # one sentence on what this row does, shown by the dwell tooltip
@@ -160,6 +169,10 @@ local function render()
   local status = hover().status()
   local lines, hls, rows = {}, {}, {}
   local any_held = false
+  -- The `auto_hover` types that are off while a switch feeding them is on.
+  -- Collected while the switches are drawn, reported once at the foot; see
+  -- the note where it is pushed.
+  local gated, seen_gate = {}, {}
 
   ---@param text string
   ---@param hl string|nil
@@ -188,6 +201,38 @@ local function render()
     rows[index] = row
   end
 
+  -- **The master row, and it counts rather than guesses.** `on` only when
+  -- every row below it is on, `off` only when none is, and a fraction in
+  -- between -- which is the state the board is in nearly all the time, and
+  -- the one a two-state glyph structurally cannot say. Deliberately not the
+  -- `◐` glyph: that already means one specific thing (set here, held off
+  -- above), and a second meaning for it would cost more than the fraction.
+  --
+  -- No header over it, because it is not a section. It is the sum of the
+  -- three below it, and a heading would file it beside them as a fourth.
+  local live, total = 0, 1
+  if status.mode == "auto" then
+    live = live + 1
+  end
+  for _, sw in ipairs(status.switches) do
+    total = total + 1
+    live = live + (sw.enabled and 1 or 0)
+  end
+  if type(status.auto) == "table" then
+    for _, entry in ipairs(status.auto) do
+      total = total + 1
+      live = live + (entry.enabled and 1 or 0)
+    end
+  end
+  local all_on = live == total
+  push("")
+  push_row(0, all_on and "on" or "off", "everything", ":Hover all", {
+    kind = "all",
+    name = "all",
+    route = ":Hover all",
+    desc = "every switch, every type and the mode at once -- on means mode auto, and page screenshots, which render a link in a headless browser",
+  }, all_on and "on" or (live == 0 and "off" or ("%d/%d"):format(live, total)))
+
   -- The mode's name goes in the state column, not in the label: "mode" is
   -- what the row is, `manual` is what it is set to, and `● manual on` says
   -- "on" about a mode that deliberately opens nothing by itself.
@@ -208,13 +253,33 @@ local function render()
       any_held = true
     end
     local route = ":Hover " .. table.concat(sw.route, " ")
+
+    -- **The second axis, said in the row rather than shouted at the toggle.**
+    -- This sentence used to arrive as a notification the moment a switch went
+    -- on, and it was the one piece of information the board's own glyph
+    -- cannot carry: a switch that is on while the `auto_hover` type it feeds
+    -- is off hovers for `:Hover show` and for nothing else. Now that toggling
+    -- here is silent, it is drawn -- in the explanation of the row it belongs
+    -- to, and once at the foot, next to the section that fixes it.
+    local desc = sw.desc
+    if state == "on" then
+      local note = switches.auto_gate_note(sw.name)
+      if note then
+        desc = sw.desc .. " " .. note
+        if sw.auto_type and not seen_gate[sw.auto_type] then
+          seen_gate[sw.auto_type] = true
+          gated[#gated + 1] = sw.auto_type
+        end
+      end
+    end
+
     -- The indent is the route's own depth, so the picture and the words to
     -- type are the same fact rather than two that have to be kept in step.
     push_row(#sw.route - 1, state, sw.label, route, {
       kind = "switch",
       name = sw.name,
       route = route,
-      desc = sw.desc,
+      desc = desc,
     })
   end
 
@@ -235,10 +300,24 @@ local function render()
   end
 
   -- Only when there is one to explain: a legend for a glyph that is not on
-  -- screen is a line of noise on every other opening.
+  -- screen is a line of noise on every other opening. The same rule holds for
+  -- the gate note below it.
   if any_held then
     push("")
     push(("  %s set here, held off by the row above it"):format(GLYPH.held), HL.muted)
+  end
+
+  if #gated > 0 then
+    push("")
+    push(
+      -- Short on purpose: the board is as wide as its widest line, and a
+      -- sentence spelling this out in full made a 70-cell board 101 wide on
+      -- every opening that had one gate to report.
+      ("  ! %s off below -- those switches wait for `:Hover show`"):format(
+        table.concat(gated, ", ")
+      ),
+      HL.muted
+    )
   end
 
   return lines, hls, rows
@@ -248,9 +327,32 @@ end
 local NS = vim.api.nvim_create_namespace("hover_status")
 
 ---@internal
---- Replace the board's content in place. The cursor stays where it is,
---- because the line count never changes between two redraws of the same
---- board -- toggling a switch changes a glyph and a word, not the shape.
+--- The box a set of board lines wants, in cells: wide enough for the longest
+--- line, tall enough for all of them plus the `winbar`, and inside the
+--- screen either way.
+---@param lines string[]
+---@return integer width, integer height
+local function box(lines)
+  local width = 0
+  for _, line in ipairs(lines) do
+    width = math.max(width, vim.fn.strdisplaywidth(line))
+  end
+  return math.min(width + 4, math.floor(vim.o.columns * 0.9)),
+    -- +1 for the winbar legend, which otherwise eats a row of content out of
+    -- a height sized exactly to the board.
+    math.min(#lines + 1, math.floor(vim.o.lines * 0.8))
+end
+
+---@internal
+--- Replace the board's content in place, and refit the window to it.
+---
+--- **Refitted, because the board is not a fixed shape.** Two footers come and
+--- go with the states they explain -- the `◐` legend and the gate note -- and
+--- the gate note is the widest line the board can produce. Sized once at
+--- `open()`, the first toggle that summons one would push it out of a window
+--- that no longer fits. Both footers sit below every row, so growing or
+--- shrinking there never moves the cursor: what the reader was pointing at
+--- stays under the cursor, which is the property this redraw is built on.
 ---@param bufnr integer
 ---@param state table
 ---@return nil
@@ -261,6 +363,17 @@ local function redraw(bufnr, state)
 
   local lines, hls, rows = render()
   state.rows = rows
+
+  local width, height = box(lines)
+  for _, win in ipairs(vim.api.nvim_list_wins()) do
+    if
+      vim.api.nvim_win_get_buf(win) == bufnr
+      and vim.api.nvim_win_get_config(win).relative ~= ""
+    then
+      pcall(vim.api.nvim_win_set_width, win, width)
+      pcall(vim.api.nvim_win_set_height, win, height)
+    end
+  end
 
   vim.bo[bufnr].modifiable = true
   vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, lines)
@@ -295,6 +408,15 @@ end
 --- Every branch goes through the public setter for its kind, which is what
 --- keeps the implication chain, the cache drop and the announcement in one
 --- place each rather than in two.
+---
+--- **And every branch asks it to keep quiet.** The announcement exists
+--- because a switch thrown from the command line is otherwise invisible --
+--- nothing on screen distinguishes a switched-off preview from a line with no
+--- target on it. On this board that reason is gone: the glyph *is* the report,
+--- it is redrawn on the same keypress, and it is two lines from the eye. What
+--- it produced instead was a flood -- one message per keystroke while someone
+--- walked two dozen rows, each repeating advice about a section that was
+--- already on screen. The `all` row is the exception, and says why there.
 ---@param state table
 ---@param on boolean|nil
 ---@return nil
@@ -305,16 +427,24 @@ local function apply(state, on)
   end
 
   if row.kind == "switch" then
-    switches.set(row.name, on)
+    switches.set(row.name, on, { silent = true })
+  elseif row.kind == "all" then
+    -- The one thing here worth a sentence: every row at once, one of which
+    -- lets a headless browser render a page. `nil` goes through
+    -- untouched -- "toggle everything" is `set_all`'s question to answer, and
+    -- a board that answered it from its own count would be a second opinion.
+    require("hover.notify").info(hover().set_all(on))
   elseif row.kind == "auto" then
     -- `set_auto(type)` only toggles, so an explicit `+`/`-` has to read the
-    -- current state first and do nothing when it already matches. Announced
-    -- here because that setter reports rather than notifies -- the route it
-    -- was written for prints its return value.
+    -- current state first and do nothing when it already matches. Its report
+    -- is dropped rather than shown -- an error still is not, because that is
+    -- the one outcome the redraw cannot show.
     local current = require("hover.config").auto_hover_for(row.name)
     if on == nil or current ~= on then
-      local report, err = hover().set_auto(row.name)
-      require("hover.notify")[err and "warn" or "info"](err or report)
+      local _, err = hover().set_auto(row.name)
+      if err then
+        require("hover.notify").warn(err)
+      end
     end
   elseif row.kind == "mode" then
     -- `+`/`-` on the mode row are the two ends of the axis rather than steps
@@ -329,7 +459,7 @@ local function apply(state, on)
     else
       want = ({ auto = "manual", manual = "off", off = "auto" })[hover().mode()] or "auto"
     end
-    local _, err = hover().set_mode(want)
+    local _, err = hover().set_mode(want, { silent = true })
     if err then
       require("hover.notify").warn(err)
     end
@@ -475,6 +605,10 @@ show_keys = function()
     ("  %s  on"):format(GLYPH.on),
     ("  %s  off"):format(GLYPH.off),
     ("  %s  set here, but held off by the row above it"):format(GLYPH.held),
+    "",
+    "  A fraction in the state column belongs to the `everything` row at the",
+    "  top: how many of the rows below it are on. Toggling it turns the lot",
+    "  on -- page screenshots included -- or turns the plugin off entirely.",
     "",
     "  Indentation is the implication chain: a row cannot do anything",
     "  until the row it sits under is on. Turning one on turns those on",
@@ -705,11 +839,10 @@ function M.open()
 
   ensure_highlights()
 
+  -- Sized through the same `box` the redraw uses, so the shape the board
+  -- opens at and the shape it keeps are one rule rather than two.
   local lines = render()
-  local width = 0
-  for _, line in ipairs(lines) do
-    width = math.max(width, vim.fn.strdisplaywidth(line))
-  end
+  local width, height = box(lines)
 
   local opened, surf = pcall(kit.surface.open, {
     lines = lines,
@@ -718,10 +851,8 @@ function M.open()
     nice_quit = true,
     enter = true,
     focusable = true,
-    width = math.min(width + 4, math.floor(vim.o.columns * 0.9)),
-    -- +1 for the winbar legend, which otherwise eats a row of content out of
-    -- a height sized exactly to the board.
-    height = #lines + 1,
+    width = width,
+    height = height,
     wo = { wrap = false, cursorline = true, winbar = WINBAR },
   })
   if not opened or type(surf) ~= "table" then
@@ -767,7 +898,15 @@ function M.open()
   -- Opened on the first actionable row rather than on the leading blank: the
   -- board exists to be acted on, and a cursor parked on a header makes the
   -- first `<CR>` a no-op that reads as a broken key.
+  --
+  -- But never on `everything`, which is the first row and the one row where a
+  -- reflexive `<CR>` is not a small mistake. The board opens under it, on the
+  -- mode; reaching the master switch costs one `<S-Tab>`, which is the right
+  -- price for a key that moves every row on the board.
   step(state, 1)
+  if (row_at_cursor(state) or {}).kind == "all" then
+    step(state, 1)
+  end
   dwell_restart(state)
   return true
 end

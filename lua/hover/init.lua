@@ -1210,12 +1210,37 @@ function M.open()
 
   local ok_open, open = pcall(require, "open")
   if ok_open and type(open.open) == "function" then
-    -- `nil` as the handler is open.nvim's context-aware pick: a browser for a
-    -- URL, the configured file manager for a path. `path=` for a path so a
-    -- filename that happens to spell one of its scope keywords ("cwd",
-    -- "git") is still read as a path.
-    local scope = target.type == "url" and what or ("path=" .. what)
-    local ok_call = pcall(open.open, nil, scope)
+    -- **A path asks for `default`, and never for the context-aware pick.**
+    -- `nil` there means "what does someone usually want for the thing under
+    -- the cursor", and open.nvim answers that with the *file manager*
+    -- (`default_target` -> `default_filemanager`). Which is a fine answer to
+    -- that question and the wrong one to this: the float is already showing
+    -- the file, so "open it" means what a double-click means -- an `.mp4` to
+    -- the registered player, not its folder revealed in Explorer. Reported
+    -- against a `.mp4` with VLC registered; it opened Explorer, and had done
+    -- so for every file type all along.
+    --
+    -- A URL keeps the pick, whose answer there is the browser handler -- and
+    -- that one can be pointed at a *named* browser, which the system default
+    -- cannot.
+    --
+    -- `path=` for a path so a filename that happens to spell one of
+    -- open.nvim's scope keywords ("cwd", "git") is still read as a path.
+    --
+    -- Asked for by name, so it is asked whether it is there: `handlers` is a
+    -- user's list, and open.nvim answers a handler it does not have with a
+    -- message and no action -- which `pcall` reports as success, so the float
+    -- would close over nothing. Falling back to the pick is the old behaviour,
+    -- and the old behaviour is at least an opened window.
+    local is_url = target.type == "url"
+    local handler = nil
+    if not is_url then
+      local ok_registry, registry = pcall(require, "open.registry")
+      if ok_registry and vim.tbl_contains(registry.list_keys() or {}, "default") then
+        handler = "default"
+      end
+    end
+    local ok_call = pcall(open.open, handler, is_url and what or ("path=" .. what))
     if ok_call then
       M.hide()
       return true
@@ -1843,11 +1868,13 @@ end
 ---    cursor is on right now", and throwing the session switch is not that.
 ---    Left standing, it would survive an off/on cycle as invisible state.
 ---@param mode Hover.Mode
+---@param opts? { silent?: boolean } suppress the announcement (used by `:Hover dashboard`, which draws the mode instead of saying it)
 ---@return Hover.Mode|nil mode, string|nil err
-function M.set_mode(mode)
+function M.set_mode(mode, opts)
   if mode ~= "auto" and mode ~= "manual" and mode ~= "off" then
     return nil, ("unknown mode %q (auto|manual|off)"):format(tostring(mode))
   end
+  opts = opts or {}
 
   _suppressed = nil
   config.raw().mode = mode
@@ -1863,10 +1890,12 @@ function M.set_mode(mode)
     require("hover.bindings.autocmds").enable()
   end
 
-  local note = mode == "auto" and "hover on (opens by itself)"
-    or mode == "manual" and "hover manual (`:Hover show` or your own key)"
-    or "hover off"
-  require("hover.notify").info(note)
+  if not opts.silent then
+    local note = mode == "auto" and "hover on (opens by itself)"
+      or mode == "manual" and "hover manual (`:Hover show` or your own key)"
+      or "hover off"
+    require("hover.notify").info(note)
+  end
 
   return mode
 end
@@ -1926,6 +1955,60 @@ function M.set_auto(which)
   local now = not config.auto_hover_for(which)
   raw.auto_hover[which] = now
   return ("%s %s by itself"):format(which, now and "opens" or "does not open")
+end
+
+--- Every switch, every target type, and the mode -- in one move.
+---
+--- **Asked for after someone did it by hand.** `:Hover dashboard` lists
+--- two dozen rows, and turning them all on meant a keystroke and a
+--- notification for each. That is not a missing convenience so much as a
+--- missing *reading*: "hover does everything it can" and "hover is quiet" are
+--- two states people actually want, and neither had a name.
+---
+--- **The mode is part of it, deliberately.** Leaving it out would let
+--- `all on` produce a board where every row says `on` and nothing ever opens,
+--- because the mode above them is `off` -- the exact class of half-true report
+--- this board was built to kill. So `on` means `auto` and `off` means `off`;
+--- `manual` is a considered position and is reachable from the mode row,
+--- which is the only place it belongs.
+---
+--- **It says what it did, and the board still stays silent.** One sentence
+--- for two dozen writes is the opposite of the flood; and it is worth a
+--- sentence, because one of the switches (`shot`) lets a page be rendered by
+--- a headless browser that executes its JavaScript. Nobody should turn that
+--- on without being told, least of all by pressing `+` on a row labelled
+--- "everything".
+--- **`nil` is a question, not a default.** "Toggle everything" cannot be read
+--- off any single flag -- twelve switches, eleven types and a mode disagree
+--- with each other constantly -- so it is answered the only way that does not
+--- depend on which one you happen to ask: on, unless every last one already
+--- is. Answered here so the route and the board's row ask it in one voice.
+---@param on? boolean explicit state; omitted turns everything on unless it already is
+---@return string report
+function M.set_all(on)
+  if on == nil then
+    on = false
+    local st = M.status()
+    if st.mode ~= "auto" then
+      on = true
+    end
+    for _, sw in ipairs(st.switches) do
+      on = on or not sw.enabled
+    end
+    for _, entry in ipairs(st.auto or {}) do
+      on = on or not entry.enabled
+    end
+  end
+
+  switches.set_all(on)
+  M.set_auto(on and "all" or "none")
+  M.set_mode(on and "auto" or "off", { silent = true })
+
+  if not on then
+    return "hover off: every switch off, nothing opens by itself"
+  end
+  return "hover on: every switch, every type, mode auto"
+    .. "\n  page screenshots included -- a hovered link is rendered by a headless browser."
 end
 
 --- Read or change the border style.

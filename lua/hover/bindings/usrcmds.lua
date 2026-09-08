@@ -228,6 +228,30 @@ function M.routes()
       end,
     },
     {
+      path = { "all" },
+      -- The route behind the board's top row, and it exists so that row can
+      -- carry one. Every other row on `:Hover dashboard` shows the words to
+      -- type at it -- that is the board's whole contract -- and a master
+      -- switch reachable only by keypress would have been the first row to
+      -- break it.
+      desc = "Everything at once: every switch, every type and the mode",
+      args = {
+        {
+          name = "state",
+          enum = STATES,
+          optional = true,
+          default = "toggle",
+        },
+      },
+      ---@param ctx table
+      run = function(ctx)
+        -- "toggle" is passed straight through as `nil`: what it means here
+        -- is a question about the whole board, and `set_all` is where that
+        -- question is answered once for this route and for the board's row.
+        require("hover.notify").info(hover().set_all(to_bool(ctx and ctx.args and ctx.args.state)))
+      end,
+    },
+    {
       path = { "mode" },
       desc = "Set the mode: auto opens by itself, manual only on request, off not at all",
       args = {
