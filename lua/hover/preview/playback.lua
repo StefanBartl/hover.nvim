@@ -33,6 +33,21 @@
 --- `video_sound = false`), the timer falls back to counting frames exactly as
 --- it always has; sound is additive, never a precondition for motion.
 ---
+--- **A run is a window, and the window rolls.** One decode covers two seconds
+--- (24 stills at 12 fps), which is what makes the first frame arrive quickly —
+--- and on its own it made playback stop dead after two seconds while the sound
+--- carried on without it, which is what a reader reported as "no video, just a
+--- couple of seconds". So the transport asks for the next window while the
+--- current one is still playing: `spec.request` decodes from where this run
+--- ends, and the result is swapped in when the picture (or mpv's clock)
+--- reaches that point. The seam is invisible because `from` moves with it, so
+--- the control row keeps reading in source time rather than restarting.
+---
+--- The lead is one second of frames. Decoding a window was measured at
+--- 442 ms plus 168 ms to sample it — comfortably inside that, and the reason
+--- the request is not issued at the very last frame, where it would arrive
+--- late every time.
+---
 --- Measured end to end, 640x360 source at 80x36 cells: 168 ms to decode 24
 --- stills (3 ms cached), 153 ms to sample them into cells, 4.6 ms to paint one
 --- — about 325 ms from the key to the first frame, and 5% of a 12 fps budget
@@ -47,7 +62,7 @@ local M = {}
 --- socket coming up, a `time-pos` reply): each carries the generation it was
 --- issued under, and a reply that arrives after `stop()` or a fresh `load()`
 --- is simply dropped rather than writing into a run nobody asked for any more.
----@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer, gen: integer, path: string|nil, audio: Media.Audio.Handle|nil, audio_starting: boolean, audio_pending: boolean }|nil
+---@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer, gen: integer, path: string|nil, audio: Media.Audio.Handle|nil, audio_starting: boolean, audio_pending: boolean, request: (fun(from: number, cb: fun(run: Hover.Playback.Run|nil, err: string|nil)): nil)|nil, next_run: Hover.Playback.Run|nil, requesting: boolean, exhausted: boolean }|nil
 local state = nil
 
 --- Bumped by every `load()`, never by anything else — the one source of
@@ -206,6 +221,71 @@ end
 --- the file) pauses rather than requesting more: the rolling window that
 --- would decode the next run while this one plays is `docs/ROADMAP.md`'s, not
 --- this function's.
+---@internal
+--- Where the current window ends, in source seconds — and therefore where the
+--- next one begins.
+---@return number
+local function window_end()
+  return state and (state.from + state.frames / state.fps) or 0
+end
+
+---@internal
+--- Ask for the next window, if it is time and there is anyone to ask.
+---
+--- Issued a second of frames before the end rather than at it: a decode plus
+--- its sampling was measured at about 0.6 s, so a request made at the last
+--- frame arrives late every single time and the picture stutters at every
+--- seam. Asked at most once per window — `requesting` is "already asked",
+--- `next_run` is "already have it", and `exhausted` is the end of the file,
+--- after which asking again would start an ffmpeg per tick for nothing.
+---@return nil
+local function prefetch()
+  if not state or not state.request then
+    return
+  end
+  if state.next_run or state.requesting or state.exhausted then
+    return
+  end
+  if state.index < state.frames - math.max(4, math.floor(state.fps)) then
+    return
+  end
+
+  state.requesting = true
+  local gen = state.gen
+  state.request(window_end(), function(run)
+    -- The run this was asked for may be gone, or a later one loaded in its
+    -- place; either way the answer belongs to nothing.
+    if not state or state.gen ~= gen then
+      return
+    end
+    state.requesting = false
+    state.next_run = run
+    -- No run means the file ended, which is not a failure and not worth
+    -- reporting — the transport simply stops when the picture runs out.
+    state.exhausted = run == nil
+  end)
+end
+
+---@internal
+--- Move the prefetched window into place, keeping source time continuous.
+---
+--- `from` advances by exactly the length of the window being left behind, so
+--- the control row reads on rather than restarting, and mpv's position keeps
+--- mapping onto the right frame across the seam.
+---@return boolean swapped
+local function swap_run()
+  if not state or not state.next_run then
+    return false
+  end
+  local run = state.next_run
+  state.next_run = nil
+  state.from = window_end()
+  state.raw = run.raw
+  state.frames = run.frames
+  state.index = 1
+  return true
+end
+
 ---@param pos number|nil  # mpv's `time-pos`, or nil for the no-audio fallback
 ---@return nil
 local function advance(pos)
@@ -215,19 +295,32 @@ local function advance(pos)
   if pos then
     local idx = math.floor((pos - state.from) * state.fps) + 1
     if idx >= state.frames then
-      state.index = state.frames
-      M.pause()
-      return
+      -- The sound has run past the decoded window. With the next one in hand
+      -- the picture follows it across; without one there is nothing left to
+      -- show, and playing sound over a frozen frame is worse than stopping.
+      if not swap_run() then
+        state.index = state.frames
+        M.pause()
+        return
+      end
+      idx = math.floor((pos - state.from) * state.fps) + 1
     end
-    state.index = math.max(1, idx)
+    state.index = math.max(1, math.min(state.frames, idx))
+    prefetch()
     draw()
     return
   end
   if state.index >= state.frames then
-    M.pause()
+    if not swap_run() then
+      M.pause()
+      return
+    end
+    prefetch()
+    draw()
     return
   end
   state.index = state.index + 1
+  prefetch()
   draw()
 end
 
@@ -238,7 +331,7 @@ end
 --- when present, is where `M.play` starts mpv from — `preview.video` sets it
 --- only when there is a track to start and sound has not been turned off, so
 --- this never has to make that decision itself.
----@param spec { buf: integer, raw: string, frames: integer, cols: integer, rows: integer, fps: number, from: number, duration: number|nil, status_row: integer, path: string|nil }
+---@param spec { buf: integer, raw: string, frames: integer, cols: integer, rows: integer, fps: number, from: number, duration: number|nil, status_row: integer, path: string|nil, request: (fun(from: number, cb: fun(run: Hover.Playback.Run|nil, err: string|nil)): nil)|nil }
 ---@return boolean ok
 function M.load(spec)
   M.stop()
@@ -262,6 +355,13 @@ function M.load(spec)
     audio = nil,
     audio_starting = false,
     audio_pending = false,
+    -- Absent when the caller cannot decode more (no duration to count from,
+    -- an offset it could not resolve): the transport then behaves exactly as
+    -- it did before windows rolled, stopping at the end of the one it has.
+    request = spec.request,
+    next_run = nil,
+    requesting = false,
+    exhausted = spec.request == nil,
   }
   return draw()
 end
@@ -345,6 +445,11 @@ function M.play()
       end)
     end
   end
+
+  -- Before the first tick: a window is two seconds and the lead is one, so a
+  -- reader who presses play and watches has already spent half the window by
+  -- the time `advance` would ask.
+  prefetch()
 
   local timer = vim.uv.new_timer()
   state.timer = timer

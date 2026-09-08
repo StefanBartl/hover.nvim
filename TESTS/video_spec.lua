@@ -129,6 +129,43 @@ describe("the offset a paging key lands on", function()
   end)
 end)
 
+describe("resolving an offset to seconds", function()
+  -- The bug this was written for: `video.at` is a percentage by default, and
+  -- `start_playback` recorded a flat 0 whenever it was not already a number.
+  -- That put the control row's clock at zero on every video, and once windows
+  -- started rolling it asked for the second one from two seconds into the
+  -- file rather than two seconds past where the first one ended -- so the
+  -- picture jumped backwards at every seam.
+  it("passes a number through", function()
+    assert.equals(42, video.to_seconds(42, 600))
+    assert.equals(0, video.to_seconds(0, nil))
+  end)
+
+  it("takes a percentage of the duration", function()
+    assert.equals(60, video.to_seconds("10%", 600))
+    assert.equals(300, video.to_seconds("50%", 600))
+  end)
+
+  it("cannot take a percentage of a duration it does not have", function()
+    -- Not an error and not a guess: the caller withholds `request`, and the
+    -- transport plays the one window it decoded instead of rolling to a place
+    -- it computed wrongly.
+    assert.is_nil(video.to_seconds("10%", nil))
+  end)
+
+  it("leaves an ffmpeg timestamp to ffmpeg", function()
+    -- Resolvable there, not here. Same answer as above, same consequence.
+    assert.is_nil(video.to_seconds("00:01:23", 600))
+    assert.is_nil(video.to_seconds("00:01:23.5", nil))
+  end)
+
+  it("answers nil for anything that is not an offset at all", function()
+    assert.is_nil(video.to_seconds(nil, 600))
+    assert.is_nil(video.to_seconds(true, 600))
+    assert.is_nil(video.to_seconds("later", 600))
+  end)
+end)
+
 describe("without media.nvim installed", function()
   it("answers with a badge that says so, rather than failing", function()
     -- The normal state of a machine that has not installed the optional

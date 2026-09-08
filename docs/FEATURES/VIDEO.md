@@ -108,6 +108,15 @@ frame-step keys, picked so a float does not eat a leader key or a bracket
 motion (`<Space>`, `]`, `[` were tried and reverted; see `transport_keys` in
 `config/DEFAULTS.lua`).
 
+**The window rolls, so it does not stop after two seconds.** One decode covers
+two seconds — 24 stills at 12 fps — which is what makes the first frame arrive
+quickly. On its own that meant playback stopped dead at the end of it while the
+sound carried on alone, which is what a reader reported as *"no video, just a
+couple of seconds"*. So the transport asks for the next window a second before
+it needs it (a decode plus its sampling was measured at ~0.6 s) and swaps it in
+when the picture reaches the seam. The clock keeps reading in source time across
+the swap, so nothing about it is visible except that the film continues.
+
 **Sound joins automatically when there is something to play it with.** If
 the file has an audio track and [mpv](https://mpv.io) is on PATH,
 `media.audio()` starts it alongside the run — no separate opt-in beyond

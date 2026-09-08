@@ -379,6 +379,15 @@
 ---@field duration? number # Source duration, for the clock's right-hand side
 ---@field status_row integer # 0-based line the control row is written to
 ---@field path? string # Source file, for `playback.play` to start audio on. Absent when there is nothing to start it for: no track, `video_sound = false`, or mpv unresolved — `preview.video` has already decided.
+---@field request? fun(from: number, cb: fun(run: Hover.Playback.Run|nil, err: string|nil)): nil # Decode the window that begins at `from` seconds. Absent when the caller cannot: no duration to count from, or a start offset it could not resolve to seconds.
+
+--- One decoded window, as `Hover.Playback.request` hands it back. Only the two
+--- fields that change between windows: everything else about the run --
+--- geometry, rate, the buffer it paints into -- is fixed when the transport is
+--- loaded and stays put across a swap.
+---@class Hover.Playback.Run
+---@field raw string # `images.blocks` payload for this window
+---@field frames integer # Stills in it; fewer than asked for at the end of a file
 
 --- Where a scrollable preview currently is, and whether more follows.
 --- Absent means "not scrollable" -- an image, or a file that fits -- and the

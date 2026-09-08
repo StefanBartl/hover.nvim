@@ -619,7 +619,7 @@ worth asserting.
     -- `at` and `step` take seconds, a percentage of the running time, or
     -- an ffmpeg timestamp. Percentages mean ten presses of the paging key
     -- walk any file end to end, whatever its length.
-    video = { at = "10%", step = "10%", width = nil },
+    video = { at = "10%", step = "10%", width = nil, sound = true },
     -- `pin` is on because the float is not focusable and its dismissal hangs
     -- on CursorMoved: unpinned, a full-screen hover closes on the first `j`.
     zen = { pin = true },
@@ -754,6 +754,33 @@ hover.status()                            { mode, switches, auto } -- for a
 hover.target_under_cursor({bufnr}, {opts})
                                           The target under the cursor, or nil.
                                           `opts.force` opens every volume gate.
+
+==============================================================================
+PLAYING A VIDEO                                              *hover-video-play*
+
+A video hover opens as a still, because a hover appears when the cursor rested
+somewhere -- a glance, not a request for motion.
+
+    <CR>      play / pause the run
+    .         one frame forward (pausing first)
+    ,         one frame back
+
+What moves is text: every cell is a coloured block, which collides with no
+terminal graphics protocol and survives every redraw. A real picture cannot be
+animated from inside Neovim -- docs/FEATURES/VIDEO.md carries the three
+measurements behind that.
+
+Sound joins by itself when the file has an audio track and mpv is on PATH. The
+picture then follows mpv's clock rather than counting its own frames, so it
+cannot drift: each paint asks mpv where it is and shows the frame belonging
+there. Without mpv, or with `video.sound = false`, the run plays exactly as it
+does otherwise, silently.
+
+Playback decodes two seconds at a time and asks for the next window a second
+before it needs it, so a film plays on instead of stopping at the end of the
+first one.
+
+The keys are configurable through `transport_keys`.
 
 ==============================================================================
 11. REGISTRY                                                   *hover-registry*
