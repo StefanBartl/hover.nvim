@@ -109,11 +109,19 @@ borrow condition is in [BINDINGS.md](BINDINGS.md).
 
 ## Playing a video
 
-A video hover opens as a still, and **nothing plays until `<Space>`**: a hover
+A video hover opens as a still, and **nothing plays until `<CR>`**: a hover
 appears because a cursor rested somewhere for `updatetime`, which is a glance
 rather than a request for motion. The first press decodes a run of stills
 (`media.frames`), samples them into terminal cells (`images.blocks`) and starts
-a timer; the next press pauses. `]` and `[` step one frame.
+a timer; the next press pauses. `.` and `,` step one frame, as they do in mpv.
+
+Those three defaults are a correction. The first version shipped `<Space>`,
+`]` and `[`, and all three broke a rule this plugin already states for
+`zen_keys`: `<Space>` is `mapleader` in most configurations — borrowing it
+displaces every leader mapping, and against which-key it re-enters the trigger
+on the same key, which reports "Recursion detected" and leaves the leader
+broken. `]` and `[` are prefixes, so `]d`, `[q` and every other bracket motion
+stop existing while a float is up, without announcing it.
 
 What moves is text — one `█` per cell with its own highlight — so it collides
 with no terminal graphics protocol and survives every redraw, unlike the still,
