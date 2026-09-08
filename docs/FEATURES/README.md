@@ -51,8 +51,11 @@ the alternatives that were rejected, and the bugs that changed the design.
   a measurement took the Alt chords away again — and the name collision that
   survived a green suite.
 - **[VIDEO.md](VIDEO.md)** — a `.mp4` under the cursor, shown as a still from
-  the file: why playback is not on the table and the three measurements that
-  settle it, why a video takes the office route rather than a new one, how the
+  the file, and `<CR>` playing it for real: a real mpv window by default, a
+  fallback to whatever this machine already plays a video with when mpv is
+  missing, and block graphics as an explicit, terminal-only third choice —
+  why no amount of tuning the third one made it the answer on its own, why a
+  video takes the office route rather than a new one for the still, how the
   PDF paging keys became a scrub with no code of their own, and the two
   extensions that are deliberately not claimed because an editor reads them as
   TypeScript.

@@ -35,6 +35,13 @@ generated and gitignored, so it is not in the checkout — run it when you want 
 | `hover.preview.url` | URL details, optional fetch |
 | `hover.preview.git` | `git show --stat` of an object, async |
 | `hover.preview.media` | Images and PDF pages, via whatever provider is installed |
+| `hover.preview.shot` | A hovered link rendered by a headless browser, drawn into the float like any other picture |
+| `hover.preview.webpdf` | A link answering `application/pdf`, shown as its first page — no conversion, `preview.media`'s own draw |
+| `hover.preview.video` | A video's still, the paging-key scrub, and which playback tier `<CR>` reaches for |
+| `hover.preview.playback` | The **inline** transport: the rolling block-graphics run, its timer, and the clock mpv corrects |
+| `hover.preview.window` | The **window** tier: a real mpv window, single-instance, tied to the float's lifetime |
+| `hover.preview.external` | The tier below the window: hand the file to `media.play()` (a configured player, or the system's own) when there is no mpv |
+| `hover.preview.align_win` | Best-effort, opt-in: centre whatever window `preview.external` handed off to, on Windows/macOS/Linux |
 
 The two directions a plugin and the hover reach each other through — the registry inbound,
 a named `pcall` outbound — are in [integrations.md](integrations.md).
