@@ -1186,6 +1186,20 @@ function M.open()
     return false
   end
 
+  -- A media file goes to `media.play` first, when media.nvim is installed:
+  -- it honours that plugin's `player` option (mpv with your flags, say),
+  -- which the generic openers below cannot know about. Everything else about
+  -- this route is unchanged -- including that it closes the hover, since the
+  -- picture has been handed to something that draws it properly.
+  local ok_media, media = pcall(require, "media")
+  if ok_media and type(media.is_media) == "function" and media.is_media(what) then
+    local played = pcall(media.play, what)
+    if played then
+      M.hide()
+      return true
+    end
+  end
+
   local ok_open, open = pcall(require, "open")
   if ok_open and type(open.open) == "function" then
     -- `nil` as the handler is open.nvim's context-aware pick: a browser for a

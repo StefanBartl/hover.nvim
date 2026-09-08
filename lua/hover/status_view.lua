@@ -118,6 +118,7 @@ local STATE_W = 7
 ---@field kind "switch"|"mode"|"auto" # which setter acts on it
 ---@field name string # switch name, target type, or the current mode
 ---@field route string # the command shown on the row, and what `y` yanks
+---@field desc? string # one sentence on what this row does, shown by the dwell tooltip
 
 ---@internal
 --- Render one row: glyph, indented label, state, route.
@@ -196,6 +197,7 @@ local function render()
     kind = "mode",
     name = status.mode,
     route = ":Hover mode",
+    desc = "auto: hovers open on their own · manual: only when asked · off: never",
   }, status.mode)
 
   push("")
@@ -212,6 +214,7 @@ local function render()
       kind = "switch",
       name = sw.name,
       route = route,
+      desc = sw.desc,
     })
   end
 
@@ -224,6 +227,9 @@ local function render()
         kind = "auto",
         name = entry.name,
         route = route,
+        desc = ("whether a %s target opens a hover by itself, without being asked"):format(
+          entry.name
+        ),
       })
     end
   end
@@ -560,6 +566,104 @@ end
 ---@type string The `winbar` value installed on the board's window.
 local WINBAR = "%!v:lua.require'hover.status_view'.legend()"
 
+---@internal
+--- How long the cursor has to sit still on a row before its explanation
+--- appears. Deliberately not `updatetime`: that is the reader's setting for
+--- the *editor's* idle behaviour, and a board they are reading line by line
+--- wants a slower hand than a buffer they are editing.
+local DWELL_MS = 3000
+
+---@internal
+--- The dwell tooltip's live state: one timer, one float, at most.
+---@type { timer: uv.uv_timer_t|nil, surf: Lib.UI.Kit.Surface|nil, row: integer|nil }
+local dwell = { timer = nil, surf = nil, row = nil }
+
+---@internal
+--- Close the tooltip and stop the countdown. Idempotent, because it is called
+--- from a cursor move, a window close and a toggle, and any of the three can
+--- happen with nothing open.
+local function dwell_clear()
+  if dwell.timer then
+    pcall(function()
+      dwell.timer:stop()
+      dwell.timer:close()
+    end)
+    dwell.timer = nil
+  end
+  if dwell.surf then
+    pcall(function()
+      dwell.surf:close()
+    end)
+    dwell.surf = nil
+  end
+  dwell.row = nil
+end
+
+---@internal
+--- Show the explanation for the row under the cursor.
+---
+--- `kit.note` never enters the window it opens, which is what makes this
+--- usable at all: the board keeps the focus, so the next key the reader
+--- presses still toggles the row they were reading about rather than landing
+--- in a window they did not ask for.
+---@param state table
+---@return nil
+local function dwell_show(state)
+  local row = row_at_cursor(state)
+  if not row or not row.desc then
+    return
+  end
+  local ok, kit = pcall(require, "lib.nvim.ui.kit")
+  if not ok or type(kit.note) ~= "function" then
+    return
+  end
+  local opened, surf = pcall(kit.note, {
+    title = row.route,
+    message = row.desc,
+    relative = "cursor",
+    width = math.min(70, math.max(30, math.floor(vim.o.columns * 0.4))),
+  })
+  if opened and type(surf) == "table" then
+    dwell.surf = surf
+    dwell.row = vim.api.nvim_win_get_cursor(0)[1]
+  end
+end
+
+---@internal
+--- Start the countdown for the row under the cursor, cancelling any tooltip
+--- that belonged to the row before it.
+---
+--- Every cursor move restarts it, so moving through the board shows nothing
+--- until the reader stops -- which is the difference between an explanation
+--- and a flicker.
+---@param state table
+---@return nil
+local function dwell_restart(state)
+  dwell_clear()
+  local row = row_at_cursor(state)
+  if not row or not row.desc then
+    return
+  end
+  local timer = vim.uv.new_timer()
+  dwell.timer = timer
+  timer:start(
+    DWELL_MS,
+    0,
+    vim.schedule_wrap(function()
+      -- The board may be gone, or the cursor moved on between the timer
+      -- firing and this running.
+      if not vim.api.nvim_buf_is_valid(state.bufnr) then
+        dwell_clear()
+        return
+      end
+      if vim.api.nvim_get_current_buf() ~= state.bufnr then
+        return
+      end
+      dwell_show(state)
+    end)
+  )
+end
+
 --- Open the board.
 ---
 --- Returns false when lib.nvim's UI kit is not there to draw one, which is
@@ -610,10 +714,34 @@ function M.open()
     end
   end
 
+  -- The dwell tooltip: rest on a row for DWELL_MS and it explains itself.
+  -- `desc` has been on every switch since they were declared -- it was only
+  -- reachable by reading the source or `:h hover`.
+  local autocmd = require("lib.nvim.bindings.autocmd")
+  local group = autocmd.group("hover_status_dwell", true)
+  autocmd.create({ "CursorMoved", "CursorMovedI" }, function()
+    dwell_restart(state)
+  end, {
+    group = group,
+    buffer = surf.bufnr,
+    desc = "hover status: restart the explanation countdown",
+  })
+  -- Leaving the board takes the tooltip with it, however it is left: the
+  -- float is anchored to a cursor that is about to be somewhere else.
+  autocmd.create({ "BufLeave", "WinClosed" }, function()
+    dwell_clear()
+  end, {
+    group = group,
+    buffer = surf.bufnr,
+    desc = "hover status: drop the explanation with the board",
+  })
+  surf:on_close(dwell_clear)
+
   -- Opened on the first actionable row rather than on the leading blank: the
   -- board exists to be acted on, and a cursor parked on a header makes the
   -- first `<CR>` a no-op that reads as a broken key.
   step(state, 1)
+  dwell_restart(state)
   return true
 end
 

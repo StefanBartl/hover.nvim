@@ -263,3 +263,58 @@ describe("the :Hover status board", function()
     assert.is_truthy(legend:find("%#HoverStatusKey#", 1, true))
   end)
 end)
+
+describe("the dwell tooltip", function()
+  local sv = require("hover.status_view")
+
+  --- Every floating window on screen right now.
+  local function floats()
+    local n = 0
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      if vim.api.nvim_win_get_config(w).relative ~= "" then
+        n = n + 1
+      end
+    end
+    return n
+  end
+
+  it("says nothing until the cursor has actually stopped", function()
+    require("hover").setup({})
+    assert.is_true(sv.open())
+    local board = vim.api.nvim_get_current_buf()
+    assert.are.equal(1, floats())
+
+    -- Well short of the three seconds: a tooltip here would fire while the
+    -- reader is still moving through the board, which is a flicker, not help.
+    vim.wait(1200, function()
+      return false
+    end, 50)
+    assert.are.equal(1, floats())
+
+    vim.wait(2400, function()
+      return false
+    end, 50)
+    assert.are.equal(2, floats())
+
+    -- And it says what the row does, not what it is called.
+    local text
+    for _, w in ipairs(vim.api.nvim_list_wins()) do
+      local b = vim.api.nvim_win_get_buf(w)
+      if b ~= board and vim.api.nvim_win_get_config(w).relative ~= "" then
+        text = table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), " ")
+      end
+    end
+    assert.is_truthy(text)
+    assert.is_true(#text > 10)
+
+    -- Moving on takes it away again.
+    vim.api.nvim_win_set_cursor(0, { vim.api.nvim_win_get_cursor(0)[1] + 1, 0 })
+    vim.cmd("doautocmd CursorMoved")
+    vim.wait(200, function()
+      return false
+    end, 50)
+    assert.are.equal(1, floats())
+
+    vim.cmd("close")
+  end)
+end)
