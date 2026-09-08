@@ -24,7 +24,7 @@ contributor requires no change here at all.
 
 **Door 2 — a named soft dependency (outbound).** hover.nvim itself calls
 `pcall(require, "images.info")`, `pcall(require, "pdfport")`,
-`pcall(require, "gopath.resolve")` — by name, from inside its own preview
+`pcall(require, "media")`, `pcall(require, "gopath.resolve")` — by name, from inside its own preview
 code, guarded so a missing plugin is a `nil` rather than an error.
 
 A `sources` or `positions` entry may also be a table —
@@ -90,6 +90,7 @@ including `on_request` for an answer that costs a process start.
 | [open.nvim](https://github.com/StefanBartl/open.nvim) | named | routing `gf` from the float to the right destination -- a browser for a URL, the configured file manager for a path | `vim.ui.open` opens it instead, letting the OS decide |
 | [images.nvim](https://github.com/StefanBartl/images.nvim) | named | drawing the picture into the float (OSC 1337) | an image target shows format, dimensions and size as text |
 | [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | named | rasterizing a PDF page to PNG, and a *window* of one at a higher DPI for the zoom; converting an office document to a PDF (opt-in) | a PDF shows its size and why it could not be rendered; a `.docx` shows what it is and how big; `:Hover zoom` says a page cannot be magnified |
+| [media.nvim](https://github.com/StefanBartl/media.nvim) | named | lifting a still out of a video with ffmpeg, and describing the file with ffprobe | a `.mp4` shows what it is and how big, and says which half is missing |
 | [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) | registry | `owner/repo` under the cursor, as the path of its cached README | no repository hover |
 | [migrate.nvim](https://github.com/StefanBartl/migrate.nvim) | registry | a *position* preview: this line uses a deprecated API, and what replaces it | no deprecation notice in the float |
 | [documentation.nvim](https://github.com/StefanBartl/documentation.nvim) | registry | a *position* preview: what the dotted module under the cursor is, out of the generated map | no module summary |
@@ -259,11 +260,52 @@ Three things worth knowing when this misbehaves, all in
 - **`can_create("office")` is asked first**, so "LibreOffice is not installed"
   is a sentence in the float rather than a failed conversion.
 - **Converted PDFs are kept**, keyed by path *and* mtime, under
-  `stdpath("cache")/hover.nvim/office`, and deleted at `VimLeavePre`. A
-  second hover on the same document does not start LibreOffice again.
+  `stdpath("cache")/hover.nvim/office`, and swept by age once per session
+  (`office.cache_days`, default 7) rather than deleted when Neovim exits —
+  the mtime in the key is what makes a kept one safe to serve. A second
+  hover on the same document does not start LibreOffice again, tomorrow
+  included.
 - **One conversion per document at a time.** The hover's own cache never holds
   a pending result, so without that guard every `CursorHold` during a
   conversion would start another one.
+
+## media.nvim — one frame out of a video
+
+```lua
+require("media").available()                              --> ffmpeg and ffprobe both there?
+require("media").probed(path)                             --> what is known already, synchronous
+require("media").frame(path, { at = offset }, callback)   --> a PNG on disk
+require("media.ui").summary(probe)                        --> "1920x1080 · 4:32 · h264 · 100 MB"
+```
+
+The video counterpart of the pdfport crossing above, and deliberately the same
+shape: an external toolchain that hover.nvim does not want to own, wrapped once
+in its own plugin, `pcall`ed by name here. `images.nvim` says of PDFs that it
+*"draws pictures; it does not read PDFs, and it does not want to"* — the same
+sentence with "videos" in it is why ffmpeg lives over there rather than in
+`preview/video.lua`.
+
+What comes back is a PNG, and from there this is an image hover: the same canvas
+geometry, the same draw, the same keys. Which is why the previewer is short —
+the interesting work is on the other side of the seam.
+
+Three things worth knowing when this misbehaves, all in
+[`preview/video.lua`](../lua/hover/preview/video.lua) and
+[VIDEO.md](FEATURES/VIDEO.md):
+
+- **`available()` is asked before anything is claimed**, so "ffmpeg is not on
+  PATH" is a sentence in the float rather than a failed render. Both binaries
+  are required: a percentage offset needs a duration, and the duration comes
+  from ffprobe.
+- **The paging keys are a scrub.** Page *n* is the still at
+  `video.at + (n-1) × video.step`, and both default to `"10%"` — so ten presses
+  walk a ten-second clip and a two-hour feature end to end alike. media.nvim
+  caches per offset, keyed by the source file's mtime, so stepping back is a
+  `stat` and a draw.
+- **No opt-in switch, unlike office.** A still is a keyframe seek rather than a
+  LibreOffice start — the same order of cost as a PDF page, which nobody had to
+  ask for either. What is still off by default is the *automatic* hover
+  (`auto_hover.video`), for the reason every type is off by default.
 
 ## What arrives through the registry
 

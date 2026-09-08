@@ -190,7 +190,11 @@ local function documented_routes(text, vimdoc)
 
   local out = {}
   for _, mention in ipairs(mentions) do
-    local route = words((mention:gsub("[%[{].*$", "")))
+    -- `<` joins `[` and `{` as a placeholder opener: `:Hover auto <type>`
+    -- is the same statement as `:Hover auto [type]`, and without it the
+    -- angle-bracket form read as an invented route named `auto type`
+    -- (README.md and docs/CONTRIBUTING.md, both, from 1e84e3f).
+    local route = words((mention:gsub("[%[{<].*$", "")))
     -- **Both readings are recorded, not just the trimmed one.** The state set
     -- is every argument value of every route pooled together, so a word can
     -- be an argument of one route and a route of another -- which stopped

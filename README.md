@@ -94,6 +94,7 @@ What it can answer depends on the target:
 | An image | The picture (needs a drawing provider), else format, dimensions, size |
 | A PDF | Page 1, rendered (needs pdfport.nvim), else size and why not |
 | An office document | A badge, or its first page once `:Hover office on` |
+| A video | A still from it (needs media.nvim + ffmpeg), and the paging keys step through the file |
 | A file with no text in it | A badge naming the format, not a screen of bytes |
 | An `http(s)` link | Host, path and decoded query; plus status code and title with fetching on |
 | A git object id | What that commit did (`git show --stat`) — only on `:Hover show` |
@@ -124,6 +125,10 @@ the registry, and none of them named in its source.
 > **[pdfport.nvim]** — page 1 of a PDF as an image, every further page
 > scrollable, and `.docx`/`.xlsx`/`.pptx` too once `:Hover office on`.
 >
+> **[media.nvim]** — a `.mp4` shown as a frame out of itself rather than as a
+> size in bytes, with the paging keys as a scrub. It does not play video, and
+> [nothing in a terminal Neovim can](docs/FEATURES/VIDEO.md).
+>
 > **[gopath.nvim]** — the same reference, followed rather than previewed. hover
 > calls its `resolve_at_cursor()` through a `pcall`, so neither depends on the
 > other.
@@ -149,9 +154,11 @@ to an error:
 | [markdown.nvim] | Link syntax, `<img src>`, and `#heading` section previews |
 | [images.nvim] | Actually drawing pictures and rendered PDF pages |
 | [pdfport.nvim] | PDF and office-document previews |
+| [media.nvim] | Video stills, and what ffprobe knows about the file |
 | [gopath.nvim] | Resolving references that are not written as paths |
 | `git` | The git-object preview |
 | `curl` | Fetching a link's status code and title |
+| `ffmpeg` | The still itself — reached through media.nvim, which needs `ffprobe` from the same install |
 
 ---
 
@@ -301,4 +308,5 @@ MIT — see [LICENSE](LICENSE).
 [markdown.nvim]: https://github.com/StefanBartl/markdown.nvim
 [images.nvim]: https://github.com/StefanBartl/images.nvim
 [pdfport.nvim]: https://github.com/StefanBartl/pdfport.nvim
+[media.nvim]: https://github.com/StefanBartl/media.nvim
 [gopath.nvim]: https://github.com/StefanBartl/gopath.nvim

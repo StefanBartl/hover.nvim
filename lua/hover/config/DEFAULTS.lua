@@ -94,6 +94,7 @@ return {
     missing = false,
     office = false,
     url = false,
+    video = false,
 
     -- A plugin answering for the *place* the cursor is in rather than for a
     -- target: what this module is, who imports it, what this container image
@@ -437,6 +438,46 @@ return {
     -- how this behaved before the cache was allowed to survive.
     ---@type integer
     cache_days = 7,
+  },
+
+  --- Videos: a still lifted out with ffmpeg, and the paging keys as a scrub.
+  ---
+  --- **There is no `convert` switch here, and the asymmetry with `office` is
+  --- deliberate.** An office page costs a LibreOffice start-up — seconds, per
+  --- document — which is why it has to be asked for. A frame is a keyframe seek
+  --- and a scale: measured on a 4 GB h265 file, 210 ms for a seek near the end,
+  --- and everything after the first is a cache hit. That is the cost of the PDF
+  --- previewer, which nobody had to opt into either.
+  ---
+  --- What still has to be asked for is the *hover* — `video` is not in
+  --- `auto_hover` by default, for the same reason `office` is not: a directory
+  --- listing scrolled past should not start a process per line. `:Hover show`
+  --- answers for it always, and `:Hover auto video` switches the trigger on.
+  video = {
+    --- Where the first still comes from. Same three shapes `media.nvim`
+    --- accepts: a number is seconds, `"10%"` is a fraction of the running
+    --- time, and anything else is handed to ffmpeg as a timestamp.
+    ---
+    --- Ten percent rather than zero because of what the first frame of a real
+    --- video usually is: black, a fade-in, a distributor's logo, or a slate.
+    ---@type number|string
+    at = "10%",
+
+    --- How far one press of the "next page" key moves.
+    ---
+    --- A percentage, so that ten presses walk any file end to end — a
+    --- ten-second clip and a two-hour feature both get ten stills, which is
+    --- what makes one setting right for both. A number means seconds, and is
+    --- what a file that reports no duration falls back to anyway.
+    ---@type number|string
+    step = "10%",
+
+    --- Width in pixels the still is rendered at, or `nil` for media.nvim's own
+    --- default. Chosen against the float rather than the source: a hover is at
+    --- most a few hundred cells wide, and every pixel past what the terminal
+    --- draws is decode time and cache bytes spent on nothing.
+    ---@type integer|nil
+    width = nil,
   },
 
   --- The float on (almost) the whole editor, and back again.

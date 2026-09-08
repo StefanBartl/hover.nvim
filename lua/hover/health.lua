@@ -396,6 +396,7 @@ function M.check()
   soft("images.info", "collect", "an image target shows its format and size as text")
   soft("images.anchor", "draw", "no picture is drawn into the float")
   soft("pdfport", "render_page", "a PDF shows its size, not its first page")
+  soft("media", "frame", "a video shows its size, not a still from it")
   soft("gopath.resolve", "resolve_at_cursor", "truncated paths (`...nvim/init.lua`) do not resolve")
 
   -- markdown.nvim contributes through the registry rather than by name, so
@@ -457,6 +458,15 @@ function M.check()
     health.ok("pdftoppm: on PATH")
   else
     health.info("pdftoppm: not on PATH -- pdfport cannot rasterize PDF pages")
+  end
+
+  -- Both, not either: media.nvim needs a duration from ffprobe to resolve the
+  -- percentage offset a still is taken at, so one without the other produces
+  -- no frame and an error that names the wrong thing.
+  if vim.fn.executable("ffmpeg") == 1 and vim.fn.executable("ffprobe") == 1 then
+    health.ok("ffmpeg/ffprobe: on PATH")
+  else
+    health.info("ffmpeg/ffprobe: not on PATH -- media.nvim cannot lift a still out of a video")
   end
 
   -- The same two tools again, this time out of docs/install.json rather than
