@@ -663,6 +663,18 @@ local function present(content)
     end
   end
 
+  -- Playback in a real mpv window, not in the float: `preview.video` chose this
+  -- over the block-graphics transport because the float's redraw is the ceiling
+  -- on that. The float itself shows only a short "playing" panel; the window is
+  -- mpv's, and closing the hover (a cursor move, `q`, `:qa`) stops it.
+  if content.play_window then
+    local window = require("hover.preview.window")
+    local ok = window.open(content.play_window)
+    if ok then
+      float.set_on_close(window.close)
+    end
+  end
+
   -- An image target draws over the float it just opened.
   if content.image_path then
     local win = float.win()
@@ -2141,6 +2153,20 @@ function M.play_toggle()
     playback.toggle()
     return
   end
+
+  -- A window is playing: the same key stops it and drops the hover back to the
+  -- still. mpv has its own pause (`<Space>` in its window); `<CR>` here is the
+  -- "I am done" gesture, symmetrical with the press that started it.
+  local window = require("hover.preview.window")
+  if window.is_active() then
+    window.close()
+    if _open and _open.target then
+      _open.play = false
+      rerender(_open, _open.target)
+    end
+    return
+  end
+
   if not _open then
     return
   end

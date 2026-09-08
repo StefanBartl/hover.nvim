@@ -555,6 +555,7 @@ function M.preview_opts()
     -- No `or DEFAULTS.video.width`: the default *is* nil, and nil means
     -- "let media.nvim choose" rather than "unset".
     video_width = video.width,
+    video_playback = video.playback ~= nil and video.playback or DEFAULTS.video.playback,
     video_sound = video.sound ~= nil and video.sound or DEFAULTS.video.sound,
     -- `~= nil` rather than `or`, because `0` is the default and a meaningful
     -- value: `video.play_at or DEFAULTS...` would read a configured `0` as

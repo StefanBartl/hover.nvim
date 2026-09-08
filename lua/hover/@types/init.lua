@@ -135,7 +135,8 @@
 ---@field at? number|string # Offset of the first still. Default "10%".
 ---@field step? number|string # Offset a paging key adds. Default "10%".
 ---@field width? integer # Render width in pixels. Default nil (media.nvim decides).
----@field sound? boolean # Start audio alongside a played run. Default true.
+---@field playback? "window"|"inline" # What the transport key does. Default "window" -- a real mpv window; "inline" paints a run of stills into the float.
+---@field sound? boolean # Start audio alongside an inline played run. Default true. (A window always has mpv's own sound.)
 ---@field play_at? number|string # Where playing starts, as opposed to where the still is taken. Default 0 -- the beginning of the file.
 ---@field play_scale? number # How much larger the playing canvas is than the still's budget, capped to the editor. Default 1.75; 1 is the still's own size.
 ---@field fps? number # Stills per second in a played run. Default 12.
@@ -247,6 +248,7 @@
 ---@field zen? boolean # Rendered against the editor's own size rather than the configured box, and centred. Set by `hover.zen`; the resize level still multiplies on top of it.
 ---@field zen_pinned? boolean # `zen` was what pinned this float, so leaving zen may unpin it again. Absent when the reader pinned it themselves, which zen must not undo.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
+---@field play? boolean # The transport key has been pressed on this video hover: the next render builds the playing view (an inline run, or a handoff to an mpv window) rather than the still. Cleared when the window player is stopped.
 
 -- #####################################################################
 -- classify.lua
@@ -334,6 +336,7 @@
 ---@field video_at? number|string # Where the first still of a video comes from: seconds, a percentage, or an ffmpeg timestamp.
 ---@field video_step? number|string # How far one paging key moves through a video.
 ---@field video_width? integer # Width the still is rendered at; nil leaves the choice to media.nvim.
+---@field video_playback? "window"|"inline" # What the transport key does: `"window"` (default) opens a real mpv window, `"inline"` paints a run of stills into the float.
 ---@field video_play_at? number|string # Where a played run starts. Default 0; the still's own `video_at` is a thumbnail offset and deliberately not this.
 ---@field video_play_scale? number # Multiplier on the preview budget for the playing canvas, capped to the editor's rows and columns.
 ---@field play? boolean # Build the playing view (a decoded run) instead of the still. Set by the transport key, never by configuration.
@@ -371,8 +374,15 @@
 ---@field highlight? string # Highlight group for the first line, where that line is a verdict rather than content: `HoverMissing` (-> `DiagnosticError`, the broken-target marker), `HoverError` (-> `DiagnosticError`, an HTTP 4xx/5xx or an unreachable host), `HoverInfo` (-> `DiagnosticHint`, the "no text in this file" badge).
 ---@field scroll? Hover.Scroll # Present when the preview has more to show; drives the `scroll_keys`.
 ---@field transport? boolean # This content has a time axis and can be played; drives the `transport_keys`. A marker only — pressing the key is what decodes anything.
----@field playback? Hover.Playback # A decoded run to paint into the float once it is open. Present only on the playing view.
+---@field playback? Hover.Playback # A decoded run to paint into the float once it is open. Present only on the inline playing view.
+---@field play_window? Hover.PlayWindow # Open a real mpv window for this file once the float is open, and tie its lifetime to the float. Present only on the windowed playing view.
 ---@field pending? boolean # Provisional; an async result replaces it (and it is not cached).
+
+--- What `hover.init` needs to open a windowed player: the file, and where in it
+--- to start. `hover.preview.window` holds the handle that stops it again.
+---@class Hover.PlayWindow
+---@field path string # Source file mpv opens.
+---@field at? number|string # Where playback starts: seconds, a percentage, or an ffmpeg timestamp — mpv's own `--start` grammar.
 
 --- A decoded run of stills, sampled into cells and ready to paint. Built by
 --- `preview.video`, consumed by `preview.playback` once the float exists —

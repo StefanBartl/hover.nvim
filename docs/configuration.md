@@ -78,7 +78,8 @@ clearing their flag, so turning it back on restores what you had.
 | `video.at` | `"10%"` | Where the first still of a video comes from. A number is seconds, `"10%"` is a fraction of the running time, anything else is handed to ffmpeg as a timestamp. Ten percent rather than zero because the first frame of a real video is usually black, a fade-in or a logo. |
 | `video.step` | `"10%"` | How far one press of the paging key moves through the file. A percentage, so ten presses walk a ten-second clip and a two-hour feature end to end alike. A file that reports no duration falls back to five seconds. |
 | `video.width` | `nil` | Width in pixels the still is rendered at; `nil` leaves the choice to media.nvim. Chosen against the float rather than the source — every pixel past what the terminal draws is decode time spent on nothing. |
-| `video.sound` | `true` | Whether a played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing — see [Playing a video](#playing-a-video). |
+| `video.playback` | `"window"` | What `<CR>` does: `"window"` opens a real mpv window (video and sound, no editor redraw in the loop); `"inline"` paints a run of stills into the float instead — see [Playing a video](#playing-a-video). |
+| `video.sound` | `true` | Whether an **inline** played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing. A `"window"` playback always has mpv's own sound and ignores this. |
 | `video.play_at` | `0` | Where **playing** starts, which is deliberately not where the still is taken. Same three shapes as `video.at`. A thumbnail wants to skip the fade-in; a viewer wants the beginning. A scrubbed still is the exception and is honoured: from page 2 on, play starts where the paging keys left off. |
 | `video.play_scale` | `2.5` | How much larger the **box** is while playing — `max_width`/`max_lines` scaled, capped to the editor's own rows and columns. The float and the canvas are both built from that one number, so they grow together. A cell carries two pixel rows, so the 20-line default is a 38-pixel picture; this is the sharpness knob. `1` is the still's size. |
 | `video.fps` | `12` | Stills per second in a played run, and the rate they are painted at. |
@@ -120,9 +121,28 @@ borrow condition is in [BINDINGS.md](BINDINGS.md).
 
 A video hover opens as a still, and **nothing plays until `<CR>`**: a hover
 appears because a cursor rested somewhere for `updatetime`, which is a glance
-rather than a request for motion. The first press decodes a run of stills
-(`media.frames`), samples them into terminal cells (`images.blocks`) and starts
-a timer; the next press pauses. `.` and `,` step one frame, as they do in mpv.
+rather than a request for motion.
+
+**`<CR>` opens a real mpv window by default (`video.playback = "window"`).**
+Painting a run of stills into the float is the editor's own redraw, twelve
+times a second, and on Windows in WezTerm that measured at about one repaint a
+second however the paint was written — a slideshow, not a video. mpv decodes
+and draws the file itself, video and sound, with no editor redraw in the loop;
+the float shows a short "playing" panel rather than a picture, because there is
+no picture in it to show. `<CR>` again — or closing the hover any other way, a
+cursor move, `q`, `:qa` — stops the window. Playback starts from the scrubbed
+position if the paging keys moved it (`video_play_at` otherwise), exactly as
+the inline route does; the two share the arithmetic.
+
+Set `video.playback = "inline"` for the block-graphics transport described
+below instead — genuinely smooth on a terminal fast enough for it, and it needs
+no separate window. Either mode falls back to the still where its own
+ingredient is missing (mpv for a window, ImageMagick for inline).
+
+The rest of this section is the **inline** route. The first press decodes a
+run of stills (`media.frames`), samples them into terminal cells
+(`images.blocks`) and starts a timer; the next press pauses. `.` and `,` step
+one frame, as they do in mpv.
 
 Playing starts at the **beginning of the file** (`video.play_at`), not at the
 still's `video.at`. Those were one setting until 2026-09-08, and sharing them

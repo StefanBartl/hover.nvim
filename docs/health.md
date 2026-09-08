@@ -94,10 +94,12 @@ extend the *user* PATH, which a terminal started before the install does not hav
 media.nvim probes both shim directories itself, so it usually finds ffmpeg regardless —
 `:checkhealth media` says which path it will actually run.
 
-`mpv` gets its own line, always `info` and never `warn`: unlike ffmpeg it is not
-required for a played video hover to work at all, only for it to have sound. A missing
-`mpv` means today's silent playback, exactly as before that feature existed —
-`:checkhealth media` has the install command and the `bin.mpv` escape hatch.
+`mpv` gets its own line, always `info` and never `warn`, and what a missing one costs
+depends on `video.playback`. With the default, `"window"`, `<CR>` on a video hover *is*
+mpv — missing it falls back to block graphics (`"inline"`) or, without ImageMagick either,
+the still. With `video.playback = "inline"` set explicitly, mpv is only for sound, and a
+missing one means today's silent playback, exactly as before the window player existed.
+Either way `:checkhealth media` has the install command and the `bin.mpv` escape hatch.
 
 **The browser for page screenshots is the one place the report will appear to contradict
 itself, and that is deliberate.** With `:Hover links web shot` on you may see both of

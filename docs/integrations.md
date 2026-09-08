@@ -277,6 +277,8 @@ require("media").probed(path)                             --> what is known alre
 require("media").frame(path, { at = offset }, callback)   --> a PNG on disk
 require("media").frames(path, opts, callback)              --> a run of PNGs, for the transport key
 require("media").audio(path, { at = offset }, callback)    --> mpv, audio only — nil handle when unavailable
+require("media").player_available()                        --> can `<CR>` open a real window at all?
+require("media").play_window(path, { at = offset })         --> a real mpv window, video and sound
 require("media.ui").summary(probe)                        --> "1920x1080 · 4:32 · h264 · 100 MB"
 ```
 
@@ -291,11 +293,18 @@ What comes back is a PNG, and from there this is an image hover: the same canvas
 geometry, the same draw, the same keys. Which is why the previewer is short —
 the interesting work is on the other side of the seam.
 
-Four things worth knowing when this misbehaves, all in
+Five things worth knowing when this misbehaves, all in
 [`preview/video.lua`](../lua/hover/preview/video.lua),
-[`preview/playback.lua`](../lua/hover/preview/playback.lua) and
+[`preview/playback.lua`](../lua/hover/preview/playback.lua),
+[`preview/window.lua`](../lua/hover/preview/window.lua) and
 [VIDEO.md](FEATURES/VIDEO.md):
 
+- **`<CR>` reaches for the window first.** `video.playback = "window"` (the
+  default) never calls `media.frame`/`media.frames` at all — `preview/video.lua`
+  hands `hover.init` a `play_window` marker instead, and `preview/window.lua`
+  is the only caller of `media.play_window`/`player_available`. The rest of
+  this section is the `"inline"` route, reached only when that setting says so
+  or `player_available()` says mpv cannot be found.
 - **`available()` is asked before anything is claimed**, so "ffmpeg is not on
   PATH" is a sentence in the float rather than a failed render. Both binaries
   are required: a percentage offset needs a duration, and the duration comes

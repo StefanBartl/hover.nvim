@@ -37,9 +37,14 @@ the reason is worth stating precisely rather than hedging:
 So the default is a still, and it stays a still until asked otherwise. `gf`
 over the hover opens the file in whatever plays video on that machine, and
 [media.nvim](https://github.com/StefanBartl/media.nvim)'s `:Media play` does
-the same from anywhere. The transport key (below) is the third option: real
-motion, drawn as block graphics rather than a real picture, which sidesteps
-every point above because text is not a graphics protocol.
+the same from anywhere. The transport key (below) is the third option, and by
+default (`video.playback = "window"`) it is the most direct one of all: a real
+mpv window, video and sound, decoded and drawn by mpv itself rather than by
+anything painted through Neovim — which sidesteps every point above by not
+going through the terminal at all. `video.playback = "inline"` keeps the
+older answer instead: real motion drawn as block graphics, which sidesteps the
+same points by a different route, entirely inside the float, and needs no
+separate window.
 
 ---
 
@@ -79,8 +84,9 @@ moment.
 | --- | --- | --- |
 | `video.at` | `"10%"` | where the first still comes from |
 | `video.step` | `"10%"` | how far one key press moves |
+| `video.playback` | `"window"` | what the transport key does -- a real mpv window, or `"inline"` block graphics -- see below |
 | `video.play_at` | `0` | where *playing* starts -- see below |
-| `video.play_scale` | `2.5` | how much larger the playing canvas is than the still's budget (how *fine* each cell is, is images.nvim's `cells`) |
+| `video.play_scale` | `2.5` | how much larger the playing canvas is than the still's budget (how *fine* each cell is, is images.nvim's `cells`) -- `"inline"` only |
 
 **`at` and `step` are both percentages, and that is the design.** Ten presses walk any file end
 to end: a ten-second clip and a two-hour feature both get ten stills spread
@@ -110,7 +116,27 @@ reader chose where to be, and play begins there.
 
 A hover appearing is a glance — the cursor rested somewhere for `updatetime`,
 which is not a request for motion. `transport_keys.toggle` (`<CR>` by
-default) is that request: it decodes a short run with `media.frames()`,
+default) is that request.
+
+**By default that request opens a real mpv window (`video.playback =
+"window"`), not the block graphics described below.** The reason is a
+measurement rather than a preference: painting a run of stills into the float
+is the editor's own redraw, and on Windows in WezTerm that measured at about
+one repaint a second — a slideshow — however the paint was written (buffer
+lines, then extmarks, then overlay virtual text; three attempts, the same
+ceiling, because the ceiling was never the Lua). mpv decodes and draws the
+file itself, video and sound, with no editor redraw in the loop; the float
+shows a short "playing" panel rather than a picture, since there is nothing
+for it to paint. The same key stops the window, and so does closing the hover
+any other way — a cursor move, `q`, `:qa`; `media.core.player` inside
+media.nvim keeps its own `VimLeavePre` backstop for the exit that runs no
+teardown at all. Playback starts from the scrubbed position exactly as the
+route below does — `video.playback_offset` is the one function both share, so
+the two cannot drift apart the way two hand-kept copies of that arithmetic
+once did.
+
+Everything from here describes `video.playback = "inline"`: it decodes a
+short run with `media.frames()`,
 draws it as block graphics (`images.blocks`, the same reasoning as above —
 text survives redraws, an image protocol does not), and starts a timer.
 `.` / `,` step one frame back or forward, pausing first — mpv's own

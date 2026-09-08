@@ -247,6 +247,180 @@ describe("where a played run starts", function()
   end)
 end)
 
+describe("the shared playback offset", function()
+  -- **One function, two callers.** The inline transport and the window player
+  -- both start playing at the same place, and a hand-kept copy of the
+  -- arithmetic in each is how page 2's window ends up starting somewhere page 2
+  -- is not -- a shape this repository has been bitten by more than once.
+  it("is video_play_at on page one, resolved and raw", function()
+    local raw, secs = video.playback_offset({ video_play_at = 0, page = 1 }, 600)
+    assert.are.equal(0, raw)
+    assert.are.equal(0, secs)
+
+    -- A percentage of a file with no duration cannot be resolved: the raw form
+    -- is still handed on (mpv resolves it), the seconds form is nil.
+    local praw, psecs = video.playback_offset({ video_play_at = "50%", page = 1 }, nil)
+    assert.are.equal("50%", praw)
+    assert.is_nil(psecs)
+  end)
+
+  it("is the scrubbed position from page two on", function()
+    -- Same numbers as `offset_for`, because it is `offset_for` underneath:
+    -- page 3 with a 10% "at" and a 10% step is 30% into a 544.75s file --
+    -- one `at` plus two strides, same as the still at that page.
+    local raw, secs = video.playback_offset({
+      video_play_at = 0,
+      video_at = "10%",
+      video_step = "10%",
+      page = 3,
+    }, 544.75)
+    assert.is_true(math.abs(raw - 163.425) < 1e-6)
+    assert.is_true(math.abs(secs - 163.425) < 1e-6)
+  end)
+
+  it("treats a nil video_play_at as the beginning", function()
+    local raw = video.playback_offset({ page = 1 }, 600)
+    assert.are.equal(0, raw)
+  end)
+end)
+
+describe("playing in a window rather than the float", function()
+  local DEFAULTS = require("hover.config.DEFAULTS")
+
+  it("is the default, because the inline paint is a slideshow where it matters", function()
+    -- Reported 2026-09-08: no measurable improvement from any of three
+    -- rewrites of the inline paint, because the ceiling is the editor's redraw
+    -- of a float-sized region, not the Lua. `<CR>` opens a real mpv window.
+    assert.are.equal("window", DEFAULTS.video.playback)
+  end)
+
+  it("hands hover.init a play_window marker instead of decoding a run", function()
+    local saved_media = package.loaded["media"]
+    local saved_ip = package.loaded["lib.nvim.image_preview"]
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return "stub"
+      end,
+    }
+    package.loaded["media"] = {
+      frame = function() end,
+      available = function()
+        return true
+      end,
+      probed = function()
+        return { duration = 600, width = 1920, height = 1080 }
+      end,
+      player_available = function()
+        return true
+      end,
+    }
+
+    local decoded = false
+    package.loaded["images.blocks"] = setmetatable({
+      available = function()
+        decoded = true
+        return true
+      end,
+    }, {
+      __index = function()
+        return function() end
+      end,
+    })
+
+    local content = video.preview({
+      type = "video",
+      raw = "clip.mp4",
+      path = "/tmp/clip.mp4",
+      ext = "mp4",
+      size = 1024,
+    }, { inline_images = true, play = true, video_playback = "window", page = 1 }, function() end)
+
+    package.loaded["media"] = saved_media
+    package.loaded["lib.nvim.image_preview"] = saved_ip
+    package.loaded["images.blocks"] = nil
+
+    assert.is_table(content)
+    assert.is_table(content.play_window)
+    assert.are.equal("/tmp/clip.mp4", content.play_window.path)
+    assert.are.equal(0, content.play_window.at)
+    assert.is_true(content.transport, "the key stays bound, to stop the window")
+    assert.is_nil(content.pending, "the window opens now; there is nothing to wait for")
+    assert.is_false(decoded, "no run is decoded for a window playback")
+  end)
+
+  it("falls through to the inline route when video_playback is inline", function()
+    local saved_media = package.loaded["media"]
+    local saved_ip = package.loaded["lib.nvim.image_preview"]
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return "stub"
+      end,
+    }
+    package.loaded["media"] = {
+      frame = function() end,
+      frames = function() end,
+      available = function()
+        return true
+      end,
+      probed = function()
+        return { duration = 600 }
+      end,
+      player_available = function()
+        return true
+      end,
+    }
+
+    local content = video.preview({
+      type = "video",
+      raw = "clip.mp4",
+      path = "/tmp/clip.mp4",
+      ext = "mp4",
+      size = 1024,
+    }, { inline_images = true, play = true, video_playback = "inline", page = 1 }, function() end)
+
+    package.loaded["media"] = saved_media
+    package.loaded["lib.nvim.image_preview"] = saved_ip
+
+    assert.is_nil(content.play_window, "inline mode never opens a window")
+  end)
+
+  it("falls through when mpv cannot be found", function()
+    local saved_media = package.loaded["media"]
+    local saved_ip = package.loaded["lib.nvim.image_preview"]
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return "stub"
+      end,
+    }
+    package.loaded["media"] = {
+      frame = function() end,
+      frames = function() end,
+      available = function()
+        return true
+      end,
+      probed = function()
+        return { duration = 600 }
+      end,
+      player_available = function()
+        return false
+      end,
+    }
+
+    local content = video.preview({
+      type = "video",
+      raw = "clip.mp4",
+      path = "/tmp/clip.mp4",
+      ext = "mp4",
+      size = 1024,
+    }, { inline_images = true, play = true, video_playback = "window", page = 1 }, function() end)
+
+    package.loaded["media"] = saved_media
+    package.loaded["lib.nvim.image_preview"] = saved_ip
+
+    assert.is_nil(content.play_window, "no mpv, no window -- the still is the honest answer")
+  end)
+end)
+
 describe("the float a played run is drawn into", function()
   local DEFAULTS = require("hover.config.DEFAULTS")
   local float = require("hover.float")
