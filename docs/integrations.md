@@ -90,7 +90,7 @@ including `on_request` for an answer that costs a process start.
 | [open.nvim](https://github.com/StefanBartl/open.nvim) | named | routing `gf` from the float to the right destination -- a browser for a URL, the configured file manager for a path | `vim.ui.open` opens it instead, letting the OS decide |
 | [images.nvim](https://github.com/StefanBartl/images.nvim) | named | drawing the picture into the float (OSC 1337) | an image target shows format, dimensions and size as text |
 | [pdfport.nvim](https://github.com/StefanBartl/pdfport.nvim) | named | rasterizing a PDF page to PNG, and a *window* of one at a higher DPI for the zoom; converting an office document to a PDF (opt-in) | a PDF shows its size and why it could not be rendered; a `.docx` shows what it is and how big; `:Hover zoom` says a page cannot be magnified |
-| [media.nvim](https://github.com/StefanBartl/media.nvim) | named | lifting a still out of a video with ffmpeg, and describing the file with ffprobe | a `.mp4` shows what it is and how big, and says which half is missing |
+| [media.nvim](https://github.com/StefanBartl/media.nvim) | named | lifting a still (or a played run, or sound for it) out of a video with ffmpeg/mpv, and describing the file with ffprobe | a `.mp4` shows what it is and how big, and says which half is missing |
 | [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) | registry | `owner/repo` under the cursor, as the path of its cached README | no repository hover |
 | [migrate.nvim](https://github.com/StefanBartl/migrate.nvim) | registry | a *position* preview: this line uses a deprecated API, and what replaces it | no deprecation notice in the float |
 | [documentation.nvim](https://github.com/StefanBartl/documentation.nvim) | registry | a *position* preview: what the dotted module under the cursor is, out of the generated map | no module summary |
@@ -269,12 +269,14 @@ Three things worth knowing when this misbehaves, all in
   a pending result, so without that guard every `CursorHold` during a
   conversion would start another one.
 
-## media.nvim — one frame out of a video
+## media.nvim — a frame, a run, and sound for it
 
 ```lua
 require("media").available()                              --> ffmpeg and ffprobe both there?
 require("media").probed(path)                             --> what is known already, synchronous
 require("media").frame(path, { at = offset }, callback)   --> a PNG on disk
+require("media").frames(path, opts, callback)              --> a run of PNGs, for the transport key
+require("media").audio(path, { at = offset }, callback)    --> mpv, audio only — nil handle when unavailable
 require("media.ui").summary(probe)                        --> "1920x1080 · 4:32 · h264 · 100 MB"
 ```
 
@@ -289,8 +291,9 @@ What comes back is a PNG, and from there this is an image hover: the same canvas
 geometry, the same draw, the same keys. Which is why the previewer is short —
 the interesting work is on the other side of the seam.
 
-Three things worth knowing when this misbehaves, all in
-[`preview/video.lua`](../lua/hover/preview/video.lua) and
+Four things worth knowing when this misbehaves, all in
+[`preview/video.lua`](../lua/hover/preview/video.lua),
+[`preview/playback.lua`](../lua/hover/preview/playback.lua) and
 [VIDEO.md](FEATURES/VIDEO.md):
 
 - **`available()` is asked before anything is claimed**, so "ffmpeg is not on
@@ -306,6 +309,14 @@ Three things worth knowing when this misbehaves, all in
   LibreOffice start — the same order of cost as a PDF page, which nobody had to
   ask for either. What is still off by default is the *automatic* hover
   (`auto_hover.video`), for the reason every type is off by default.
+- **Sound polls, it does not push.** `preview/playback.lua`'s timer asks mpv's
+  IPC socket `time-pos` once per tick and paints whichever frame belongs to
+  the answer, rather than counting frames on its own and hoping mpv agrees —
+  the picture cannot drift from the sound if it is never running its own
+  independent clock in the first place. `media.audio()` failing (no mpv, no
+  track, `video_sound = false`) is not a branch this file has to handle: it
+  just means `playback.load`'s `path` is `nil`, and everything downstream
+  already knows how to run without one.
 
 ## What arrives through the registry
 

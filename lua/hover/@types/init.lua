@@ -332,6 +332,7 @@
 ---@field video_fps? number # Sampling rate of a played run; also the rate it is painted at.
 ---@field video_run? integer # How many stills one run holds.
 ---@field video_run_width? integer # Pixel width of a run's stills before they are sampled into cells; nil leaves it to media.nvim.
+---@field video_sound? boolean # Start audio alongside a played run when the file has a track and mpv is on PATH. Default true; a player-driven clock is used either way, this only decides whether anything comes out of the speakers.
 ---@field url_pdf? boolean # Show a link answering `application/pdf` as its first page.
 ---@field url_pdf_max_bytes? integer # Ceiling for that download.
 ---@field url_pdf_timeout_ms? integer # How long it may take.
@@ -377,6 +378,7 @@
 ---@field from number # Where the run starts in the source, in seconds, for the clock
 ---@field duration? number # Source duration, for the clock's right-hand side
 ---@field status_row integer # 0-based line the control row is written to
+---@field path? string # Source file, for `playback.play` to start audio on. Absent when there is nothing to start it for: no track, `video_sound = false`, or mpv unresolved — `preview.video` has already decided.
 
 --- Where a scrollable preview currently is, and whether more follows.
 --- Absent means "not scrollable" -- an image, or a file that fits -- and the

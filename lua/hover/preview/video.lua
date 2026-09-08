@@ -230,6 +230,10 @@ local function start_playback(target, opts, probe, on_result)
           from = type(from) == "number" and from or 0,
           duration = probe and probe.duration or nil,
           status_row = #lines - 1,
+          -- `playback.play` starts audio from here, when there is a track to
+          -- start and the reader has not turned it off — see `M.play` for why
+          -- an mpv the file has no sound for is simply never worth starting.
+          path = (opts.video_sound ~= false and probe and probe.has_audio) and target.path or nil,
         },
       })
     end)

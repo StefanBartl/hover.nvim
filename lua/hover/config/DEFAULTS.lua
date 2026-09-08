@@ -478,6 +478,14 @@ return {
     --- draws is decode time and cache bytes spent on nothing.
     ---@type integer|nil
     width = nil,
+
+    --- Whether a played run may start audio, when the file has a track and
+    --- mpv is on PATH. On by default for the same reason `inline_images`
+    --- defaults on: everything this needs degrades to today's silent playback
+    --- by itself (no mpv, no audio track), so there is nothing here that fails
+    --- when this stays `true` and the ingredients are missing.
+    ---@type boolean
+    sound = true,
   },
 
   --- The float on (almost) the whole editor, and back again.

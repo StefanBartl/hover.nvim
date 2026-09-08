@@ -13,7 +13,7 @@ would report the symptom everyone already has.
 | **hover.nvim** | Is `lib.nvim` there, and is it new enough — the one dependency with no fallback |
 | **configuration** | Which mode is set, what `auto_hover` opens by itself, and every switch with its current state |
 | **optional contributors** | Which sibling plugins are installed, what each absent one is not doing, whether a link source is registered at all, and — read back off the registry — every name that registered |
-| **external tools** | `soffice`, `pdftoppm` and `ffmpeg`/`ffprobe` on `PATH`, and *whether they are even needed* |
+| **external tools** | `soffice`, `pdftoppm`, `ffmpeg`/`ffprobe` and `mpv` on `PATH`, and *whether they are even needed* |
 | **declared tools** | The tools declared in [`install.json`](install.json), through `lib.nvim.deps` — why each matters and how to install it on this machine. Absent on an older lib.nvim |
 
 ---
@@ -93,6 +93,11 @@ The same Windows PATH caveat applies once more, in its mildest form: winget and 
 extend the *user* PATH, which a terminal started before the install does not have.
 media.nvim probes both shim directories itself, so it usually finds ffmpeg regardless —
 `:checkhealth media` says which path it will actually run.
+
+`mpv` gets its own line, always `info` and never `warn`: unlike ffmpeg it is not
+required for a played video hover to work at all, only for it to have sound. A missing
+`mpv` means today's silent playback, exactly as before that feature existed —
+`:checkhealth media` has the install command and the `bin.mpv` escape hatch.
 
 **The browser for page screenshots is the one place the report will appear to contradict
 itself, and that is deliberate.** With `:Hover links web shot` on you may see both of

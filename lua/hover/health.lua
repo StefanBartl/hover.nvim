@@ -469,6 +469,17 @@ function M.check()
     health.info("ffmpeg/ffprobe: not on PATH -- media.nvim cannot lift a still out of a video")
   end
 
+  -- Info, not warn, even more so than ffmpeg above: mpv is not needed to play
+  -- a run at all, only to hear it -- `video.sound` degrades to today's silent
+  -- playback by itself, so this is purely a "did you know" line.
+  if vim.fn.executable("mpv") == 1 then
+    health.ok("mpv: on PATH -- a played video hover can have sound")
+  else
+    health.info(
+      "mpv: not on PATH -- a played video hover stays silent (`:checkhealth media` has the detail)"
+    )
+  end
+
   -- The same two tools again, this time out of docs/install.json rather than
   -- by hand -- which is what adds the per-manager install command and the
   -- `:Lib deps install hover.nvim` route. The checks above stay: they carry
