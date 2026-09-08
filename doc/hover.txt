@@ -763,9 +763,20 @@ PLAYING A VIDEO                                              *hover-video-play*
 A video hover opens as a still, because a hover appears when the cursor rested
 somewhere -- a glance, not a request for motion.
 
-    <CR>      play / pause the run
-    .         one frame forward (pausing first)
-    ,         one frame back
+    <CR>      open a real mpv window (video.playback = "window", the
+              default) -- press again, or close the hover, to stop it
+    .         one frame forward (pausing first) -- "inline" playback only
+    ,         one frame back -- "inline" playback only
+
+`video.playback = "window"` (default) sends `<CR>` to a real mpv window
+instead of painting into the float: video and sound, decoded and drawn by mpv
+with no editor redraw in the loop. The float shows a short "playing" panel,
+not a picture. Set `video.playback = "inline"` for the block-graphics
+transport described below, which is genuinely smooth on a terminal fast
+enough for it and needs no separate window; either falls back to the still
+where its own ingredient (mpv, ImageMagick) is missing.
+
+The rest of this section is the "inline" route.
 
 What moves is text: every cell is a coloured block, which collides with no
 terminal graphics protocol and survives every redraw. A real picture cannot be

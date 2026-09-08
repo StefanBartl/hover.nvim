@@ -450,7 +450,11 @@ describe("the video transport", function()
     assert.equals(1, #calls.seek)
 
     playback.play() -- audio already started once; this resumes it in place
-    assert.equals(1, calls.resume)
+    -- Two by now, not one: mpv's own connect already resumed it once, since
+    -- the picture was still "playing" the moment the socket came up and
+    -- leaving mpv paused there would mean no sound until a second toggle.
+    -- This explicit play, after the pause and the step, is the second.
+    assert.equals(2, calls.resume)
     assert.equals(0, calls.started_at) -- still the one start, not a second
 
     playback.stop()

@@ -161,7 +161,11 @@ local function badge_with_summary(target, note)
   if not probe then
     return content
   end
-  local summary = require("media.ui").summary(probe)
+  local ok_ui, ui = pcall(require, "media.ui")
+  if not ok_ui then
+    return content
+  end
+  local summary = ui.summary(probe)
   if summary ~= "" then
     -- Above the note, which is an explanation of why there is no picture and
     -- belongs last.
@@ -214,6 +218,34 @@ function M.playback_cells(probe, opts)
   return max_cols, max_rows
 end
 
+--- Where playing starts, in the file — which is not where the still is taken
+--- from, and conflating the two was a real defect (see `video.play_at` in the
+--- defaults). Public and shared by both playback routes for the same reason
+--- `offset_for` is: two hand-kept copies of this arithmetic is how page 2's
+--- window ends up starting somewhere page 2 is not.
+---
+--- Returns the offset in the form `media.nvim`/mpv accept (a number, or a
+--- percentage string when the duration is unknown) *and* its resolution to
+--- seconds, which is `nil` when it cannot be one — the inline transport needs
+--- the second to roll its window, the window player hands the first to mpv.
+---@param opts Hover.PreviewOpts
+---@param duration number|nil
+---@return number|string play_at
+---@return number|nil from_seconds
+function M.playback_offset(opts, duration)
+  local page = math.max(1, math.floor(opts.page or 1))
+  local play_at = opts.video_play_at
+  if play_at == nil then
+    play_at = 0
+  end
+  -- A *scrubbed* still is a position the reader chose with the paging keys, so
+  -- page 2 onward starts play there rather than at the opening.
+  if page > 1 then
+    play_at = M.offset_for(page, opts.video_at or "10%", opts.video_step or "10%", duration)
+  end
+  return play_at, M.to_seconds(play_at, duration)
+end
+
 ---@internal
 --- Build the playing view: a run of stills sampled into cells, the canvas
 --- lines they are painted onto, and the control row under them.
@@ -244,28 +276,13 @@ local function start_playback(target, opts, probe, on_result)
   local duration = probe and probe.duration or nil
 
   -- **Where the run starts, in seconds — and it is not where the still came
-  -- from.** `video_at` is a thumbnail offset, ten percent in by default so the
-  -- picture is not a fade-in or a distributor's slate. Playing borrowed that
-  -- number, so a nine-minute video began at 0:54 and a two-minute one at 0:14,
-  -- with no way back to the opening. Reported 2026-09-08, and the two settings
-  -- are separate from here on: `video_play_at` is the beginning of the file
-  -- unless configured otherwise.
-  --
-  -- A *scrubbed* still is the exception, and not an inconsistency: page 2
-  -- onward is a position the reader chose with the paging keys, so play starts
-  -- from what is on screen rather than from the top.
-  --
-  -- `nil` means the offset could not be resolved (a percentage of a file that
-  -- reports no duration), and the transport then plays the one window it has.
-  local page = math.max(1, math.floor(opts.page or 1))
-  local play_at = opts.video_play_at
-  if play_at == nil then
-    play_at = 0
-  end
-  if page > 1 then
-    play_at = M.offset_for(page, opts.video_at or "10%", opts.video_step or "10%", duration)
-  end
-  local from_seconds = M.to_seconds(play_at, duration)
+  -- from.** `video_at` is a thumbnail offset; playing starts at `video_play_at`
+  -- (the opening, by default), or at the scrubbed position from page 2 on. The
+  -- arithmetic is `M.playback_offset`, shared with the window player so the two
+  -- cannot drift. `from_seconds` is `nil` when the offset could not be resolved
+  -- (a percentage of a file that reports no duration), and the transport then
+  -- plays the one window it has.
+  local play_at, from_seconds = M.playback_offset(opts, duration)
 
   -- Sized from the canvas when nothing is configured, and from the *geometry*
   -- rather than the cell count: a cell is sampled down to `blocks` sub-pixels
@@ -394,8 +411,31 @@ function M.preview(target, opts, on_result)
 
   -- Playing is asked for, never assumed: a hover appears because a cursor
   -- rested somewhere, which is a glance and not a request for motion. The
-  -- transport key sets `opts.play`, and only then is a run decoded at all.
+  -- transport key sets `opts.play`, and only then is anything decoded or any
+  -- window opened.
   if opts.play then
+    -- **The window route is the default, because the inline one is a
+    -- slideshow where it matters most.** Painting a run of stills into the
+    -- float is the editor's redraw twelve times a second, and on Windows in
+    -- WezTerm that was measured at about one repaint a second however the
+    -- paint was written. `video.playback = "window"` sends `<CR>` to a real
+    -- mpv window instead — mpv decodes and draws it, with no editor redraw in
+    -- the loop. `"inline"` keeps the block-graphics transport for a terminal
+    -- fast enough to enjoy it.
+    if
+      opts.video_playback ~= "inline"
+      and type(media.player_available) == "function"
+      and media.player_available()
+    then
+      local play_at = M.playback_offset(opts, probe and probe.duration or nil)
+      local content = badge_with_summary(target, "▶ playing in an mpv window — <CR> to stop")
+      content.transport = true
+      -- Consumed by `hover.init` once the float is open: it starts the window
+      -- and registers its teardown as the float's `on_close`.
+      content.play_window = { path = target.path, at = play_at }
+      return content
+    end
+
     if start_playback(target, opts, probe, on_result) then
       return vim.tbl_extend(
         "force",
@@ -403,8 +443,8 @@ function M.preview(target, opts, on_result)
         { pending = true }
       )
     end
-    -- Nothing to play with (no media.nvim, no ImageMagick): fall through to
-    -- the still, which is the honest answer and already on screen.
+    -- Nothing to play with (no media.nvim, no ImageMagick, no mpv): fall
+    -- through to the still, which is the honest answer and already on screen.
   end
 
   local page = math.max(1, math.floor(opts.page or 1))
@@ -428,7 +468,10 @@ function M.preview(target, opts, on_result)
     -- over a picture the reader is already looking at is noise. From the second
     -- on, the timestamp is the one thing the picture cannot say about itself.
     if page > 1 then
-      content.title = require("media.ui").duration(type(offset) == "number" and offset or nil)
+      local ok_ui, ui = pcall(require, "media.ui")
+      if ok_ui then
+        content.title = ui.duration(type(offset) == "number" and offset or nil)
+      end
     end
     return content
   end

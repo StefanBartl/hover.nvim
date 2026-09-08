@@ -479,11 +479,37 @@ return {
     ---@type integer|nil
     width = nil,
 
-    --- Whether a played run may start audio, when the file has a track and
-    --- mpv is on PATH. On by default for the same reason `inline_images`
-    --- defaults on: everything this needs degrades to today's silent playback
-    --- by itself (no mpv, no audio track), so there is nothing here that fails
-    --- when this stays `true` and the ingredients are missing.
+    --- What the transport key (`<CR>`) does on a video hover.
+    ---
+    --- **`"window"` — a real mpv window — is the default, and the reason is a
+    --- measurement.** The other mode paints a run of stills into the float
+    --- twelve times a second, and every frame is a namespace clear plus
+    --- hundreds of extmarks; the picture *is* the editor's redraw of a
+    --- float-sized region, and on Windows in WezTerm that was measured at about
+    --- one repaint a second — a slideshow — however the paint was written
+    --- (buffer lines, then extmarks, then overlay virtual text, three attempts,
+    --- same ceiling). A reader on that terminal asked, in as many words, to be
+    --- able to "actually play the video, like a player". So `<CR>` opens mpv on
+    --- the file (from the scrubbed position, if the paging keys moved it):
+    --- video and sound, decoded and drawn by mpv with no editor redraw in the
+    --- loop. The float shows a short "playing" panel; closing the hover — a
+    --- cursor move, `q`, `:qa` — stops the window.
+    ---
+    --- **`"inline"` keeps the block-graphics transport**, which is genuinely
+    --- smooth on a terminal fast enough for it and needs no separate window.
+    --- It falls back to the still where mpv or ImageMagick is missing.
+    ---
+    --- Either way the still and the paging-key scrub through it are unchanged —
+    --- this is only about what "play" means.
+    ---@type "window"|"inline"
+    playback = "window",
+
+    --- Whether an *inline* played run may start audio, when the file has a
+    --- track and mpv is on PATH. On by default for the same reason
+    --- `inline_images` defaults on: everything this needs degrades to silent
+    --- playback by itself (no mpv, no audio track), so there is nothing here
+    --- that fails when it stays `true` and the ingredients are missing. A
+    --- `"window"` playback always has mpv's own sound and ignores this.
     ---@type boolean
     sound = true,
 

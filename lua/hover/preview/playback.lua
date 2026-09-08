@@ -744,9 +744,16 @@ function M.play()
             -- Seeking it forward instead means nothing on screen moves
             -- backwards, and because it was started paused, no sound has been
             -- heard from the wrong place either.
+            --
+            -- Only when the picture actually moved: mpv's socket answering
+            -- fast enough that `now` still equals the offset it was started
+            -- at means there is nothing to catch up on, and seeking anyway is
+            -- a real IPC round trip spent on a no-op.
             local now = state.from + (state.index - 1) / state.fps
-            state.audio_catch_up = now
-            pcall(handle.seek, now)
+            if now > at then
+              state.audio_catch_up = now
+              pcall(handle.seek, now)
+            end
             pcall(handle.resume)
           else
             pcall(handle.pause)
