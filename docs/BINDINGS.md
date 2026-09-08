@@ -265,7 +265,7 @@ first time they are needed.
 | `HoverDismiss` | `CursorMoved`, `CursorMovedI`, `InsertEnter`, `BufLeave`, `WinScrolled` | global, `once` | close the float that is open. `CursorMoved` alone would not do: leaving insert or switching windows must clear it too, or a stale float outlives what it described |
 | `HoverMedia` | `VimLeavePre` | global, once per session | delete the PNGs rasterized from PDF pages |
 | `HoverPersist` | `VimLeavePre` | global, once per session | write `mode`, `auto_hover` and every switch to disk, when `persist` is on |
-| `HoverPlayback` | `VimLeavePre` | global, once per session | stop the audio-only mpv an **inline** played video hover started — a float torn down by `:qa` never runs its own `on_close`. A `"window"` playback's mpv is not this: `media.core.player` keeps its own `VimLeavePre` backstop for that, inside media.nvim |
+| `HoverPlayback` | `VimLeavePre` | global, once per session | stop the audio-only mpv an **inline** played video hover started — a float torn down by `:qa` never runs its own `on_close`. A `"window"` playback's mpv is not this: `media.core.player` keeps its own `VimLeavePre` backstop for that, inside media.nvim. Without mpv at all, `<CR>` hands the file to the system's own player (`preview.external`) instead, and there is no backstop for that one anywhere — nothing here ever held a process to stop, on `:qa` or otherwise, so there is nothing a `VimLeavePre` could reach for either |
 
 Three rules decide whether a per-buffer group is created at all:
 

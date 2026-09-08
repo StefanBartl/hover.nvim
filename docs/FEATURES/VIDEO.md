@@ -84,7 +84,8 @@ moment.
 | --- | --- | --- |
 | `video.at` | `"10%"` | where the first still comes from |
 | `video.step` | `"10%"` | how far one key press moves |
-| `video.playback` | `"window"` | what the transport key does -- a real mpv window, or `"inline"` block graphics -- see below |
+| `video.playback` | `"window"` | what the transport key does -- a real mpv window, or without mpv the system's own player, or `"inline"` block graphics -- see below |
+| `video.system_player_align` | `false` | experimental: best-effort centre the system player's window when there is no mpv window -- see below |
 | `video.play_at` | `0` | where *playing* starts -- see below |
 | `video.play_scale` | `2.5` | how much larger the playing canvas is than the still's budget (how *fine* each cell is, is images.nvim's `cells`) -- `"inline"` only |
 
@@ -134,6 +135,48 @@ teardown at all. Playback starts from the scrubbed position exactly as the
 route below does — `video.playback_offset` is the one function both share, so
 the two cannot drift apart the way two hand-kept copies of that arithmetic
 once did.
+
+**Without mpv, `"window"` still beats a muted run of block graphics.**
+`preview.external` hands the file to `media.play()` instead — a configured
+player, or whatever this machine already opens a video with, the same call
+`gf` already makes for "open externally". Real video and sound, nothing extra
+to install, at a real cost: nothing here holds a process to kill the way
+`preview.window` holds mpv's, since `media.play()` on Windows hands off
+through `explorer.exe`, which dispatches to the registered app and exits
+itself almost at once. `<CR>` a second time only drops the float back to the
+still; the player keeps running until its own window is closed by hand,
+exactly as it would have if opened with `gf` in the first place. A resize (or
+any other re-render while the hover stays open) must not spawn a second copy
+of the same file — `preview.external` tracks the last path it handed off and
+treats a repeat for the same path as a no-op, since it has no handle to close
+first the way the window tier's `M.open` does.
+
+**`video.system_player_align` (default `false`, experimental) reaches for the
+same "centred, like mpv" feel from outside a process this plugin does not
+own.** There is no `--geometry` to pass a system player the way
+`media.core.player` passes mpv one, so the only way left is to watch for the
+window that appears right after the hand-off and move it. `preview.
+align_win` does this on all three platforms, and is honest that it can fail
+silently on each:
+
+- **Windows** moves a classic window (VLC, MPC-HC) cleanly with
+  `SetWindowPos`. The stock handler for a video, "Films & TV", is a UWP app
+  running inside a shared `ApplicationFrameHost.exe` container, and that
+  container's window has historically ignored being moved from outside it —
+  measured true on the machine this shipped from.
+- **macOS** drives `System Events` over `osascript`, which can move most
+  apps' windows once the terminal running Neovim has Accessibility
+  permission (System Settings → Privacy & Security → Accessibility). Without
+  it, every `tell` answers nothing, not an error.
+- **Linux** prefers `xdotool` (search, geometry, move and activate in one
+  tool), falling back to the cruder `wmctrl` (can move a window, cannot query
+  its size, so it lands at a fixed offset rather than a true centre). Neither
+  can move anything under Wayland, by that compositor's own security model —
+  there is no escape hatch, only silence.
+
+None of the three ever reports failure. Each writes a disposable script to
+`stdpath("cache")` and runs it hidden: centres the window when it can, and
+changes nothing from the plain fallback above when it cannot.
 
 Everything from here describes `video.playback = "inline"`: it decodes a
 short run with `media.frames()`,

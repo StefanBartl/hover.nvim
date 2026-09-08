@@ -675,6 +675,19 @@ local function present(content)
     end
   end
 
+  -- No mpv window, but a real player still opened for this file, in whatever
+  -- the system already plays it with: `preview.video` already made the call
+  -- and checked it worked, so this only wires the teardown -- a later hover
+  -- (a different file, or the same one after this float closed) gets a fresh
+  -- hand-off rather than `preview.external`'s own idempotency guard treating
+  -- it as the same request forever.
+  if content.play_external then
+    local external = require("hover.preview.external")
+    if external.open(content.play_external) then
+      float.set_on_close(external.reset)
+    end
+  end
+
   -- An image target draws over the float it just opened.
   if content.image_path then
     local win = float.win()
@@ -2160,6 +2173,20 @@ function M.play_toggle()
   local window = require("hover.preview.window")
   if window.is_active() then
     window.close()
+    if _open and _open.target then
+      _open.play = false
+      rerender(_open, _open.target)
+    end
+    return
+  end
+
+  -- A real player opened for this file, outside of anything hover.nvim
+  -- holds a handle to: `<CR>` cannot stop it, only drop the hover back to
+  -- the still, exactly as `q` or a cursor move already would. The player
+  -- itself keeps running until its own window is closed by hand.
+  local external = require("hover.preview.external")
+  if external.is_open() then
+    external.reset()
     if _open and _open.target then
       _open.play = false
       rerender(_open, _open.target)

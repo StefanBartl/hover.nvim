@@ -95,10 +95,12 @@ media.nvim probes both shim directories itself, so it usually finds ffmpeg regar
 `:checkhealth media` says which path it will actually run.
 
 `mpv` gets its own line, always `info` and never `warn`, and what a missing one costs
-depends on `video.playback`. With the default, `"window"`, `<CR>` on a video hover *is*
-mpv — missing it falls back to block graphics (`"inline"`) or, without ImageMagick either,
-the still. With `video.playback = "inline"` set explicitly, mpv is only for sound, and a
-missing one means today's silent playback, exactly as before the window player existed.
+depends on `video.playback`. With the default, `"window"`, `<CR>` on a video hover falls
+back to whatever this machine already plays a video with (real video and sound, no extra
+install), then to block graphics (`"inline"`) if that fails too, then to the still if
+ImageMagick is also missing. With `video.playback = "inline"` set explicitly, mpv is only
+for sound, and a missing one means today's silent playback, exactly as before the window
+player existed.
 Either way `:checkhealth media` has the install command and the `bin.mpv` escape hatch.
 
 **The browser for page screenshots is the one place the report will appear to contradict

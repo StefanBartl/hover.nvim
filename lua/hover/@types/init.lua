@@ -135,8 +135,9 @@
 ---@field at? number|string # Offset of the first still. Default "10%".
 ---@field step? number|string # Offset a paging key adds. Default "10%".
 ---@field width? integer # Render width in pixels. Default nil (media.nvim decides).
----@field playback? "window"|"inline" # What the transport key does. Default "window" -- a real mpv window; "inline" paints a run of stills into the float.
----@field sound? boolean # Start audio alongside an inline played run. Default true. (A window always has mpv's own sound.)
+---@field playback? "window"|"inline" # What the transport key does. Default "window" -- a real mpv window, or without mpv the system's own player; "inline" paints a run of stills into the float instead of either.
+---@field system_player_align? boolean # Experimental, Windows only: best-effort centre the window the system player (not mpv) opens. Default false; can silently do nothing -- see `preview.align_win`.
+---@field sound? boolean # Start audio alongside an inline played run. Default true. (A window always has its player's own sound.)
 ---@field play_at? number|string # Where playing starts, as opposed to where the still is taken. Default 0 -- the beginning of the file.
 ---@field play_scale? number # How much larger the playing canvas is than the still's budget, capped to the editor. Default 1.75; 1 is the still's own size.
 ---@field fps? number # Stills per second in a played run. Default 12.
@@ -336,7 +337,8 @@
 ---@field video_at? number|string # Where the first still of a video comes from: seconds, a percentage, or an ffmpeg timestamp.
 ---@field video_step? number|string # How far one paging key moves through a video.
 ---@field video_width? integer # Width the still is rendered at; nil leaves the choice to media.nvim.
----@field video_playback? "window"|"inline" # What the transport key does: `"window"` (default) opens a real mpv window, `"inline"` paints a run of stills into the float.
+---@field video_playback? "window"|"inline" # What the transport key does: `"window"` (default) opens a real mpv window, or without mpv hands the file to the system's own player; `"inline"` paints a run of stills into the float instead of either.
+---@field video_system_player_align? boolean # Experimental, Windows only: best-effort attempt to centre whatever window the system player opens, when there is no mpv window to fall back on. Default false; silently does nothing when it cannot (see `preview.align_win`).
 ---@field video_play_at? number|string # Where a played run starts. Default 0; the still's own `video_at` is a thumbnail offset and deliberately not this.
 ---@field video_play_scale? number # Multiplier on the preview budget for the playing canvas, capped to the editor's rows and columns.
 ---@field play? boolean # Build the playing view (a decoded run) instead of the still. Set by the transport key, never by configuration.
@@ -376,6 +378,7 @@
 ---@field transport? boolean # This content has a time axis and can be played; drives the `transport_keys`. A marker only — pressing the key is what decodes anything.
 ---@field playback? Hover.Playback # A decoded run to paint into the float once it is open. Present only on the inline playing view.
 ---@field play_window? Hover.PlayWindow # Open a real mpv window for this file once the float is open, and tie its lifetime to the float. Present only on the windowed playing view.
+---@field play_external? string # Path already handed to the system's own player (no mpv window available); this only wires the float's `on_close` to `preview.external.reset`, since `preview.video` already made the call and checked it worked.
 ---@field pending? boolean # Provisional; an async result replaces it (and it is not cached).
 
 --- What `hover.init` needs to open a windowed player: the file, and where in it

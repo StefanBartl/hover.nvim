@@ -436,6 +436,34 @@ function M.preview(target, opts, on_result)
       return content
     end
 
+    -- **Still not "inline", but no mpv window either: a real player beats a
+    -- muted run of block graphics.** The same `media.play()` `gf` already
+    -- uses for "open externally" -- nothing to install beyond what already
+    -- opens this file by hand. Called here, synchronously, rather than
+    -- deferred to `hover.init` the way `play_window` is: there is no
+    -- `player_available()`-style pre-check for this route, so whether it
+    -- actually opened anything is only known by trying, and the badge below
+    -- must not claim "playing" over nothing. `preview.external`'s own doc
+    -- has the rest -- why nothing here can stop it, and why a resize does
+    -- not open a second copy.
+    if opts.video_playback ~= "inline" then
+      local ok_ext, external = pcall(require, "hover.preview.external")
+      if
+        ok_ext
+        and external.open(target.path, { align = opts.video_system_player_align == true })
+      then
+        local content =
+          badge_with_summary(target, "▶ handed to your system's video player — <CR> to dismiss")
+        content.transport = true
+        -- Consumed by `hover.init`: registers the float's `on_close` so a
+        -- later hover, or a later video, gets a fresh hand-off rather than
+        -- the no-op this path's own idempotency guard would otherwise give
+        -- it forever.
+        content.play_external = target.path
+        return content
+      end
+    end
+
     if start_playback(target, opts, probe, on_result) then
       return vim.tbl_extend(
         "force",
