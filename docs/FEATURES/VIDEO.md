@@ -164,6 +164,19 @@ painted frame against 8.32 ms — very nearly free. Sextants are the default
 there; `:checkhealth images` prints a row of each geometry, because whether a
 terminal draws Unicode 13 block characters is not something Neovim can ask it.
 
+**The picture runs on a local clock that mpv corrects, not on mpv itself.**
+Until 2026-09-08 the transport asked mpv for its position once per painted
+frame and skipped the tick while an answer was outstanding, which made the IPC
+round trip a hard ceiling on the frame rate. Measured against a stub with a
+known latency: 0 ms gives 11.3 fps, 80 ms gives 11.0, **150 ms gives 5.7 and
+300 ms gives 3.0**. A real round trip averages 9.5 ms here but was measured at
+377, and every two seconds playback starts an ffmpeg and an ImageMagick for the
+next window — so the spikes are not rare, and a reader reported 1-2 frames per
+second with the sound running a second ahead of the picture. Now the frame to
+draw comes from `uv.hrtime`, corrected against mpv four times a second: sound
+still leads, because every correction moves the picture to wherever mpv
+actually is, but a paint never waits for an answer.
+
 **Sound joins automatically when there is something to play it with.** If
 the file has an audio track and [mpv](https://mpv.io) is on PATH,
 `media.audio()` starts it alongside the run — no separate opt-in beyond

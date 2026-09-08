@@ -276,6 +276,88 @@ describe("the video transport", function()
     vim.api.nvim_buf_delete(buf, { force = true })
   end)
 
+  it("paints from a local clock, not once per mpv round trip", function()
+    if not blocks_ok then
+      return
+    end
+    -- **The frame rate must not hang off the IPC latency.** The transport
+    -- used to ask mpv for `time-pos` once per painted frame and skip the tick
+    -- while an answer was outstanding, which made the round trip a hard
+    -- ceiling: measured against a stub, 0 ms gave 11.3 fps, 150 ms gave 5.7
+    -- and 300 ms gave 3.0. A real round trip averages 9.5 ms here but was
+    -- measured at 377, and every two seconds playback runs an ffmpeg and an
+    -- ImageMagick for the next window -- so the spikes are not rare, and a
+    -- reader reported 1-2 frames per second.
+    --
+    -- Asserted as a *ratio* rather than as a frame rate, because a frame rate
+    -- in a spec measures the machine it runs on. What matters is that asking
+    -- and painting have come apart.
+    local cols, rows, frames = 20, 4, 24
+    local buf, raw = fixture(cols, rows, frames)
+    local asks = 0
+    local saved = package.loaded["media.core.audio"]
+    package.loaded["media.core.audio"] = {
+      available = function()
+        return true
+      end,
+      start = function(_, _, cb)
+        local began = vim.uv.hrtime()
+        cb({
+          pause = function() end,
+          resume = function() end,
+          seek = function() end,
+          stop = function() end,
+          time_pos = function(callback)
+            asks = asks + 1
+            -- Answered late, the way a loaded machine answers.
+            vim.defer_fn(function()
+              callback((vim.uv.hrtime() - began) / 1e9)
+            end, 120)
+          end,
+        })
+      end,
+    }
+
+    local painted = 0
+    local real_paint = blocks.paint
+    blocks.paint = function(...)
+      painted = painted + 1
+      return real_paint(...)
+    end
+
+    playback.load({
+      buf = buf,
+      raw = raw,
+      frames = frames,
+      cols = cols,
+      rows = rows,
+      fps = 12,
+      from = 0,
+      duration = 600,
+      status_row = rows,
+      path = "/does/not/exist.mp4",
+      request = function(_, cb)
+        cb({ raw = raw, frames = frames })
+      end,
+    })
+    painted = 0
+    playback.play()
+    vim.wait(1000, function()
+      return false
+    end, 20)
+    playback.pause()
+
+    blocks.paint = real_paint
+    package.loaded["media.core.audio"] = saved
+
+    assert.is_true(painted > 6, ("only %d frames in a second"):format(painted))
+    assert.is_true(
+      asks < painted,
+      ("%d asks for %d frames: the clock is still one round trip per frame"):format(asks, painted)
+    )
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
   it("stops cleanly, and stopping twice is not an error", function()
     if not blocks_ok then
       return
