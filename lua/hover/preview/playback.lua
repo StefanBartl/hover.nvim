@@ -78,7 +78,7 @@ local M = {}
 --- boundaries: the position asked for while its window is still decoding, the
 --- "a decode is already in flight" guard, and the newest place asked for. See
 --- `scrub_to`.
----@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer, gen: integer, path: string|nil, audio: Media.Audio.Handle|nil, audio_starting: boolean, audio_pending: boolean, clock_pos: number|nil, clock_at: integer, synced_at: integer, syncing: boolean, request: (fun(from: number, cb: fun(run: Hover.Playback.Run|nil, err: string|nil)): nil)|nil, next_run: Hover.Playback.Run|nil, requesting: boolean, exhausted: boolean, seeking_to: number|nil, scrubbing: boolean, scrub_target: number }|nil
+---@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer, gen: integer, path: string|nil, audio: Media.Audio.Handle|nil, audio_starting: boolean, audio_pending: boolean, audio_catch_up: number|nil, clock_pos: number|nil, clock_at: integer, synced_at: integer, syncing: boolean, request: (fun(from: number, cb: fun(run: Hover.Playback.Run|nil, err: string|nil)): nil)|nil, next_run: Hover.Playback.Run|nil, requesting: boolean, exhausted: boolean, seeking_to: number|nil, scrubbing: boolean, scrub_target: number }|nil
 local state = nil
 
 --- Bumped by every `load()`, never by anything else — the one source of
@@ -435,6 +435,21 @@ local function advance(pos)
     return
   end
   if pos then
+    -- **A seek is not instant, and its first replies are stale.** mpv keeps
+    -- reporting the position it is leaving for a tick or two after `seek`, and
+    -- taking those at face value paints the frames the seek was issued to skip
+    -- — a visible stutter backwards at the exact moment the sound joins.
+    -- Waiting until the reported position reaches the target costs at most a
+    -- couple of frames and removes it. The tolerance is one frame: mpv seeks to
+    -- a keyframe, which can land marginally short of what was asked for, and an
+    -- exact comparison would wait forever.
+    if state.audio_catch_up then
+      if pos < state.audio_catch_up - 1 / state.fps then
+        return
+      end
+      state.audio_catch_up = nil
+    end
+
     local idx = math.floor((pos - state.from) * state.fps) + 1
     if idx >= state.frames then
       -- The sound has run past the decoded window. With the next one in hand
@@ -497,6 +512,7 @@ function M.load(spec)
     audio = nil,
     audio_starting = false,
     audio_pending = false,
+    audio_catch_up = nil,
     -- The local clock has nothing to run from until mpv answers once; until
     -- then `advance(nil)` counts frames, exactly as a run without sound does.
     clock_pos = nil,
@@ -701,7 +717,8 @@ function M.play()
       state.audio_starting = false
     else
       hook_cleanup()
-      audio.start(state.path, { at = at }, function(handle)
+      -- Paused, because the picture does not wait for it: see the callback.
+      audio.start(state.path, { at = at, paused = true }, function(handle)
         -- The run this was asked for may already be gone, or a later one
         -- loaded in its place — either way `gen` no longer matches, and an
         -- mpv nobody will stop or draw against is stopped right here instead.
@@ -714,7 +731,24 @@ function M.play()
         state.audio_starting = false
         if handle then
           state.audio = handle
-          if not state.playing then
+          if state.playing then
+            -- **The picture kept moving while mpv was starting, so mpv joins
+            -- it rather than the other way round.** mpv takes about a second
+            -- to answer its socket; the transport paints from frame one
+            -- immediately, so by now the picture is a second further on than
+            -- the offset mpv was told to start at. Letting mpv's clock take
+            -- over unadjusted dragged the picture back to where play was
+            -- pressed — reported as "the sound comes in and the video starts
+            -- from the beginning again".
+            --
+            -- Seeking it forward instead means nothing on screen moves
+            -- backwards, and because it was started paused, no sound has been
+            -- heard from the wrong place either.
+            local now = state.from + (state.index - 1) / state.fps
+            state.audio_catch_up = now
+            pcall(handle.seek, now)
+            pcall(handle.resume)
+          else
             pcall(handle.pause)
           end
         end
