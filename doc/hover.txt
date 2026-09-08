@@ -772,6 +772,11 @@ terminal graphics protocol and survives every redraw. A real picture cannot be
 animated from inside Neovim -- docs/FEATURES/VIDEO.md carries the three
 measurements behind that.
 
+Sharpness is two settings. `video.play_scale` decides how many cells the
+picture gets; images.nvim's `display.ascii_fallback.cells` decides how finely
+each cell is divided -- 2x3 sub-pixels by default (sextants), against the 1x2
+of a half block. `:checkhealth images` prints a row of each geometry.
+
 Sound joins by itself when the file has an audio track and mpv is on PATH. The
 picture then follows mpv's clock rather than counting its own frames, so it
 cannot drift: each paint asks mpv where it is and shows the frame belonging

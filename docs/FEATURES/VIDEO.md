@@ -80,7 +80,7 @@ moment.
 | `video.at` | `"10%"` | where the first still comes from |
 | `video.step` | `"10%"` | how far one key press moves |
 | `video.play_at` | `0` | where *playing* starts -- see below |
-| `video.play_scale` | `1.75` | how much larger the playing canvas is than the still's budget |
+| `video.play_scale` | `1.75` | how much larger the playing canvas is than the still's budget (how *fine* each cell is, is images.nvim's `cells`) |
 
 **`at` and `step` are both percentages, and that is the design.** Ten presses walk any file end
 to end: a ten-second clip and a two-hour feature both get ten stills spread
@@ -142,8 +142,8 @@ read as reloading rather than as a position, and a second, contradictory answer
 to the question the clock beside it (`0:55 / 9:05`) already answers. Without a
 duration to measure against, the window is all there is and the bar says so.
 
-**How sharp it is, is `video.play_scale`.** A cell carries two pixel rows (the
-half block `▀`), so the still's 20-line budget is a picture 38 pixels tall.
+**How sharp it is, is two settings.** A cell carries two pixel rows with a half
+block (`▀`), so the still's 20-line budget is a picture 38 pixels tall.
 Measured 2026-09-08, per window of 24 stills: 78x19 cells sampled in 168 ms and
 painted in 6.4 ms; 140x36 — nearly four times the picture — sampled in 184 ms
 and painted in 6.4 ms. ImageMagick's startup dominates one and extmark count
@@ -153,6 +153,16 @@ columns -- the box, because the float and the canvas are both derived from it
 and have to agree. Scaling only the canvas wrapped every row onto two and
 pushed the control row off the bottom, silently; `hover.box()` is the one place
 that number lives, and it already reconciles zen and resize there.
+
+That is the first of the two; the second is how finely each of those cells is
+divided, which belongs to images.nvim (`display.ascii_fallback.cells`). A cell
+holds two colours whatever character is in it — the terminal decides that — but
+a half block can only place them top and bottom, while a sextant divides the
+cell into six and keeps the diagonal edges. The same 113x32 canvas is a 113x64
+picture with half blocks and a **226x96** one with sextants, at 8.03 ms per
+painted frame against 8.32 ms — very nearly free. Sextants are the default
+there; `:checkhealth images` prints a row of each geometry, because whether a
+terminal draws Unicode 13 block characters is not something Neovim can ask it.
 
 **Sound joins automatically when there is something to play it with.** If
 the file has an audio track and [mpv](https://mpv.io) is on PATH,

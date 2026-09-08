@@ -152,16 +152,23 @@ on the same key, which reports "Recursion detected" and leaves the leader
 broken. `]` and `[` are prefixes, so `]d`, `[q` and every other bracket motion
 stop existing while a float is up, without announcing it.
 
-What moves is text — one `▀` per cell, the upper half block, carrying one
-colour in its top half and another in its bottom, so a text row shows two pixel
-rows. It collides with no terminal graphics protocol and survives every redraw,
-unlike the still, which is an OSC 1337 payload Neovim paints over. The timer
-only rewrites highlights, never the float, because re-rendering at 12 fps would
-be a strobe.
+What moves is text — a block character per cell, carrying two colours, so one
+text row shows several pixel rows. It collides with no terminal graphics
+protocol and survives every redraw, unlike the still, which is an OSC 1337
+payload Neovim paints over. The timer never re-renders the float, because
+doing that at 12 fps would be a strobe.
 
-That half block is also why `video.play_scale` exists. Two pixel rows per cell
-means the still's 20-line budget is a picture 38 pixels tall, which is what
-"very pixelated" means when someone reports it. Measured 2026-09-08 per window
+How finely a cell is divided is `images.nvim`'s
+`display.ascii_fallback.cells`, and it is the second half of the sharpness
+answer: a half block (`▀`) divides a cell into two, a sextant into six, so the
+same 113x32 canvas is a 113x64 picture or a 226x96 one. Measured at 8.03 ms
+per painted frame with sextants against 8.32 ms with half blocks — the finer
+geometry is very nearly free. `:checkhealth images` prints a row of each so a
+terminal that cannot draw them says so.
+
+The cell geometry is also why `video.play_scale` exists. Two pixel rows per
+cell means the still's 20-line budget is a picture 38 pixels tall, which is
+what "very pixelated" means when someone reports it. Measured 2026-09-08 per window
 of 24 stills: **78x19 cells sampled in 168 ms and painted in 6.4 ms; 140x36 —
 nearly four times the picture — sampled in 184 ms and painted in 6.4 ms.**
 ImageMagick's startup dominates the sampling and the paint is extmarks, so the

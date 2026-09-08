@@ -200,11 +200,16 @@ function M.playback_cells(probe, opts)
   local max_cols = math.max(16, (opts.max_width or 80) - 2)
   local max_rows = math.max(6, (opts.max_lines or 24) - 2)
 
-  local ok_scale, scale = pcall(require, "images.scale")
-  if ok_scale and probe and probe.width and probe.height then
-    local cols, rows =
-      scale.fit_cells(max_cols, max_rows, { width = probe.width, height = probe.height })
-    return cols, rows
+  -- **`blocks.fit_cells`, not `images.scale.fit_cells`.** They answer
+  -- different questions and `blocks` says so in as many words: `scale`'s
+  -- assumes one pixel per cell and corrects for a cell being twice as tall as
+  -- it is wide, while a block cell holds its own sub-pixel grid and the fit is
+  -- a plain aspect fit against it. Using `scale`'s here squashes the picture
+  -- vertically -- `images.ascii`, the other consumer of this module, has
+  -- always called the right one.
+  local ok_blocks, blocks = pcall(require, "images.blocks")
+  if ok_blocks and probe and probe.width and probe.height then
+    return blocks.fit_cells(max_cols, max_rows, { width = probe.width, height = probe.height })
   end
   return max_cols, max_rows
 end
@@ -262,13 +267,18 @@ local function start_playback(target, opts, probe, on_result)
   end
   local from_seconds = M.to_seconds(play_at, duration)
 
-  -- Sized from the canvas when nothing is configured: a still is sampled down
-  -- to `cols` pixels across, and decoding much more than twice that is decode
-  -- time and cache bytes spent on detail the downsample averages away — while
-  -- decoding *less* than the canvas is the pixelation the larger canvas exists
-  -- to remove. media.nvim's own default is the floor, so a small float does
-  -- not end up with a smaller source than it had before.
-  local run_width = opts.video_run_width or math.max(320, cols * 2)
+  -- Sized from the canvas when nothing is configured, and from the *geometry*
+  -- rather than the cell count: a cell is sampled down to `blocks` sub-pixels
+  -- across, which is one pixel per cell with half blocks and two with
+  -- sextants. Twice that, so the downsample has something to average — below
+  -- it the decode is the limit and the finer geometry buys nothing; far above
+  -- it is decode time and cache bytes spent on detail that is averaged away.
+  -- media.nvim's own default is the floor, so a small float never ends up with
+  -- a smaller source than it had before.
+  -- `blocks` is already in hand here (the caller checked it before starting a
+  -- run), so this reads the geometry off it rather than requiring it again.
+  local subpixels = type(blocks.geometry) == "function" and blocks.geometry().cols or 2
+  local run_width = opts.video_run_width or math.max(320, cols * subpixels * 2)
 
   --- Decode one window and sample it into cells.
   ---

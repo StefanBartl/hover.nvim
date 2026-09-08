@@ -56,10 +56,10 @@ local function fixture(cols, rows, n)
   local parts = {}
   for i = 1, n do
     local shade = string.char(math.min(255, i * 10), 0, 255 - math.min(255, i * 10))
-    -- Two pixel rows per text row: the half block is what doubles the
-    -- vertical resolution, and a payload built for one row per cell is half
-    -- a frame short -- which `paint` correctly refuses.
-    parts[#parts + 1] = shade:rep(cols * rows * blocks.ROWS_PER_CELL)
+    -- `frame_bytes`, never a sub-pixel count of this spec's own: a cell holds
+    -- two sub-pixels with half blocks and six with sextants, and a payload
+    -- built for the wrong one is short -- which `paint` correctly refuses.
+    parts[#parts + 1] = shade:rep(blocks.frame_bytes(cols, rows) / 3)
   end
   return buf, table.concat(parts)
 end
