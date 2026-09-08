@@ -463,6 +463,15 @@ local function build(target, bufnr, opts, emit)
     build_async(function(on_result)
       return require("hover.preview.office").preview(target, opts, on_result)
     end, emit)
+  elseif target.type == "video" then
+    -- Same shape as the office branch, and a cheaper one: a frame is a
+    -- keyframe seek rather than a LibreOffice start, so this needs no opt-in
+    -- switch of its own. What it does share is the deferral -- the first still
+    -- of a file is a process, and the reader should not wait on it in the
+    -- foreground.
+    build_async(function(on_result)
+      return require("hover.preview.video").preview(target, opts, on_result)
+    end, emit)
   elseif target.type == "git" then
     build_async(function(on_result)
       return require("hover.preview.git").preview(target, opts, on_result, bufnr)
@@ -576,7 +585,7 @@ local function present(content)
   -- scroll during that moment would otherwise take the by-lines branch.
   if _open then
     local t = _open.target
-    _open.paged = (t and (t.type == "pdf" or t.type == "office")) == true
+    _open.paged = (t and (t.type == "pdf" or t.type == "office" or t.type == "video")) == true
       or (content.scroll ~= nil and content.scroll.page ~= nil)
       or nil
   end

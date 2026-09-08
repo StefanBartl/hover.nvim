@@ -47,6 +47,22 @@
         "scoop": "poppler",
         "choco": "poppler"
       }
+    },
+    {
+      "bin": "ffmpeg",
+      "required": false,
+      "why": "Lifts a still out of a video under the cursor, so a .mp4 shows a frame in the hover window instead of a size in bytes — and the paging keys then step through the file. Reached through media.nvim, which also needs ffprobe from the same install to read the duration a percentage offset is taken of; both come from one package. On Windows, winget and scoop extend the *user* PATH, which a terminal started before the install does not have — media.nvim probes both shim directories itself, and `:checkhealth media` says what it found.",
+      "pkg": {
+        "apt": "ffmpeg",
+        "dnf": "ffmpeg",
+        "pacman": "ffmpeg",
+        "zypper": "ffmpeg",
+        "apk": "ffmpeg",
+        "brew": "ffmpeg",
+        "winget": "Gyan.FFmpeg",
+        "scoop": "ffmpeg",
+        "choco": "ffmpeg"
+      }
     }
   ]
 }

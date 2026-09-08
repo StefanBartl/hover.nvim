@@ -25,6 +25,7 @@ local M = {}
 ---@class Hover.Format
 ---@field label string # Human name for the badge's first line.
 ---@field office? boolean # Convertible to PDF by LibreOffice, and therefore previewable page by page.
+---@field video? boolean # Holds moving picture, and therefore has a frame ffmpeg can lift out of it.
 
 ---@type table<string, Hover.Format>
 local FORMATS = {
@@ -87,11 +88,29 @@ local FORMATS = {
   ogg = { label = "Ogg audio" },
   opus = { label = "Opus audio" },
   m4a = { label = "AAC audio" },
-  mp4 = { label = "MP4 video" },
-  mkv = { label = "Matroska video" },
-  mov = { label = "QuickTime video" },
-  avi = { label = "AVI video" },
-  webm = { label = "WebM video" },
+  -- `video = true` is what routes these to `preview.video` instead of the
+  -- generic badge — the second group with another answer available: media.nvim
+  -- lifts a frame out with ffmpeg, and a frame is something this hover can
+  -- actually show. The list is the containers ffmpeg reads *and* people put
+  -- video in; `.ogg` stays audio-only above because in practice it is, and a
+  -- false claim here costs the reader their badge and gives back an error.
+  mp4 = { label = "MP4 video", video = true },
+  m4v = { label = "MPEG-4 video", video = true },
+  mkv = { label = "Matroska video", video = true },
+  mov = { label = "QuickTime video", video = true },
+  avi = { label = "AVI video", video = true },
+  webm = { label = "WebM video", video = true },
+  wmv = { label = "Windows Media video", video = true },
+  flv = { label = "Flash video", video = true },
+  mpg = { label = "MPEG video", video = true },
+  mpeg = { label = "MPEG video", video = true },
+  -- `.ts` and `.mts` are deliberately absent. They are MPEG transport streams
+  -- and they are TypeScript, and in an editor the second reading wins by
+  -- orders of magnitude — claiming them would send every TypeScript file in a
+  -- project to ffmpeg. `.m2ts` is unambiguous and stays.
+  m2ts = { label = "Blu-ray transport stream", video = true },
+  ogv = { label = "Ogg video", video = true },
+  ["3gp"] = { label = "3GPP video", video = true },
 
   -- ── Fonts ─────────────────────────────────────────────────────────────
   ttf = { label = "TrueType font" },
@@ -135,6 +154,15 @@ end
 function M.is_office(ext)
   local format = M.of(ext)
   return format ~= nil and format.office == true
+end
+
+--- Whether `ext` names a video — the other group that can become a picture,
+--- here by way of a frame rather than a page.
+---@param ext string|nil
+---@return boolean
+function M.is_video(ext)
+  local format = M.of(ext)
+  return format ~= nil and format.video == true
 end
 
 return M

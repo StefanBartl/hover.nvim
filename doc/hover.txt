@@ -53,6 +53,9 @@ the hover falls back to without it (-): >
   pdfport.nvim   + rasterizes a PDF page; converts an office document
                  - a PDF shows its size; an office file shows a badge
 
+  media.nvim     + lifts a still out of a video (ffmpeg + ffprobe)
+                 - a video shows its size, not a frame from it
+
   gopath.nvim    + resolves truncated paths and :line:col suffixes
                  - ordinary paths still resolve, truncated ones do not
 <
@@ -604,6 +607,10 @@ worth asserting.
     -- `cache_days` is how long a converted PDF may sit in the cache before
     -- the next session sweeps it; 0 keeps nothing between sessions.
     office = { convert = false, timeout_ms = 60000, cache_days = 7 },
+    -- `at` and `step` take seconds, a percentage of the running time, or
+    -- an ffmpeg timestamp. Percentages mean ten presses of the paging key
+    -- walk any file end to end, whatever its length.
+    video = { at = "10%", step = "10%", width = nil },
     -- `pin` is on because the float is not focusable and its dismissal hangs
     -- on CursorMoved: unpinned, a full-screen hover closes on the first `j`.
     zen = { pin = true },
@@ -760,8 +767,8 @@ Re-registering under the same name REPLACES that plugin's contribution, so a
 setup() running twice does not leave two copies firing on every hover. A
 source that throws is skipped and the next one still runs.
 
-Target types a preview can claim: image, pdf, office, markdown, file,
-directory, url, anchor, missing, git. Returning nil declines, and the
+Target types a preview can claim: image, pdf, office, video, markdown,
+file, directory, url, anchor, missing, git. Returning nil declines, and the
 built-in preview runs instead.
 
                                                              *hover-contribute*

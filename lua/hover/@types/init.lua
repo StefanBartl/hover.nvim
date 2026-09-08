@@ -44,6 +44,7 @@
 ---@field positions? boolean # Whether a registered position preview may open a float. Default true.
 ---@field paths? Hover.PathsConfig
 ---@field office? Hover.OfficeConfig
+---@field video? Hover.VideoConfig
 ---@field zen? Hover.ZenConfig
 ---@field scroll_keys? Hover.ScrollKeys
 ---@field resize_keys? Hover.ResizeKeys
@@ -129,6 +130,11 @@
 
 ---@class Hover.OfficeConfig
 ---@field convert? boolean # Default false. `:Hover office on`.
+
+---@class Hover.VideoConfig
+---@field at? number|string # Offset of the first still. Default "10%".
+---@field step? number|string # Offset a paging key adds. Default "10%".
+---@field width? integer # Render width in pixels. Default nil (media.nvim decides).
 ---@field timeout_ms? integer # How long the conversion may take. Default 60000 -- LibreOffice's first start is slow.
 ---@field cache_days? integer # How long a converted PDF may survive between sessions. Default 7; 0 keeps nothing.
 
@@ -241,7 +247,7 @@
 
 --- What a target turned out to be.
 ---@class Hover.Target
----@field type "image"|"pdf"|"office"|"markdown"|"file"|"directory"|"url"|"anchor"|"missing"|"git"
+---@field type "image"|"pdf"|"office"|"video"|"markdown"|"file"|"directory"|"url"|"anchor"|"missing"|"git"
 ---@field raw string # The target exactly as written.
 ---@field path? string # Absolute, normalized path for local targets.
 ---@field anchor? string # Fragment after `#`, without the `#`.
@@ -319,6 +325,9 @@
 ---@field office_convert? boolean # Convert an office document to a PDF for a real page preview, instead of showing a badge.
 ---@field office_timeout_ms? integer # Conversion timeout, passed to pdfport.
 ---@field office_cache_days? integer # How long a converted PDF may survive between sessions.
+---@field video_at? number|string # Where the first still of a video comes from: seconds, a percentage, or an ffmpeg timestamp.
+---@field video_step? number|string # How far one paging key moves through a video.
+---@field video_width? integer # Width the still is rendered at; nil leaves the choice to media.nvim.
 ---@field url_pdf? boolean # Show a link answering `application/pdf` as its first page.
 ---@field url_pdf_max_bytes? integer # Ceiling for that download.
 ---@field url_pdf_timeout_ms? integer # How long it may take.

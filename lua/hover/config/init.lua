@@ -526,6 +526,7 @@ function M.preview_opts()
   local office = type(c.office) == "table" and c.office or {}
   local shot = type(links.shot) == "table" and links.shot or {}
   local pdf = type(links.pdf) == "table" and links.pdf or {}
+  local video = type(c.video) == "table" and c.video or {}
   return {
     max_lines = c.max_lines or DEFAULTS.max_lines,
     max_width = c.max_width or DEFAULTS.max_width,
@@ -549,6 +550,11 @@ function M.preview_opts()
     office_convert = M.office_enabled(),
     office_timeout_ms = office.timeout_ms or DEFAULTS.office.timeout_ms,
     office_cache_days = office.cache_days or DEFAULTS.office.cache_days,
+    video_at = video.at ~= nil and video.at or DEFAULTS.video.at,
+    video_step = video.step ~= nil and video.step or DEFAULTS.video.step,
+    -- No `or DEFAULTS.video.width`: the default *is* nil, and nil means
+    -- "let media.nvim choose" rather than "unset".
+    video_width = video.width,
   }
 end
 

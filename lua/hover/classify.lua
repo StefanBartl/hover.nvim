@@ -148,6 +148,12 @@ function M.classify(target, source_path)
     -- else that cannot be read as text is caught by the byte test in
     -- `preview.binary`, which needs no extension to be listed anywhere.
     kind = "office"
+  elseif require("hover.formats").is_video(ext) then
+    -- The same reasoning as `office`, one group over: it cannot be read as
+    -- text, but it is not merely "some binary file" either — ffmpeg lifts a
+    -- frame out of it, and a frame is a picture this hover already knows how
+    -- to draw.
+    kind = "video"
   end
 
   return {
@@ -191,6 +197,7 @@ M.TYPES = {
   "office",
   "pdf",
   "url",
+  "video",
 }
 
 return M

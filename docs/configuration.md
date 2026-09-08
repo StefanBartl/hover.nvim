@@ -75,6 +75,9 @@ clearing their flag, so turning it back on restores what you had.
 | `office.convert` | `false` | Whether a `.docx`/`.xlsx`/`.pptx`/… is converted to a PDF and shown as a page. Off: converting one means starting LibreOffice, which is seconds rather than milliseconds. |
 | `office.timeout_ms` | `60000` | LibreOffice's first start is slow, and a timeout that fires on it looks like a broken feature. |
 | `office.cache_days` | `7` | How many days a converted PDF may sit in the cache before the next session sweeps it. Converted PDFs outlive the session — the mtime in their key makes that safe — and this is what keeps the cache from being a directory that only grows. `0` keeps nothing between sessions. |
+| `video.at` | `"10%"` | Where the first still of a video comes from. A number is seconds, `"10%"` is a fraction of the running time, anything else is handed to ffmpeg as a timestamp. Ten percent rather than zero because the first frame of a real video is usually black, a fade-in or a logo. |
+| `video.step` | `"10%"` | How far one press of the paging key moves through the file. A percentage, so ten presses walk a ten-second clip and a two-hour feature end to end alike. A file that reports no duration falls back to five seconds. |
+| `video.width` | `nil` | Width in pixels the still is rendered at; `nil` leaves the choice to media.nvim. Chosen against the float rather than the source — every pixel past what the terminal draws is decode time spent on nothing. |
 
 ## Keys
 
@@ -140,8 +143,8 @@ volume switch but not this one, because a veto a keypress can defeat is not a ve
 ## What opens by itself
 
 `auto_hover` names the target types the automatic trigger opens a float for. The names
-are `image`, `pdf`, `office`, `markdown`, `file`, `directory`, `url`, `anchor`, `missing`
-and `git`, plus `position` for a plugin answering about the *place* the cursor is in.
+are `image`, `pdf`, `office`, `video`, `markdown`, `file`, `directory`, `url`,
+`anchor`, `missing` and `git`, plus `position` for a plugin answering about the *place* the cursor is in.
 
 ```lua
 require("hover").setup({

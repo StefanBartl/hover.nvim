@@ -50,6 +50,12 @@ the alternatives that were rejected, and the bugs that changed the design.
   keys have the narrowest borrow condition here and the best case for it, how
   a measurement took the Alt chords away again — and the name collision that
   survived a green suite.
+- **[VIDEO.md](VIDEO.md)** — a `.mp4` under the cursor, shown as a still from
+  the file: why playback is not on the table and the three measurements that
+  settle it, why a video takes the office route rather than a new one, how the
+  PDF paging keys became a scrub with no code of their own, and the two
+  extensions that are deliberately not claimed because an editor reads them as
+  TypeScript.
 - **[integrations.md](../integrations.md)** (one level up) — who is wired to
   whom, through which door, and what degrades when a plugin is absent.
 

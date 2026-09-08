@@ -13,7 +13,7 @@ would report the symptom everyone already has.
 | **hover.nvim** | Is `lib.nvim` there, and is it new enough — the one dependency with no fallback |
 | **configuration** | Which mode is set, what `auto_hover` opens by itself, and every switch with its current state |
 | **optional contributors** | Which sibling plugins are installed, what each absent one is not doing, whether a link source is registered at all, and — read back off the registry — every name that registered |
-| **external tools** | `soffice` and `pdftoppm` on `PATH`, and *whether they are even needed* |
+| **external tools** | `soffice`, `pdftoppm` and `ffmpeg`/`ffprobe` on `PATH`, and *whether they are even needed* |
 | **declared tools** | The tools declared in [`install.json`](install.json), through `lib.nvim.deps` — why each matters and how to install it on this machine. Absent on an older lib.nvim |
 
 ---
@@ -83,6 +83,16 @@ On Windows the LibreOffice installer does not put `soffice.exe` on `PATH`, so th
 it missing on a machine where LibreOffice is plainly installed. That is correct, and the
 one-line fix is in
 [installation.md](installation.md#soffice-on-windows-installing-libreoffice-is-not-enough).
+
+`ffmpeg`/`ffprobe` are reported as one line, and the line is only green when **both**
+are there. That is not tidiness: media.nvim needs a duration from `ffprobe` to resolve the
+percentage offset a still is taken at, so ffmpeg alone produces no frame and an error
+naming the wrong thing. They come from one package everywhere.
+
+The same Windows PATH caveat applies once more, in its mildest form: winget and scoop
+extend the *user* PATH, which a terminal started before the install does not have.
+media.nvim probes both shim directories itself, so it usually finds ffmpeg regardless —
+`:checkhealth media` says which path it will actually run.
 
 **The browser for page screenshots is the one place the report will appear to contradict
 itself, and that is deliberate.** With `:Hover links web shot` on you may see both of
