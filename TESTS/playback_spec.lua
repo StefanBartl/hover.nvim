@@ -41,7 +41,10 @@ local function fixture(cols, rows, n)
   local parts = {}
   for i = 1, n do
     local shade = string.char(math.min(255, i * 10), 0, 255 - math.min(255, i * 10))
-    parts[#parts + 1] = shade:rep(cols * rows)
+    -- Two pixel rows per text row: the half block is what doubles the
+    -- vertical resolution, and a payload built for one row per cell is half
+    -- a frame short -- which `paint` correctly refuses.
+    parts[#parts + 1] = shade:rep(cols * rows * blocks.ROWS_PER_CELL)
   end
   return buf, table.concat(parts)
 end
@@ -174,9 +177,14 @@ describe("the transport keys", function()
     cfg.setup({})
     local keys = cfg.get().transport_keys
     assert.is_table(keys)
-    assert.are.same({ "<Space>" }, keys.toggle)
-    assert.are.same({ "]" }, keys.forward)
-    assert.are.same({ "[" }, keys.back)
+    -- Not `<Space>`, `]`, `[`: the first is `mapleader` in most
+    -- configurations (and re-enters which-key's trigger on the same key), and
+    -- the other two are prefixes -- `]d`, `[q` and every other bracket motion
+    -- stop existing while a float is up. Both were shipped and both were
+    -- wrong; see the note on `transport_keys` in config/DEFAULTS.lua.
+    assert.are.same({ "<CR>" }, keys.toggle)
+    assert.are.same({ "." }, keys.forward)
+    assert.are.same({ "," }, keys.back)
   end)
 
   it("are borrowed only for content that says it can play", function()
@@ -184,7 +192,7 @@ describe("the transport keys", function()
     keys.release()
 
     keys.borrow({ lines = { "plain text" } }, {})
-    assert.is_nil(vim.fn.maparg("<Space>", "n", false, true).desc)
+    assert.is_nil(vim.fn.maparg("<CR>", "n", false, true).desc)
     keys.release()
 
     local calls = 0
@@ -193,10 +201,14 @@ describe("the transport keys", function()
         calls = calls + 1
       end,
     })
-    local mapped = vim.fn.maparg("<Space>", "n", false, true)
+    local mapped = vim.fn.maparg("<CR>", "n", false, true)
     assert.is_truthy(mapped.desc)
     mapped.callback()
     assert.are.equal(1, calls)
+
+    -- And handed back when the float goes: a transport key that outlives its
+    -- hover is a key the reader cannot get rid of.
     keys.release()
+    assert.is_nil(vim.fn.maparg("<CR>", "n", false, true).desc)
   end)
 end)

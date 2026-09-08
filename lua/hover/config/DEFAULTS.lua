@@ -752,23 +752,33 @@ return {
   --- request for motion. The first press decodes the run and starts it, every
   --- press after that starts and stops the timer.
   ---
-  --- **`<Space>`, chosen on the same rule as `F` above.** In normal mode it
-  --- is `l` — a motion, so borrowing it displaces something real, but only
-  --- for as long as a float is up, and moving the cursor is what dismisses
-  --- the float anyway. It is also the key every media player in the world
-  --- uses for exactly this, which is worth more here than saving one
-  --- rightward motion.
+  --- **These three defaults are a correction, and the rule they broke is the
+  --- one `zen_keys` states two entries up.** The first version shipped
+  --- `<Space>`, `]` and `[`, and all three were wrong for reasons that were
+  --- already written down here:
   ---
-  --- `]` and `[` step one frame and pause, mirroring the paging keys that
-  --- scrub the *still* through the file — same direction, one order of
-  --- magnitude finer.
+  --- - **`<Space>` is `mapleader` in most configurations.** Borrowing it does
+  ---   not displace a motion, it displaces *every leader mapping there is* —
+  ---   and against which-key it is worse than that: it re-enters the trigger
+  ---   which-key installed on the same key and the plugin reports "Recursion
+  ---   detected", after which the leader stays broken. Measured 2026-09-08 in
+  ---   a live config.
+  --- - **`]` and `[` are prefixes**, exactly like the `z` that `zen_keys`
+  ---   refuses. Mapping the prefix itself means `]d`, `]c`, `[q` and every
+  ---   other bracket motion stop existing while a float is up — and a broken
+  ---   prefix does not announce itself.
+  ---
+  --- `<CR>` in normal mode moves down one line, which is what `j` is for;
+  --- it is not a prefix and not a leader. `.` and `,` are mpv's own
+  --- frame-step keys, and both are single, completed operations (repeat, and
+  --- reverse-find) — the same trade `F` makes above.
   transport_keys = {
     ---@type string|string[]
-    toggle = { "<Space>" },
+    toggle = { "<CR>" },
     ---@type string|string[]
-    forward = { "]" },
+    forward = { "." },
     ---@type string|string[]
-    back = { "[" },
+    back = { "," },
   },
 
   --- Keymaps this plugin sets in the user's namespace. Every entry is a

@@ -42,9 +42,9 @@ require("hover").setup({ keymaps = { show = false } })
 | `dismiss_keys` | `q`, `<Esc>` | **every** hover | dismiss this hover until the cursor reaches another target |
 | `open_keys` | `gf` | hovers with a target | open what the float is showing, then close it |
 | `zen_keys.toggle` | `F` | hovers with a target | the float on (almost) the whole editor, and back; pins by default |
-| `transport_keys.toggle` | `<Space>` | hovers that can play — a video | first press decodes a run and plays it; every press after starts and stops it |
-| `transport_keys.forward` | `]` | as above, once a run is loaded | one frame on, and pause |
-| `transport_keys.back` | `[` | as above | one frame back, and pause |
+| `transport_keys.toggle` | `<CR>` | hovers that can play — a video | first press decodes a run and plays it; every press after starts and stops it |
+| `transport_keys.forward` | `.` | as above, once a run is loaded | one frame on, and pause |
+| `transport_keys.back` | `,` | as above | one frame back, and pause |
 | `scroll_keys.down` | `<M-PageDown>`, `<C-Down>` | scrollable hovers only | next screenful of lines, or next PDF page |
 | `scroll_keys.up` | `<M-PageUp>`, `<C-Up>` | scrollable hovers only | back |
 | `resize_keys.larger` | `+` | hovers with a picture only | the float one step (×1.25) larger |
