@@ -47,7 +47,9 @@ be tried rather than decided.
 | `:Hover mode [auto\|manual\|off]` | set the mode; omitted, it reports the current one |
 | `:Hover toggle` | off if it is on, back to `auto` if it is off |
 | `:Hover auto [<type>\|all\|none]` | which target types open by themselves. A type toggles it; omitted, it lists what does and what waits to be asked |
-| `:Hover status` | the mode, every switch and what opens by itself — as a board where `<CR>` toggles the row under the cursor, `?` lists its keys, and every row carries the command that acts on it. One message where lib.nvim has no UI kit |
+| `:Hover open` | hand what the float is showing to whatever opens it outside Neovim. A media file goes through media.nvim's `play` first, so its configured `player` wins; everything else through [open.nvim](https://github.com/StefanBartl/open.nvim) or `vim.ui.open`. The same thing the borrowed `gf` does, as a command that works without having to know the key |
+| `:Hover status` | alias for `:Hover dashboard` — the name it carried until 2026-09-08, kept because it is in muscle memory and in anything a host wired up |
+| `:Hover dashboard` | the mode, every switch and what opens by itself — as a board where `<CR>` toggles the row under the cursor, `?` lists its keys, and every row carries the command that acts on it. One message where lib.nvim has no UI kit |
 
 Whatever this board shows survives a restart when [`persist = true`](configuration.md#persisting-runtime-changes)
 is set — it is written on `VimLeavePre` and read back the next time `enable()` runs.
@@ -80,7 +82,7 @@ Switching `links` *off* silences web links without clearing their flag, so turni
 back on restores what you had rather than quietly demoting it.
 
 **`links off` is about how a target was found, not what it is.** If the same text is also
-a resolvable bare path, `paths` decides it. `:Hover status` shows both.
+a resolvable bare path, `paths` decides it. `:Hover dashboard` shows both.
 
 **Every switch is announced when it changes**, because "off" is otherwise invisible:
 nothing on screen tells a switched-off preview apart from a line that simply has no target
@@ -100,7 +102,7 @@ do is in [FEATURES/QUIET.md](FEATURES/QUIET.md).
 
 ## The routes are generated, not written out
 
-Dispatch, `<Tab>` completion, the descriptions above, `:Hover status` and the
+Dispatch, `<Tab>` completion, the descriptions above, `:Hover dashboard` and the
 `:checkhealth hover` section all read `hover.switches` — one table. A tenth switch is one
 entry there and nothing else, and the five copies cannot drift apart because there is only
 one of them.

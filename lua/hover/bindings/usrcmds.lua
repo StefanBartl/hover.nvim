@@ -4,7 +4,7 @@
 --- One compound command rather than a family of them (`UI-21`), and its
 --- routes are *derived* from `hover.switches` rather than written out
 --- (`UI-20`): adding an eighth switch adds its route, its `<Tab>`
---- completion, its description and its line in `:Hover status` at once,
+--- completion, its description and its line in `:Hover dashboard` at once,
 --- because there is only one place any of that is written.
 ---
 --- **Why a command and not a keymap for the switches.** A setting thrown a
@@ -96,7 +96,7 @@ local function notify_status(status)
   -- **The second axis, which this form used to leave out entirely.** The
   -- board (`hover.status_view`) has drawn it since it was built; this
   -- fallback listed the switches and stopped, so on a lib.nvim without the UI
-  -- kit `:Hover status` could report every switch on and every float shut.
+  -- kit `:Hover dashboard` could report every switch on and every float shut.
   -- The switches say what may hover; these say what opens *without being
   -- asked*, and a report of one half is what made `:Hover links web on` look
   -- broken.
@@ -131,7 +131,7 @@ end
 --- It stays a *report* first: the same switches in the same order, plus the
 --- mode and what opens by itself. Acting on them is the addition.
 ---@return nil
-local function report_status()
+local function open_dashboard()
   local ok, view = pcall(require, "hover.status_view")
   if ok and type(view) == "table" and view.open() then
     return
@@ -313,9 +313,34 @@ function M.routes()
       end,
     },
     {
+      -- Beside the borrowed `gf` rather than instead of it, which is the
+      -- house rule (`:Hover zen` states it two entries down): a borrowed key
+      -- is undiscoverable until it has been seen once, and it only exists
+      -- while a float is up. A command works from anywhere, is completable,
+      -- and can be mapped to whatever key the reader prefers.
+      path = { "open" },
+      desc = "Open what the hover is showing, in whatever handles it outside Neovim",
+      run = function()
+        local h = hover()
+        if type(h.open) ~= "function" or not h.open() then
+          require("hover.notify").info("no hover to open")
+        end
+      end,
+    },
+    {
+      path = { "dashboard" },
+      desc = "Open the board: every switch, its state, and the command that acts on it",
+      run = open_dashboard,
+    },
+    {
+      -- The name this had until 2026-09-08, kept working. "Status" was
+      -- accurate when it printed a message and stopped being so when it
+      -- became a board you act on -- but it is in muscle memory, in older
+      -- notes, and in anything a host wired up, and a removed verb teaches
+      -- nothing except that it is gone.
       path = { "status" },
-      desc = "Report the mode and every switch in one message",
-      run = report_status,
+      desc = "Alias for `:Hover dashboard`",
+      run = open_dashboard,
     },
     {
       path = { "pin" },

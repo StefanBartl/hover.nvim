@@ -204,7 +204,7 @@ to ask. Two consequences worth knowing before you keep the default:
 
 ## Persisting runtime changes
 
-`mode`, `auto_hover` and every switch — exactly what [`:Hover status`](commands.md)
+`mode`, `auto_hover` and every switch — exactly what [`:Hover dashboard`](commands.md)
 reports — are written to disk on `VimLeavePre` and read back over this configuration the
 next time `enable()` runs, **after** the installation spec's own options are merged. So
 the order is DEFAULTS → installation spec → the last session's own switches, and

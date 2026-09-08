@@ -1,5 +1,5 @@
 ---@module 'hover.persist'
----@brief Carry a session's `:Hover status` toward the next one.
+---@brief Carry a session's `:Hover dashboard` toward the next one.
 ---@description
 --- Every switch, `mode` and `auto_hover` are written back over the
 --- installation spec's own `opts` on the next `enable()`, by default:
@@ -11,7 +11,7 @@
 ---
 --- **What is carried, and what is not.** Exactly what `hover.switches`
 --- already declares a `path` for, plus `mode` and `auto_hover` -- the same
---- three axes `:Hover status` reports, and nothing more: `border`,
+--- three axes `:Hover dashboard` reports, and nothing more: `border`,
 --- `max_lines`, the `_keys` tables and every layout or keybinding option
 --- stay in the installation spec, where a reader can see them.
 ---
