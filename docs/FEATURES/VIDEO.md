@@ -148,8 +148,11 @@ Measured 2026-09-08, per window of 24 stills: 78x19 cells sampled in 168 ms and
 painted in 6.4 ms; 140x36 — nearly four times the picture — sampled in 184 ms
 and painted in 6.4 ms. ImageMagick's startup dominates one and extmark count
 barely moves the other, so the small canvas bought nothing. Playing therefore
-gets a canvas `play_scale` times the still's budget, capped to the editor's own
-rows and columns.
+scales the **box** by `play_scale`, capped to the editor's own rows and
+columns -- the box, because the float and the canvas are both derived from it
+and have to agree. Scaling only the canvas wrapped every row onto two and
+pushed the control row off the bottom, silently; `hover.box()` is the one place
+that number lives, and it already reconciles zen and resize there.
 
 **Sound joins automatically when there is something to play it with.** If
 the file has an audio track and [mpv](https://mpv.io) is on PATH,

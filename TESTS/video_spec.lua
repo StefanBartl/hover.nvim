@@ -246,3 +246,82 @@ describe("where a played run starts", function()
     )
   end)
 end)
+
+describe("the float a played run is drawn into", function()
+  local DEFAULTS = require("hover.config.DEFAULTS")
+  local float = require("hover.float")
+  local blocks_ok, blocks = pcall(require, "images.blocks")
+  local scale_ok = pcall(require, "images.scale")
+
+  --- `hover.box()` for a played hover, which is private to `hover.init`.
+  --- Duplicated here on purpose: this spec exists to catch the two derivations
+  --- drifting apart, and it can only do that by holding one of them.
+  ---@return integer width, integer height
+  local function play_box()
+    local w, h = DEFAULTS.max_width, DEFAULTS.max_lines
+    local factor = DEFAULTS.video.play_scale
+    if factor > 1 then
+      w = math.min(math.floor(w * factor), math.max(20, vim.o.columns - 4))
+      h = math.min(math.floor(h * factor), math.max(3, vim.o.lines - 4))
+    end
+    return w, h
+  end
+
+  -- **The invariant a wrap breaks, and it breaks silently.** `preview.video`
+  -- builds a canvas from the box and `float.open` clamps the window to the
+  -- same box. Scale one without the other and every canvas row wraps onto two
+  -- screen rows -- the picture comes out as horizontal stripes and the control
+  -- row falls off the bottom, with nothing raising an error. That shipped on
+  -- 2026-09-08 and was reported with a screenshot of the wrap markers.
+  it("is wide enough for every canvas row, and tall enough for all of them", function()
+    if not (blocks_ok and scale_ok) then
+      return
+    end
+    local columns, lines_before = vim.o.columns, vim.o.lines
+    vim.o.columns, vim.o.lines = 200, 38
+
+    local ok = pcall(function()
+      for _, source in ipairs({ { 1280, 720 }, { 720, 1280 }, { 640, 640 } }) do
+        local width, height = play_box()
+        -- The real function, not a copy of its arithmetic: a spec that holds
+        -- its own version of the thing it is checking cannot notice the two
+        -- drifting apart, which is exactly the failure being guarded.
+        local cols, rows = video.playback_cells(
+          { width = source[1], height = source[2] },
+          { max_width = width, max_lines = height }
+        )
+        local canvas = blocks.canvas_lines(cols, rows)
+        canvas[#canvas + 1] = "▮▮♪ 0:00 / 9:05  ▯▯▯"
+
+        local widest = 0
+        for _, line in ipairs(canvas) do
+          widest = math.max(widest, vim.fn.strdisplaywidth(line))
+        end
+
+        local w, h = float.size_for(canvas, { max_width = width, max_height = height })
+        assert.is_true(
+          w >= widest,
+          ("float %d wide for a %d-wide canvas: every row would wrap"):format(w, widest)
+        )
+        assert.is_true(
+          h >= #canvas,
+          ("float %d tall for %d rows: the control row falls off"):format(h, #canvas)
+        )
+      end
+    end)
+
+    vim.o.columns, vim.o.lines = columns, lines_before
+    assert.is_true(ok)
+  end)
+
+  it("keeps the enlarged box inside the screen it is drawn on", function()
+    local columns, lines_before = vim.o.columns, vim.o.lines
+    -- A terminal far smaller than the scaled budget asks for.
+    vim.o.columns, vim.o.lines = 60, 14
+    local width, height = play_box()
+    vim.o.columns, vim.o.lines = columns, lines_before
+
+    assert.is_true(width <= 56, "a generous factor on a small terminal is the terminal")
+    assert.is_true(height <= 10)
+  end)
+end)
