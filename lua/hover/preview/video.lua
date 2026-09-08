@@ -145,6 +145,99 @@ local function badge_with_summary(target, note)
   return content
 end
 
+---@internal
+--- Cell size for the playback canvas: the float's box, narrowed to the
+--- video's aspect ratio so the picture is not stretched across it.
+---
+--- One row is reserved for the control line. Without that the canvas fills the
+--- float exactly and the control row pushes the last picture row out of view
+--- -- which reads as the video being cropped, not as a missing row.
+---@param probe table|nil
+---@param opts Hover.PreviewOpts
+---@return integer cols, integer rows
+local function playback_cells(probe, opts)
+  local max_cols = math.max(16, (opts.max_width or 80) - 2)
+  local max_rows = math.max(6, (opts.max_lines or 24) - 2)
+
+  local ok_scale, scale = pcall(require, "images.scale")
+  if ok_scale and probe and probe.width and probe.height then
+    local cols, rows =
+      scale.fit_cells(max_cols, max_rows, { width = probe.width, height = probe.height })
+    return cols, rows
+  end
+  return max_cols, max_rows
+end
+
+---@internal
+--- Build the playing view: a run of stills sampled into cells, the canvas
+--- lines they are painted onto, and the control row under them.
+---
+--- Returns nil (with a reason) rather than a badge, so the caller can decide
+--- whether a failure here means "show the still instead" -- which it always
+--- does: everything this needs beyond the still is optional.
+---@param target Hover.Target
+---@param opts Hover.PreviewOpts
+---@param probe table|nil
+---@param on_result fun(content: Hover.Content): nil
+---@return boolean started
+local function start_playback(target, opts, probe, on_result)
+  local ok_media, media = pcall(require, "media")
+  local ok_blocks, blocks = pcall(require, "images.blocks")
+  if
+    not ok_media
+    or type(media.frames) ~= "function"
+    or not ok_blocks
+    or not blocks.available()
+  then
+    return false
+  end
+
+  local cols, rows = playback_cells(probe, opts)
+  local from = opts.video_at or "10%"
+  local fps = opts.video_fps or 12
+
+  media.frames(target.path, {
+    from = from,
+    fps = fps,
+    count = opts.video_run or 24,
+    width = opts.video_run_width,
+  }, function(pngs, err)
+    if not pngs then
+      on_result(badge_with_summary(target, err and ("(" .. err .. ")") or nil))
+      return
+    end
+    -- One ImageMagick pass for the whole run: per-file is 8.5x slower
+    -- (measured in images.blocks), which is the difference between playback
+    -- and a slideshow that arrives late.
+    blocks.sample_async(pngs, cols, rows, function(raw, serr)
+      if not raw then
+        on_result(badge_with_summary(target, serr and ("(" .. serr .. ")") or nil))
+        return
+      end
+      local lines = blocks.canvas_lines(cols, rows)
+      -- Placeholder: `playback.load` writes the real control row as soon as
+      -- the float exists, and it needs a line to write into.
+      lines[#lines + 1] = ""
+      on_result({
+        lines = lines,
+        transport = true,
+        playback = {
+          raw = raw,
+          frames = #pngs,
+          cols = cols,
+          rows = rows,
+          fps = fps,
+          from = type(from) == "number" and from or 0,
+          duration = probe and probe.duration or nil,
+          status_row = #lines - 1,
+        },
+      })
+    end)
+  end)
+
+  return true
+end
+
 --- Preview a video: a still from it, or a badge explaining why not.
 ---
 --- Same contract as `preview.media.pdf` and `preview.office.preview` — return
@@ -173,8 +266,24 @@ function M.preview(target, opts, on_result)
     return badge_with_summary(target, "(no image provider installed)")
   end
 
-  local page = math.max(1, math.floor(opts.page or 1))
   local probe = media.probed(target.path)
+
+  -- Playing is asked for, never assumed: a hover appears because a cursor
+  -- rested somewhere, which is a glance and not a request for motion. The
+  -- transport key sets `opts.play`, and only then is a run decoded at all.
+  if opts.play then
+    if start_playback(target, opts, probe, on_result) then
+      return vim.tbl_extend(
+        "force",
+        badge_with_summary(target, "decoding frames…"),
+        { pending = true }
+      )
+    end
+    -- Nothing to play with (no media.nvim, no ImageMagick): fall through to
+    -- the still, which is the honest answer and already on screen.
+  end
+
+  local page = math.max(1, math.floor(opts.page or 1))
   local offset = M.offset_for(
     page,
     opts.video_at or "10%",
@@ -188,6 +297,9 @@ function M.preview(target, opts, on_result)
     local content = require("hover.preview.media").canvas_for(png, opts)
     content.scroll =
       { page = page, step = 1, more = more_after(offset, probe and probe.duration or nil) }
+    -- Only a marker: it binds the transport key, and pressing it is what
+    -- decodes anything.
+    content.transport = true
     -- The first still stays untitled, as every image preview does: a filename
     -- over a picture the reader is already looking at is noise. From the second
     -- on, the timestamp is the one thing the picture cannot say about itself.

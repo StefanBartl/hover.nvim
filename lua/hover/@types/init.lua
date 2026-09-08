@@ -328,6 +328,10 @@
 ---@field video_at? number|string # Where the first still of a video comes from: seconds, a percentage, or an ffmpeg timestamp.
 ---@field video_step? number|string # How far one paging key moves through a video.
 ---@field video_width? integer # Width the still is rendered at; nil leaves the choice to media.nvim.
+---@field play? boolean # Build the playing view (a decoded run) instead of the still. Set by the transport key, never by configuration.
+---@field video_fps? number # Sampling rate of a played run; also the rate it is painted at.
+---@field video_run? integer # How many stills one run holds.
+---@field video_run_width? integer # Pixel width of a run's stills before they are sampled into cells; nil leaves it to media.nvim.
 ---@field url_pdf? boolean # Show a link answering `application/pdf` as its first page.
 ---@field url_pdf_max_bytes? integer # Ceiling for that download.
 ---@field url_pdf_timeout_ms? integer # How long it may take.
@@ -357,7 +361,22 @@
 ---@field canvas? Hover.Canvas # Size the float to this instead of to `lines`, and show no text or title: the float is a frame for the picture, not a caption for it.
 ---@field highlight? string # Highlight group for the first line, where that line is a verdict rather than content: `HoverMissing` (-> `DiagnosticError`, the broken-target marker), `HoverError` (-> `DiagnosticError`, an HTTP 4xx/5xx or an unreachable host), `HoverInfo` (-> `DiagnosticHint`, the "no text in this file" badge).
 ---@field scroll? Hover.Scroll # Present when the preview has more to show; drives the `scroll_keys`.
+---@field transport? boolean # This content has a time axis and can be played; drives the `transport_keys`. A marker only — pressing the key is what decodes anything.
+---@field playback? Hover.Playback # A decoded run to paint into the float once it is open. Present only on the playing view.
 ---@field pending? boolean # Provisional; an async result replaces it (and it is not cached).
+
+--- A decoded run of stills, sampled into cells and ready to paint. Built by
+--- `preview.video`, consumed by `preview.playback` once the float exists —
+--- the float has to be open before there is a buffer to paint into.
+---@class Hover.Playback
+---@field raw string # `images.blocks` payload: frames * cols * rows * 3 bytes
+---@field frames integer # How many stills the run holds; may be fewer than asked for near the end of a file
+---@field cols integer
+---@field rows integer
+---@field fps number # Sampling rate of the run, and the rate the timer paints at
+---@field from number # Where the run starts in the source, in seconds, for the clock
+---@field duration? number # Source duration, for the clock's right-hand side
+---@field status_row integer # 0-based line the control row is written to
 
 --- Where a scrollable preview currently is, and whether more follows.
 --- Absent means "not scrollable" -- an image, or a file that fits -- and the

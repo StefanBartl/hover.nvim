@@ -744,6 +744,33 @@ return {
     toggle = { "F" },
   },
 
+  --- The transport, borrowed only while a hover that can play is on screen —
+  --- today a video, which is the only content with a time axis.
+  ---
+  --- **Nothing plays until `toggle` is pressed.** A hover appears because a
+  --- cursor rested somewhere for `updatetime`; that is a glance, not a
+  --- request for motion. The first press decodes the run and starts it, every
+  --- press after that starts and stops the timer.
+  ---
+  --- **`<Space>`, chosen on the same rule as `F` above.** In normal mode it
+  --- is `l` — a motion, so borrowing it displaces something real, but only
+  --- for as long as a float is up, and moving the cursor is what dismisses
+  --- the float anyway. It is also the key every media player in the world
+  --- uses for exactly this, which is worth more here than saving one
+  --- rightward motion.
+  ---
+  --- `]` and `[` step one frame and pause, mirroring the paging keys that
+  --- scrub the *still* through the file — same direction, one order of
+  --- magnitude finer.
+  transport_keys = {
+    ---@type string|string[]
+    toggle = { "<Space>" },
+    ---@type string|string[]
+    forward = { "]" },
+    ---@type string|string[]
+    back = { "[" },
+  },
+
   --- Keymaps this plugin sets in the user's namespace. Every entry is a
   --- single key, a list of keys, or `false` for "bind nothing".
   ---
