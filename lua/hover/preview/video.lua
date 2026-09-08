@@ -308,6 +308,19 @@ local function start_playback(target, opts, probe, on_result)
           cb(nil, serr)
           return
         end
+        -- **Every highlight group this window needs, created before a frame
+        -- of it is painted.** `nvim_set_hl` invalidates the whole screen --
+        -- Neovim cannot know which windows a redefined group appears in -- so
+        -- creating them lazily from inside the paint costs one full redraw
+        -- per new colour pair. Measured over eight seconds of real footage at
+        -- 113x32 cells: 10 to 476 new pairs per second, never settling,
+        -- because each rolled window brings new material. Headless that is
+        -- free and the paint measures 8 ms; in a terminal it was reported as
+        -- 1-2 frames per second. Done here, the invalidations collapse into
+        -- the one redraw this window was going to cause anyway.
+        if type(blocks.prepare) == "function" then
+          pcall(blocks.prepare, raw, cols, rows)
+        end
         cb({ raw = raw, frames = #pngs }, nil)
       end)
     end)

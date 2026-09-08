@@ -523,8 +523,17 @@ return {
     ---
     --- `1` is the previous behaviour — the playing canvas exactly as large as
     --- the still's.
+    ---
+    --- **Raised from 1.75 to 2.5 on 2026-09-08, and the reason is a
+    --- measurement rather than taste.** At 1.75 the box came out 140x35, and
+    --- on a 38-row editor the screen cap (34) was doing all the work — so a
+    --- *larger* terminal produced the same picture as a smaller one, because
+    --- the factor and not the screen was the limit. Measured across editor
+    --- sizes: 200x38, 230x48 and 300x70 all produced a 117x33 canvas. At 2.5
+    --- the screen is the limit again, which is what a cap is for; on the
+    --- 38-row editor this changes nothing at all.
     ---@type number
-    play_scale = 1.75,
+    play_scale = 2.5,
 
     --- Stills per second in a played run, sampled and painted.
     ---

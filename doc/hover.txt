@@ -620,7 +620,7 @@ worth asserting.
     -- an ffmpeg timestamp. Percentages mean ten presses of the paging key
     -- walk any file end to end, whatever its length.
     video = { at = "10%", step = "10%", width = nil, sound = true,
-              play_at = 0, play_scale = 1.75, fps = 12, run = 24,
+              play_at = 0, play_scale = 2.5, fps = 12, run = 24,
               run_width = nil },
     -- `pin` is on because the float is not focusable and its dismissal hangs
     -- on CursorMoved: unpinned, a full-screen hover closes on the first `j`.
@@ -795,7 +795,7 @@ thumbnail is not a fade-in. A still the reader has scrubbed keeps its position.
 
 The bar under the picture measures the film, matching the clock beside it.
 
-`video.play_scale` (default 1.75) is the sharpness knob: a cell carries two
+`video.play_scale` (default 2.5) is the sharpness knob: a cell carries two
 pixel rows, so the still's budget is a 38-pixel-tall picture. The playing
 canvas is that budget scaled, capped to the editor's own rows and columns.
 

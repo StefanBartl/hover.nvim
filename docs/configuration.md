@@ -80,7 +80,7 @@ clearing their flag, so turning it back on restores what you had.
 | `video.width` | `nil` | Width in pixels the still is rendered at; `nil` leaves the choice to media.nvim. Chosen against the float rather than the source — every pixel past what the terminal draws is decode time spent on nothing. |
 | `video.sound` | `true` | Whether a played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing — see [Playing a video](#playing-a-video). |
 | `video.play_at` | `0` | Where **playing** starts, which is deliberately not where the still is taken. Same three shapes as `video.at`. A thumbnail wants to skip the fade-in; a viewer wants the beginning. A scrubbed still is the exception and is honoured: from page 2 on, play starts where the paging keys left off. |
-| `video.play_scale` | `1.75` | How much larger the **box** is while playing — `max_width`/`max_lines` scaled, capped to the editor's own rows and columns. The float and the canvas are both built from that one number, so they grow together. A cell carries two pixel rows, so the 20-line default is a 38-pixel picture; this is the sharpness knob. `1` is the still's size. |
+| `video.play_scale` | `2.5` | How much larger the **box** is while playing — `max_width`/`max_lines` scaled, capped to the editor's own rows and columns. The float and the canvas are both built from that one number, so they grow together. A cell carries two pixel rows, so the 20-line default is a 38-pixel picture; this is the sharpness knob. `1` is the still's size. |
 | `video.fps` | `12` | Stills per second in a played run, and the rate they are painted at. |
 | `video.run` | `24` | Stills one decoded window holds — two seconds at 12 fps. |
 | `video.run_width` | `nil` | Pixel width of a run's stills before they are sampled into cells. `nil` sizes it from the canvas (twice its width in cells, floored at media.nvim's default). |
@@ -175,6 +175,14 @@ ImageMagick's startup dominates the sampling and the paint is extmarks, so the
 small canvas was never buying performance. The cap matters more than the
 factor: whatever it asks for, the box stays inside the editor's own rows and
 columns.
+
+Raised from 1.75 on 2026-09-08: at that factor the box came out 140x35, so on
+any editor taller than 39 rows the *factor* rather than the screen was the
+limit, and a larger terminal produced the same picture as a smaller one.
+Measured across editor sizes at 1.75: 200x38, 230x48 and 300x70 all gave a
+117x33 canvas. At 2.5 the screen is the limit again — 200x38 gives 113x32 (the
+same as before, since the screen cap was already doing the work there), 230x48
+gives 149x42, 260x58 gives 170x48.
 
 It is the **box** that scales, not the canvas alone — `hover.box()`, the one
 place that already reconciles zen and resize. Scaling the canvas by itself
