@@ -135,6 +135,12 @@
 ---@field at? number|string # Offset of the first still. Default "10%".
 ---@field step? number|string # Offset a paging key adds. Default "10%".
 ---@field width? integer # Render width in pixels. Default nil (media.nvim decides).
+---@field sound? boolean # Start audio alongside a played run. Default true.
+---@field play_at? number|string # Where playing starts, as opposed to where the still is taken. Default 0 -- the beginning of the file.
+---@field play_scale? number # How much larger the playing canvas is than the still's budget, capped to the editor. Default 1.75; 1 is the still's own size.
+---@field fps? number # Stills per second in a played run. Default 12.
+---@field run? integer # Stills one decoded window holds. Default 24 -- two seconds at 12 fps.
+---@field run_width? integer # Pixel width of a run's stills before sampling. Default nil (sized from the canvas).
 ---@field timeout_ms? integer # How long the conversion may take. Default 60000 -- LibreOffice's first start is slow.
 ---@field cache_days? integer # How long a converted PDF may survive between sessions. Default 7; 0 keeps nothing.
 
@@ -328,6 +334,8 @@
 ---@field video_at? number|string # Where the first still of a video comes from: seconds, a percentage, or an ffmpeg timestamp.
 ---@field video_step? number|string # How far one paging key moves through a video.
 ---@field video_width? integer # Width the still is rendered at; nil leaves the choice to media.nvim.
+---@field video_play_at? number|string # Where a played run starts. Default 0; the still's own `video_at` is a thumbnail offset and deliberately not this.
+---@field video_play_scale? number # Multiplier on the preview budget for the playing canvas, capped to the editor's rows and columns.
 ---@field play? boolean # Build the playing view (a decoded run) instead of the still. Set by the transport key, never by configuration.
 ---@field video_fps? number # Sampling rate of a played run; also the rate it is painted at.
 ---@field video_run? integer # How many stills one run holds.

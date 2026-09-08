@@ -15,9 +15,18 @@
 --   2. **A stopped playback frees its timer.** One that outlives its float
 --      paints into an invisible buffer at 12 fps, forever, and nothing on
 --      screen says so.
---   3. **Stepping clamps rather than wraps.** A run is a window into a file;
---      wrapping from its end to its start reads as the video looping when it
---      is not.
+--   3. **Stepping is a position in the file, not an index into the window.**
+--      A window is two seconds; while a step was clamped to it, the transport
+--      keys could not leave one -- stepping back stopped at the window's start
+--      and play resumed from there, which right after play began *was* the
+--      opening offset. Reported 2026-09-08 as "it jumps back to 0:54". With a
+--      decoder, a step past an edge fetches the window that contains the
+--      target; without one, the window is all that exists and the edge is the
+--      edge. Neither wraps: running off the end back to the beginning reads as
+--      the video looping when it is not.
+--   3b. **The bar measures the film, not the window.** It used to fill up and
+--      reset every two seconds, which reads as reloading rather than as a
+--      position -- and contradicts the clock beside it.
 --   4. **Painting never rewrites the picture rows.** The canvas text is
 --      written once and only highlights change after that -- the property the
 --      whole approach rests on, since re-rendering the float at 12 fps is a
@@ -127,22 +136,143 @@ describe("the video transport", function()
     vim.api.nvim_buf_delete(buf, { force = true })
   end)
 
-  it("clamps stepping instead of wrapping", function()
+  it("clamps a step to the window when nothing can decode another", function()
     if not blocks_ok then
       return
     end
     local buf, raw = fixture(40, 4, 5)
+    -- `load_into` hands over no `request`, which is the "no resolvable offset"
+    -- case: the window on screen is the whole of what exists.
     load_into(buf, raw, 5, 40, 4)
 
     playback.step(-5) -- already at frame 1
-    local at_start = vim.api.nvim_buf_get_lines(buf, 4, 5, false)[1]
-    assert.is_truthy(at_start:match("0[:.]0"))
-    assert.is_truthy(at_start:find("▯", 1, true)) -- the bar is not full
+    assert.are.equal(0, playback.position())
 
-    playback.step(99) -- past the end
-    local at_end = vim.api.nvim_buf_get_lines(buf, 4, 5, false)[1]
-    -- Frame 5 of a 12 fps run is a third of a second in, and the bar is full.
-    assert.is_falsy(at_end:find("▯", 1, true))
+    playback.step(99) -- past the end of the window
+    -- Frame 5 of a 12 fps run is a third of a second in, and it stays there
+    -- rather than wrapping back to the start.
+    assert.is_true(math.abs(playback.position() - 4 / 12) < 1e-6)
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("steps out of the window, fetching the one that holds the target", function()
+    if not blocks_ok then
+      return
+    end
+    local cols, rows, frames = 40, 4, 24
+    local buf, raw = fixture(cols, rows, frames)
+    local asked = {}
+    playback.load({
+      buf = buf,
+      raw = raw,
+      frames = frames,
+      cols = cols,
+      rows = rows,
+      fps = 12,
+      from = 100,
+      duration = 544.75,
+      status_row = rows,
+      request = function(from, cb)
+        asked[#asked + 1] = from
+        cb({ raw = raw, frames = frames })
+      end,
+    })
+
+    -- Thirty frames back is two and a half seconds -- half a second past the
+    -- start of a two-second window. Clamped, this stopped at 100 and play
+    -- resumed there, which is the reported "it jumps back to the start".
+    for _ = 1, 30 do
+      playback.step(-1)
+    end
+    assert.is_true(#asked > 0, "a step past the edge has to ask for a window")
+    assert.is_true(math.abs(playback.position() - (100 - 30 / 12)) < 1e-6)
+    -- And the window fetched is the one holding it, not the next one along.
+    assert.is_true(math.abs(asked[#asked] - (100 - 30 / 12)) < 1e-6)
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("coalesces a held step key into one decode at a time", function()
+    if not blocks_ok then
+      return
+    end
+    local cols, rows, frames = 40, 4, 24
+    local buf, raw = fixture(cols, rows, frames)
+    local pending, asked = {}, 0
+    playback.load({
+      buf = buf,
+      raw = raw,
+      frames = frames,
+      cols = cols,
+      rows = rows,
+      fps = 12,
+      from = 100,
+      duration = 544.75,
+      status_row = rows,
+      -- Deferred, the way a real decode is: nothing answers until the test
+      -- lets it, so every step below lands while one is in flight.
+      request = function(from, cb)
+        asked = asked + 1
+        pending[#pending + 1] = function()
+          cb({ raw = raw, frames = frames })
+        end
+      end,
+    })
+
+    for _ = 1, 60 do
+      playback.step(-1)
+    end
+    -- A window is 24 frames, so the first 24 steps stay inside it and the rest
+    -- would each have started an ffmpeg of their own.
+    assert.are.equal(1, asked, "a held key must not start a decode per press")
+    for _, answer in ipairs(pending) do
+      answer()
+    end
+    -- The stale answer re-issues once for where the key actually ended up.
+    assert.is_true(asked <= 2, "at most one re-issue for the final position")
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("measures the bar against the film, not against the window", function()
+    if not blocks_ok then
+      return
+    end
+    local cols, rows, frames = 60, 4, 5
+    local buf, raw = fixture(cols, rows, frames)
+    playback.load({
+      buf = buf,
+      raw = raw,
+      frames = frames,
+      cols = cols,
+      rows = rows,
+      fps = 12,
+      from = 50,
+      duration = 100,
+      status_row = rows,
+    })
+
+    ---@return integer filled, integer total
+    local function bar()
+      local row = vim.api.nvim_buf_get_lines(buf, rows, rows + 1, false)[1] or ""
+      -- Only the bar: the pause glyph is the same character.
+      local segment = row:match("([▮▯]+)$") or ""
+      local filled = select(2, segment:gsub("▮", ""))
+      local empty = select(2, segment:gsub("▯", ""))
+      return filled, filled + empty
+    end
+
+    local filled, total = bar()
+    assert.is_true(total > 0)
+    -- Halfway through a 100-second file, and the window has nothing to do
+    -- with it: the last frame of this run is 0.33 s along, which as a window
+    -- index would have filled the bar completely.
+    assert.is_true(math.abs(filled / total - 0.5) < 0.05, "the bar reads 50% of the film")
+
+    playback.step(99)
+    local at_end = select(1, bar())
+    assert.is_true(
+      math.abs(at_end / total - 0.5) < 0.05,
+      "the end of a window is not the end of the film"
+    )
     vim.api.nvim_buf_delete(buf, { force = true })
   end)
 

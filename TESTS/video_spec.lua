@@ -206,3 +206,43 @@ describe("without media.nvim installed", function()
     assert.is_nil(content.pending)
   end)
 end)
+
+describe("where a played run starts", function()
+  local DEFAULTS = require("hover.config.DEFAULTS")
+
+  -- **The still's offset and the play offset are two settings, and treating
+  -- them as one was the defect.** `at = "10%"` is right for a thumbnail --
+  -- the first frame of a real video is a fade-in or a slate -- and wrong for
+  -- playing, where it means a nine-minute file starts at 0:54 with no way
+  -- back to the opening. Reported 2026-09-08 against two real files, and both
+  -- numbers below are those files.
+  it("is the beginning of the file, not the still's ten percent", function()
+    assert.are.equal(0, DEFAULTS.video.play_at)
+    assert.are.equal("10%", DEFAULTS.video.at, "the still keeps its thumbnail offset")
+  end)
+
+  it("resolves the reported symptom, so the fix is against the right number", function()
+    -- RickBeato_720p.mp4 is 544.75s; Leben_wir_in_einer_Simulation.mp4 is 140.97s.
+    assert.is_true(math.abs(video.to_seconds("10%", 544.75) - 54.475) < 1e-6)
+    assert.is_true(math.abs(video.to_seconds("10%", 140.97) - 14.097) < 1e-6)
+    assert.are.equal(0, video.to_seconds(DEFAULTS.video.play_at, 544.75))
+  end)
+
+  it("follows a scrubbed still, which is a position the reader chose", function()
+    -- Page 1 is "wherever the still is"; from page 2 the reader has walked
+    -- the file with the paging keys and play belongs where they stopped.
+    assert.are.equal(0, video.offset_for(1, 0, "10%", 544.75))
+    assert.is_true(math.abs(video.offset_for(3, 0, "10%", 544.75) - 108.95) < 1e-6)
+  end)
+
+  it("configures a larger canvas for playing than for the still", function()
+    -- A cell is two pixel rows, so the still's 20-line budget is a 38-pixel
+    -- picture -- which is what "very pixelated" meant. Sampling and painting
+    -- were measured flat in the cell count (2026-09-08), so this costs
+    -- essentially nothing.
+    assert.is_true(DEFAULTS.video.play_scale > 1)
+    assert.is_true(
+      math.floor((DEFAULTS.max_lines - 2) * DEFAULTS.video.play_scale) > DEFAULTS.max_lines - 2
+    )
+  end)
+end)

@@ -79,6 +79,11 @@ clearing their flag, so turning it back on restores what you had.
 | `video.step` | `"10%"` | How far one press of the paging key moves through the file. A percentage, so ten presses walk a ten-second clip and a two-hour feature end to end alike. A file that reports no duration falls back to five seconds. |
 | `video.width` | `nil` | Width in pixels the still is rendered at; `nil` leaves the choice to media.nvim. Chosen against the float rather than the source — every pixel past what the terminal draws is decode time spent on nothing. |
 | `video.sound` | `true` | Whether a played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing — see [Playing a video](#playing-a-video). |
+| `video.play_at` | `0` | Where **playing** starts, which is deliberately not where the still is taken. Same three shapes as `video.at`. A thumbnail wants to skip the fade-in; a viewer wants the beginning. A scrubbed still is the exception and is honoured: from page 2 on, play starts where the paging keys left off. |
+| `video.play_scale` | `1.75` | How much larger the playing canvas is than the still's budget (`max_width`/`max_lines`), capped to the editor's own rows and columns. A cell carries two pixel rows, so the 20-line default is a 38-pixel picture — this is the sharpness knob. `1` is the still's size. |
+| `video.fps` | `12` | Stills per second in a played run, and the rate they are painted at. |
+| `video.run` | `24` | Stills one decoded window holds — two seconds at 12 fps. |
+| `video.run_width` | `nil` | Pixel width of a run's stills before they are sampled into cells. `nil` sizes it from the canvas (twice its width in cells, floored at media.nvim's default). |
 
 ## Keys
 
@@ -119,6 +124,26 @@ rather than a request for motion. The first press decodes a run of stills
 (`media.frames`), samples them into terminal cells (`images.blocks`) and starts
 a timer; the next press pauses. `.` and `,` step one frame, as they do in mpv.
 
+Playing starts at the **beginning of the file** (`video.play_at`), not at the
+still's `video.at`. Those were one setting until 2026-09-08, and sharing them
+meant a nine-minute video began at 0:54 and a two-minute one at 0:14 — ten
+percent in, which is right for a thumbnail that should not be a fade-in and
+wrong for pressing play. A still the reader has *scrubbed* is the exception:
+from page 2 on it is a chosen position, and play begins there.
+
+A step is a position in the file rather than an index into the decoded window.
+That distinction is invisible until it is wrong: a window is two seconds, and
+while steps were clamped to it, `,` stopped dead at the window's start and `<CR>`
+then resumed from there — which right after play began *was* the opening
+offset, and read as the video jumping back. Stepping past an edge now fetches
+the window holding the target, and a held key coalesces into one decode at a
+time rather than one ffmpeg per press.
+
+The bar under the picture measures the **film**, next to a clock that reads
+`0:55 / 9:05`. It used to measure the window, so it filled and reset every two
+seconds — which reads as reloading rather than as a position, and contradicted
+the clock beside it.
+
 Those three defaults are a correction. The first version shipped `<Space>`,
 `]` and `[`, and all three broke a rule this plugin already states for
 `zen_keys`: `<Space>` is `mapleader` in most configurations — borrowing it
@@ -127,17 +152,27 @@ on the same key, which reports "Recursion detected" and leaves the leader
 broken. `]` and `[` are prefixes, so `]d`, `[q` and every other bracket motion
 stop existing while a float is up, without announcing it.
 
-What moves is text — one `█` per cell with its own highlight — so it collides
-with no terminal graphics protocol and survives every redraw, unlike the still,
-which is an OSC 1337 payload Neovim paints over. The timer only rewrites
-highlights, never the float, because re-rendering at 12 fps would be a strobe.
+What moves is text — one `▀` per cell, the upper half block, carrying one
+colour in its top half and another in its bottom, so a text row shows two pixel
+rows. It collides with no terminal graphics protocol and survives every redraw,
+unlike the still, which is an OSC 1337 payload Neovim paints over. The timer
+only rewrites highlights, never the float, because re-rendering at 12 fps would
+be a strobe.
 
-| Option | Default | What it does |
-| --- | --- | --- |
-| `preview.video_fps` | `12` | Stills per second of source, and the rate they are painted at |
-| `preview.video_run` | `24` | Stills per run — two seconds at the default rate |
-| `preview.video_run_width` | media.nvim's | Pixel width of a run's stills before they become cells |
-| `preview.video_sound` | `true` | Same as `video.sound` above, the name it takes once threaded into `Hover.PreviewOpts` |
+That half block is also why `video.play_scale` exists. Two pixel rows per cell
+means the still's 20-line budget is a picture 38 pixels tall, which is what
+"very pixelated" means when someone reports it. Measured 2026-09-08 per window
+of 24 stills: **78x19 cells sampled in 168 ms and painted in 6.4 ms; 140x36 —
+nearly four times the picture — sampled in 184 ms and painted in 6.4 ms.**
+ImageMagick's startup dominates the sampling and the paint is extmarks, so the
+small canvas was never buying performance. The cap matters more than the
+factor: whatever it asks for, the canvas stays inside the editor's own rows and
+columns.
+
+Inside `Hover.PreviewOpts` these arrive as `video_play_at`, `video_play_scale`,
+`video_fps`, `video_run`, `video_run_width` and `video_sound` — the names a
+contributed previewer sees. The last four were documented as options before
+they were wired to the configuration at all; they are now.
 
 Both `media.nvim` (with ffmpeg) and `images.nvim` (with ImageMagick) have to be
 installed. Without either, `<CR>` is bound but the still stays — the same

@@ -486,6 +486,67 @@ return {
     --- when this stays `true` and the ingredients are missing.
     ---@type boolean
     sound = true,
+
+    --- Where *playing* starts — which is not where the still is taken from,
+    --- and conflating the two was a real defect rather than a preference.
+    ---
+    --- `at` is ten percent because a thumbnail of a black frame says nothing
+    --- about the file. Playing borrowed that number, so pressing play on a
+    --- nine-minute video started it at 0:54 and on a two-minute one at 0:14 —
+    --- with no way to reach the opening, since the transport keys scrub and
+    --- never rewind past where the run began. Reported 2026-09-08.
+    ---
+    --- Zero, then: the same three shapes `at` accepts, and the beginning of
+    --- the file unless a reader says otherwise. A *scrubbed* still is
+    --- different and still honoured — page 2 onward is a position the reader
+    --- chose, so play starts there rather than here.
+    ---@type number|string
+    play_at = 0,
+
+    --- How much larger the canvas is while playing than the still's own
+    --- budget — `max_width` and `max_lines` multiplied by this, then capped
+    --- to what the editor actually has room for.
+    ---
+    --- **This is a resolution setting, and it is nearly free.** A cell is two
+    --- pixels tall (`images.blocks` draws half blocks), so a 20-line budget is
+    --- a picture 38 pixels high — which is what "very pixelated" means when a
+    --- reader reports it. Measured 2026-09-08 on this machine, per window of
+    --- 24 stills: 78x19 cells sampled in 168 ms and painted in 6.4 ms;
+    --- 140x36 cells — nearly four times the picture — sampled in 184 ms and
+    --- painted in 6.4 ms. ImageMagick's startup dominates the sampling and the
+    --- paint is extmarks, so neither scales with the cell count in any way a
+    --- reader would notice. The small canvas was never buying performance.
+    ---
+    --- The cap matters more than the factor: whatever this asks for, the
+    --- canvas stays inside the editor's own rows and columns, so a large
+    --- factor on a small terminal is simply the terminal.
+    ---
+    --- `1` is the previous behaviour — the playing canvas exactly as large as
+    --- the still's.
+    ---@type number
+    play_scale = 1.75,
+
+    --- Stills per second in a played run, sampled and painted.
+    ---
+    --- Twelve is half of what film runs at and reads as motion; the cost of
+    --- raising it is decode time per window, not paint time. Documented in
+    --- `Hover.PreviewOpts` since the run existed but never actually read from
+    --- the configuration — the type promised a setting that was not wired.
+    ---@type number
+    fps = 12,
+
+    --- Stills one window holds. At `fps = 12` this is two seconds of picture
+    --- per decode, and the transport asks for the next window a second before
+    --- it needs it (see `preview.playback`).
+    ---@type integer
+    run = 24,
+
+    --- Pixel width of a run's stills before they are sampled into cells, or
+    --- `nil` to size it from the canvas — twice its width in cells, floored at
+    --- media.nvim's own default, which is enough for the downsample to have
+    --- something to average.
+    ---@type integer|nil
+    run_width = nil,
   },
 
   --- The float on (almost) the whole editor, and back again.

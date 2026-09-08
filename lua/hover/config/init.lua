@@ -556,6 +556,16 @@ function M.preview_opts()
     -- "let media.nvim choose" rather than "unset".
     video_width = video.width,
     video_sound = video.sound ~= nil and video.sound or DEFAULTS.video.sound,
+    -- `~= nil` rather than `or`, because `0` is the default and a meaningful
+    -- value: `video.play_at or DEFAULTS...` would read a configured `0` as
+    -- unset and put playback back at ten percent, which is the bug this
+    -- setting exists to fix.
+    video_play_at = video.play_at ~= nil and video.play_at or DEFAULTS.video.play_at,
+    video_play_scale = video.play_scale ~= nil and video.play_scale or DEFAULTS.video.play_scale,
+    video_fps = video.fps ~= nil and video.fps or DEFAULTS.video.fps,
+    video_run = video.run ~= nil and video.run or DEFAULTS.video.run,
+    -- No default: nil means "size it from the canvas", not "unset".
+    video_run_width = video.run_width,
   }
 end
 
