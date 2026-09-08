@@ -89,6 +89,31 @@ function M.offset_for(page, at, step, duration)
   return base + index * stride
 end
 
+--- `value` as a number of seconds, or nil when it cannot be one.
+---
+--- The three shapes `video.at` and `video.step` accept, reduced to the one the
+--- transport can do arithmetic with: a number passes through, a percentage is
+--- taken of the duration, and an ffmpeg timestamp (`"00:01:23"`) is left for
+--- ffmpeg — resolvable there, not here, so this answers nil and the caller
+--- treats the window as un-rollable rather than guessing.
+---@param value number|string|nil
+---@param duration number|nil
+---@return number|nil
+function M.to_seconds(value, duration)
+  if type(value) == "number" then
+    return value
+  end
+  if type(value) ~= "string" then
+    return nil
+  end
+  local percent = value:match("^%s*([%d%.]+)%s*%%%s*$")
+  local fraction = percent and tonumber(percent) or nil
+  if fraction and duration then
+    return duration * fraction / 100
+  end
+  return nil
+end
+
 ---@internal
 --- Whether there is anything past `offset` worth stepping to.
 ---
@@ -193,50 +218,82 @@ local function start_playback(target, opts, probe, on_result)
   end
 
   local cols, rows = playback_cells(probe, opts)
-  local from = opts.video_at or "10%"
   local fps = opts.video_fps or 12
+  local count = opts.video_run or 24
 
-  media.frames(target.path, {
-    from = from,
-    fps = fps,
-    count = opts.video_run or 24,
-    width = opts.video_run_width,
-  }, function(pngs, err)
-    if not pngs then
+  -- **Where the run starts, in seconds.** `video_at` is a percentage by
+  -- default, and this used to be recorded as a flat `0` whenever it was not
+  -- already a number — which put the control row's clock at zero on every
+  -- video and, once windows started rolling, asked for the second window from
+  -- two seconds into the file rather than two seconds past where the first one
+  -- ended. `nil` here means the offset could not be resolved (a file with no
+  -- duration), and the transport then plays the one window it has.
+  local from_seconds = M.to_seconds(opts.video_at or "10%", probe and probe.duration or nil)
+
+  --- Decode one window and sample it into cells.
+  ---
+  --- The whole of what a window costs, in one place, because the transport
+  --- asks for the next one through exactly this function while the current one
+  --- plays. `nil` without an error is the end of the file: ffmpeg returns the
+  --- frames that exist, and past the last one there are none.
+  ---@param at number|string
+  ---@param cb fun(run: Hover.Playback.Run|nil, err: string|nil): nil
+  ---@return nil
+  local function decode(at, cb)
+    media.frames(target.path, {
+      from = at,
+      fps = fps,
+      count = count,
+      width = opts.video_run_width,
+    }, function(pngs, err)
+      if not pngs or #pngs == 0 then
+        cb(nil, err)
+        return
+      end
+      -- One ImageMagick pass for the whole run: per-file is 8.5x slower
+      -- (measured in images.blocks), which is the difference between playback
+      -- and a slideshow that arrives late.
+      blocks.sample_async(pngs, cols, rows, function(raw, serr)
+        if not raw then
+          cb(nil, serr)
+          return
+        end
+        cb({ raw = raw, frames = #pngs }, nil)
+      end)
+    end)
+  end
+
+  decode(from_seconds or opts.video_at or "10%", function(run, err)
+    if not run then
       on_result(badge_with_summary(target, err and ("(" .. err .. ")") or nil))
       return
     end
-    -- One ImageMagick pass for the whole run: per-file is 8.5x slower
-    -- (measured in images.blocks), which is the difference between playback
-    -- and a slideshow that arrives late.
-    blocks.sample_async(pngs, cols, rows, function(raw, serr)
-      if not raw then
-        on_result(badge_with_summary(target, serr and ("(" .. serr .. ")") or nil))
-        return
-      end
-      local lines = blocks.canvas_lines(cols, rows)
-      -- Placeholder: `playback.load` writes the real control row as soon as
-      -- the float exists, and it needs a line to write into.
-      lines[#lines + 1] = ""
-      on_result({
-        lines = lines,
-        transport = true,
-        playback = {
-          raw = raw,
-          frames = #pngs,
-          cols = cols,
-          rows = rows,
-          fps = fps,
-          from = type(from) == "number" and from or 0,
-          duration = probe and probe.duration or nil,
-          status_row = #lines - 1,
-          -- `playback.play` starts audio from here, when there is a track to
-          -- start and the reader has not turned it off — see `M.play` for why
-          -- an mpv the file has no sound for is simply never worth starting.
-          path = (opts.video_sound ~= false and probe and probe.has_audio) and target.path or nil,
-        },
-      })
-    end)
+    local lines = blocks.canvas_lines(cols, rows)
+    -- Placeholder: `playback.load` writes the real control row as soon as
+    -- the float exists, and it needs a line to write into.
+    lines[#lines + 1] = ""
+    on_result({
+      lines = lines,
+      transport = true,
+      playback = {
+        raw = run.raw,
+        frames = run.frames,
+        cols = cols,
+        rows = rows,
+        fps = fps,
+        from = from_seconds or 0,
+        duration = probe and probe.duration or nil,
+        status_row = #lines - 1,
+        -- `playback.play` starts audio from here, when there is a track to
+        -- start and the reader has not turned it off — see `M.play` for why
+        -- an mpv the file has no sound for is simply never worth starting.
+        path = (opts.video_sound ~= false and probe and probe.has_audio) and target.path or nil,
+        -- Only when the first offset is a real number of seconds: without one
+        -- there is nothing to add a window length to, and a request from the
+        -- wrong place would show the wrong part of the film.
+        request = from_seconds and decode or nil,
+      },
+    })
   end)
 
   return true
