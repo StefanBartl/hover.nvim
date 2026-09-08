@@ -106,6 +106,9 @@ borrow condition is in [BINDINGS.md](BINDINGS.md).
 | `nav_keys.up` | `{ "k" }` | as above |
 | `nav_keys.down` | `{ "j" }` | as above |
 | `position_keys.next` | `{ "<M-n>" }` | **position hovers only**, and only where more than one contribution is registered — see [When two plugins answer](#when-two-plugins-answer) |
+| `transport_keys.toggle` | `{ "<CR>" }` | hovers that **can play** — a video. First press decodes a run and starts it, every press after starts and stops it. `<CR>` moves down a line unbound: not a prefix, and not `mapleader` — see [Playing a video](#playing-a-video) for the two keys this replaced |
+| `transport_keys.forward` | `{ "." }` | as above, once a run is loaded: one frame on, and pause. mpv's own frame-step key |
+| `transport_keys.back` | `{ "," }` | as above, one frame back |
 
 ## Playing a video
 
