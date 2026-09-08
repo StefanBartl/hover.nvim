@@ -181,6 +181,14 @@ can reach them.
 | `?` | the same table, in a panel, generated from the source |
 | `q`, `<Esc>` | close the board |
 
+Resting on a row for **three seconds** opens a small panel explaining what
+that switch does — the `desc` each switch has carried since it was declared,
+which until then was only reachable by reading the source. Moving on closes
+it; the countdown restarts on every cursor move, so walking down the board
+shows nothing until you stop. Not `updatetime`: that is the setting for the
+editor's idle behaviour, and a board being read line by line wants a slower
+hand than a buffer being edited.
+
 The `winbar` carries the keys that fit and pins `? Keys`, which is how the rest
 stays reachable. Both the legend and the `?` panel are generated from one table
 in `hover.status_view`, so neither can advertise a key that is not bound.
