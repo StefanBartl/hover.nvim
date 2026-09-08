@@ -164,7 +164,7 @@ vim.keymap.set("n", "<C-u>", function() require("hover").scroll(-1) end)
 `scroll(delta)` and `dismiss()` both return `false` when there is no open
 hover, so either is safe to bind unconditionally.
 
-### Owned — buffer-local, inside the `:Hover status` board
+### Owned — buffer-local, inside the `:Hover dashboard` board
 
 Not borrowed and not global: these live on the board's own scratch buffer and
 go away with it. They are not configurable, because nothing outside that window
@@ -213,7 +213,7 @@ left out. The list itself, so this cheatsheet is one:
 | --- | --- |
 | asking | `:Hover show` &middot; `:Hover why` &middot; `:Hover pin` &middot; `:Hover next` |
 | the float on screen | `:Hover resize` &middot; `:Hover zoom` &middot; `:Hover nav` &middot; `:Hover border` |
-| volume | `:Hover mode` &middot; `:Hover toggle` &middot; `:Hover auto` &middot; `:Hover status` |
+| volume | `:Hover mode` &middot; `:Hover toggle` &middot; `:Hover auto` &middot; `:Hover dashboard` |
 | switches | `:Hover links` &middot; `:Hover links web` &middot; `:Hover links web fetch` &middot; `:Hover links web fetch pdf` &middot; `:Hover links web shot` &middot; `:Hover links web shot eager` &middot; `:Hover paths` &middot; `:Hover paths missing` &middot; `:Hover paths code` &middot; `:Hover positions` &middot; `:Hover images` &middot; `:Hover office` |
 
 `:Hover` is registered from `plugin/hover.lua`, so it exists before `setup()`
@@ -222,7 +222,7 @@ point: `:Hover mode auto` has to be reachable from exactly the state where
 someone is most likely to type it.
 
 The routes are **generated** from `hover.switches`, not written out. Dispatch,
-completion, the descriptions and `:Hover status` all read the same table, so
+completion, the descriptions and `:Hover dashboard` all read the same table, so
 they cannot drift apart.
 
 No keymap is offered for these, and none accepts a range. A setting thrown a
@@ -280,7 +280,7 @@ Defined on demand with `default = true`, so a colorscheme still wins.
 | `HoverMissing` | `DiagnosticError` | the "this target does not exist" marker |
 | `HoverError` | `DiagnosticError` | an HTTP 4xx/5xx, or an unreachable host |
 | `HoverInfo` | `DiagnosticHint` | the "no text in this file" badge |
-| `HoverStatusHeader` | `Title` | a section heading on the `:Hover status` board |
+| `HoverStatusHeader` | `Title` | a section heading on the `:Hover dashboard` board |
 | `HoverStatusOn` | `DiagnosticOk` | a row that is on, glyph and state |
 | `HoverStatusOff` | `Comment` | a row that is off |
 | `HoverStatusHeld` | `DiagnosticWarn` | a row that is set, but held off by the row above it |

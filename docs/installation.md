@@ -191,7 +191,7 @@ appears there as `registry: user`. That line is what separates "it never registe
 "it registered and declined", which look the same from the outside.
 
 ```vim
-:Hover status
+:Hover dashboard
 ```
 
 The mode, all twelve switches and what opens by itself, on one board — with the command

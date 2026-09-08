@@ -107,7 +107,7 @@ a name (`manual`).
 ## One declaration, and every copy of it that fell behind
 
 `lua/hover/switches.lua` is the single declaration of the switches. Routes,
-completion, `:Hover status` and `:checkhealth hover` are all *derived* from it,
+completion, `:Hover dashboard` and `:checkhealth hover` are all *derived* from it,
 so adding a switch is a table entry and nothing else.
 
 That is not tidiness. **Every time something in this repository kept a second,
@@ -118,7 +118,7 @@ hand-kept number and went stale twice before this sentence replaced it.
 - `usrcmds.route_path` (`ac50599`) — a new switch landed at the top level
   instead of under its parent.
 - `switches.effective` (`144c405`) — a new switch read as permanently on;
-  `:Hover status` and `:checkhealth` both lied.
+  `:Hover dashboard` and `:checkhealth` both lied.
 - `preview/office.lua` (`a5531e5`) — a badge advertised a command that no
   longer existed.
 - **The documents** (2026-09-02) — the vimdoc listed seven of the nine switch

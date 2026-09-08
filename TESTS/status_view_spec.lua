@@ -2,7 +2,7 @@
 -- The test body is the guard; see the note in TESTS/bare_path_spec.lua
 -- (`LLS-42`).
 
--- TESTS/status_view_spec.lua -- the `:Hover status` board.
+-- TESTS/status_view_spec.lua -- the `:Hover dashboard` board.
 --
 -- **What this file is here to pin is one bug report.** Someone read
 -- `link targets on` / `web links off`, typed `:Hover links on` at it, and
@@ -117,7 +117,7 @@ local function row_text(bufnr, needle)
   error("no row matching " .. needle)
 end
 
-describe("the :Hover status board", function()
+describe("the :Hover dashboard board", function()
   before_each(function()
     config.reset()
     vim.g.hover_disable = nil

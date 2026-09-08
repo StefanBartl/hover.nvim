@@ -3,7 +3,7 @@
 ---@description
 --- One table drives the public API (`hover.set`/`hover.enabled`), the
 --- `:Hover <feature> <state>` routes, their `<Tab>` completion, the
---- `:Hover status` report and the `:checkhealth hover` section. A ninth
+--- `:Hover dashboard` report and the `:checkhealth hover` section. A ninth
 --- switch is one entry here and nothing else -- and dispatch, completion and
 --- documentation cannot drift apart, because there is only one of them
 --- (`UI-20`, `UI-21`).
@@ -190,7 +190,7 @@ end
 ---
 --- **Here rather than in the command module, because it has two readers.**
 --- It was a local in `hover.bindings.usrcmds`, which was fine while the
---- command tree was the only thing that needed it. `:Hover status` needs the
+--- command tree was the only thing that needed it. `:Hover dashboard` needs the
 --- same answer -- a row saying `broken-target marker` is unusable unless it
 --- also says which words to type -- and a second derivation of the same
 --- chain is exactly the drift this table exists to prevent. So it lives with
@@ -239,7 +239,7 @@ end
 --- switch added without a matching entry read as permanently `off`: `name`
 --- was simply not in the table, and `read ~= nil` answered false. `code`
 --- hid it -- its default is off, so the wrong answer was the right one --
---- and `positions` exposed it, reported off while being on. `:Hover status`
+--- and `positions` exposed it, reported off while being on. `:Hover dashboard`
 --- and the `:checkhealth` section both read from here, so both lied.
 ---
 --- Third consumer of `SWITCHES` to fall behind it this way (`ac50599` was
@@ -404,7 +404,7 @@ function M.on_report(name)
     )
 end
 
---- Every switch's current state, in display order, for `:Hover status` and
+--- Every switch's current state, in display order, for `:Hover dashboard` and
 --- `:checkhealth hover`.
 ---
 --- `enabled` folds in the implication chain and is the answer to "does this

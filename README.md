@@ -206,7 +206,7 @@ When one does not, that is the question `:Hover why` exists to answer:
 ```vim
 :Hover show            " one hover, here, now, ignoring every volume switch
 :Hover why             " which gate refused, and what to type about it
-:Hover status          " the mode and every switch, as a board you can toggle
+:Hover dashboard          " the mode and every switch, as a board you can toggle
 ```
 
 No key is claimed by default — a plugin that other plugins depend on has no
@@ -231,7 +231,7 @@ the state argument may be omitted, which toggles.
 | --- | --- |
 | `:Hover show` | One hover, here, now, ignoring every volume switch |
 | `:Hover why` | Why nothing hovered *here* — which gate refused, and what to type about it |
-| `:Hover status` | The mode, every switch and what opens by itself — a board where `<CR>` toggles the row and `?` lists the keys |
+| `:Hover dashboard` | The mode, every switch and what opens by itself — a board where `<CR>` toggles the row and `?` lists the keys |
 | `:Hover mode manual` | Nothing opens by itself any more; every preview still answers when asked |
 | `:Hover auto [<type>]` | Which target types open by themselves |
 | `:Hover links web on` | Let `http(s)` links hover too — off by default, because documentation is made of links. Pair it with `:Hover auto url` for the automatic trigger |

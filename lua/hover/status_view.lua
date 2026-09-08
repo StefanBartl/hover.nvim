@@ -1,5 +1,5 @@
 ---@module 'hover.status_view'
----@brief `:Hover status` as a board you can act on, not a message you read.
+---@brief `:Hover dashboard` as a board you can act on, not a message you read.
 ---@description
 --- Every switch, its state, and **the words to type at it**, on one screen --
 --- and `<CR>` on a row does the typing. It replaces a `vim.notify` dump and
@@ -490,7 +490,7 @@ show_keys = function()
 
   kit.viewer({
     lines = lines,
-    title = "Hover status keys",
+    title = "Hover dashboard keys",
     filetype = "hover-help",
     width = math.min(width + 2, math.floor(vim.o.columns * 0.9)),
     height = math.min(#lines, math.floor(vim.o.lines * 0.8)),
@@ -614,14 +614,41 @@ local function dwell_show(state)
     return
   end
   local ok, kit = pcall(require, "lib.nvim.ui.kit")
-  if not ok or type(kit.note) ~= "function" then
+  if not ok or type(kit.surface) ~= "table" then
     return
   end
-  local opened, surf = pcall(kit.note, {
+
+  local width = math.min(70, math.max(30, math.floor(vim.o.columns * 0.4)))
+  -- Wrapped by hand: the surface sizes itself to the lines it is given, so a
+  -- long sentence would otherwise open a float wider than the screen.
+  local lines = {}
+  local line = ""
+  for word in row.desc:gmatch("%S+") do
+    if line == "" then
+      line = word
+    elseif vim.fn.strdisplaywidth(line .. " " .. word) <= width - 2 then
+      line = line .. " " .. word
+    else
+      lines[#lines + 1] = line
+      line = word
+    end
+  end
+  lines[#lines + 1] = line
+
+  -- `kit.surface` rather than `kit.note`, for `zindex` alone: both windows
+  -- otherwise take the theme's `popup` level, and at equal zindex the focused
+  -- window wins -- which is the board, so the explanation opened *behind* the
+  -- thing it explains. `enter = false` keeps the board's keys working.
+  local opened, surf = pcall(kit.surface.open, {
+    lines = lines,
     title = row.route,
-    message = row.desc,
     relative = "cursor",
-    width = math.min(70, math.max(30, math.floor(vim.o.columns * 0.4))),
+    width = width,
+    height = #lines,
+    zindex = 200,
+    enter = false,
+    focusable = false,
+    filetype = "hover-status-help",
   })
   if opened and type(surf) == "table" then
     dwell.surf = surf
@@ -668,7 +695,7 @@ end
 ---
 --- Returns false when lib.nvim's UI kit is not there to draw one, which is
 --- the caller's signal to fall back to the plain message -- exactly the
---- behaviour `:Hover status` had before this module existed.
+--- behaviour `:Hover dashboard` had before this module existed.
 ---@return boolean shown
 function M.open()
   local ok, kit = pcall(require, "lib.nvim.ui.kit")

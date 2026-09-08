@@ -343,7 +343,7 @@ end)
 describe("what the documents count", function()
   it("spells out the right number of switches, wherever it spells one out", function()
     -- `docs/installation.md` said "the mode and all seven switches" while
-    -- there were nine, in the page that explains `:Hover status`. A number in
+    -- there were nine, in the page that explains `:Hover dashboard`. A number in
     -- prose has no consumer that would notice.
     local want = #switches.names()
     local wrong = {}
@@ -634,7 +634,7 @@ describe("docs/BINDINGS.md against the groups the source installs", function()
     end
 
     -- **Two sources, because there are two.** The float's groups were the
-    -- only ones until `:Hover status` became a board, and a spec that kept
+    -- only ones until `:Hover dashboard` became a board, and a spec that kept
     -- reading one file would have passed on a table that documented half the
     -- groups -- which is this repository's recurring bug, in the one place
     -- built to catch it. `HL_SPEC` writes its names out for exactly this.

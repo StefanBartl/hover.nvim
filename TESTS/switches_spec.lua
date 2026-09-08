@@ -471,7 +471,7 @@ end)
 -- out of without anything failing. `route_path` was the first (`ac50599`,
 -- a switch registered at the wrong place in the command tree); `effective`
 -- was the second, and reported `positions` as off while it was on -- in
--- `:Hover status` and in `:checkhealth` alike, since both read from there.
+-- `:Hover dashboard` and in `:checkhealth` alike, since both read from there.
 --
 -- These specs are written over `switches.names()` rather than over a list, so
 -- a tenth switch is covered the moment it is declared. That is the only shape

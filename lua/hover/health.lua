@@ -303,7 +303,7 @@ local function check_config()
     end
   end
 
-  -- The route beside the label, for the same reason `:Hover status` grew a
+  -- The route beside the label, for the same reason `:Hover dashboard` grew a
   -- board: `broken-target marker` is a state, `:Hover paths missing` is the
   -- thing to type about it, and only one of them used to be on screen. A
   -- switch that is set while the switch above it is off says so rather than
@@ -327,7 +327,7 @@ local function check_config()
 
   if not any and mode ~= "off" then
     health.warn("every preview class is switched off -- no target can produce a float", {
-      "`:Hover status` lists them; `:Hover paths on` is the usual one to restore.",
+      "`:Hover dashboard` lists them; `:Hover paths on` is the usual one to restore.",
     })
   end
 
