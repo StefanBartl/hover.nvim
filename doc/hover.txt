@@ -771,10 +771,26 @@ somewhere -- a glance, not a request for motion.
 `video.playback = "window"` (default) sends `<CR>` to a real mpv window
 instead of painting into the float: video and sound, decoded and drawn by mpv
 with no editor redraw in the loop. The float shows a short "playing" panel,
-not a picture. Set `video.playback = "inline"` for the block-graphics
-transport described below, which is genuinely smooth on a terminal fast
-enough for it and needs no separate window; either falls back to the still
-where its own ingredient (mpv, ImageMagick) is missing.
+not a picture.
+
+Without mpv, "window" still beats a muted run of block graphics: `<CR>` hands
+the file to `media.play()` instead -- a configured player, or whatever this
+machine already opens a video with, the same call `gf` makes. Nothing extra
+to install, at the cost of nothing here being able to stop it again: closing
+the hover only drops the float back to the still, and the player itself keeps
+running until its own window is closed by hand.
+
+`video.system_player_align` (default false, experimental, Windows/macOS/
+Linux) is a best-effort attempt to centre whatever window that system player
+opens. It can genuinely do nothing -- a UWP default handler on Windows, a
+terminal without Accessibility permission on macOS, Wayland on Linux -- and
+never reports when it does not.
+
+Set `video.playback = "inline"` for the block-graphics transport described
+below instead of either of the above, which is genuinely smooth on a terminal
+fast enough for it and needs no separate window; each tier falls back
+further where its own ingredient is missing (mpv, then a working
+`media.play()`, then ImageMagick, then the still).
 
 The rest of this section is the "inline" route.
 

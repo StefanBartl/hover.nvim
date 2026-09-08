@@ -495,21 +495,49 @@ return {
     --- loop. The float shows a short "playing" panel; closing the hover — a
     --- cursor move, `q`, `:qa` — stops the window.
     ---
-    --- **`"inline"` keeps the block-graphics transport**, which is genuinely
-    --- smooth on a terminal fast enough for it and needs no separate window.
-    --- It falls back to the still where mpv or ImageMagick is missing.
+    --- **Without mpv, `"window"` still beats a muted run of block graphics.**
+    --- `<CR>` hands the file to `media.play()` instead -- a configured
+    --- player, or whatever this machine already opens a video with, the same
+    --- call `gf` makes. Real video and sound, nothing extra to install, at
+    --- the cost of nothing here being able to stop it again: closing the
+    --- hover only drops the float back to the still, and the player itself
+    --- runs until its own window is closed by hand.
     ---
-    --- Either way the still and the paging-key scrub through it are unchanged —
+    --- **`"inline"` keeps the block-graphics transport instead of either**,
+    --- which is genuinely smooth on a terminal fast enough for it and opens
+    --- no separate window at all. It is also where both of the above end up
+    --- when neither can run: no mpv and no system player (`media.play()`
+    --- failing outright), or ImageMagick missing on top of that falls
+    --- further to the still.
+    ---
+    --- Either way the still and the paging-key scrub through it are unchanged --
     --- this is only about what "play" means.
     ---@type "window"|"inline"
     playback = "window",
+
+    --- Experimental, and Windows only: when `"window"` falls back to the
+    --- system player (no mpv), best-effort centre whatever new window
+    --- appears in the next few seconds -- mpv's own `--geometry=50%:50%`,
+    --- approximated from outside a process this plugin does not own.
+    ---
+    --- **Off by default because whether it does anything depends on what is
+    --- registered, not on this plugin.** A classic window (VLC, MPC-HC)
+    --- moves cleanly. The stock Windows handler for a video is a UWP app
+    --- ("Films & TV"), which runs inside a shared container process that has
+    --- historically ignored being moved from outside it -- measured true on
+    --- the machine this shipped from. Either way this never reports failure:
+    --- it centres the window when it can, and changes nothing when it
+    --- cannot. See `preview.align_win`.
+    ---@type boolean
+    system_player_align = false,
 
     --- Whether an *inline* played run may start audio, when the file has a
     --- track and mpv is on PATH. On by default for the same reason
     --- `inline_images` defaults on: everything this needs degrades to silent
     --- playback by itself (no mpv, no audio track), so there is nothing here
     --- that fails when it stays `true` and the ingredients are missing. A
-    --- `"window"` playback always has mpv's own sound and ignores this.
+    --- `"window"` playback always has its player's own sound and ignores
+    --- this.
     ---@type boolean
     sound = true,
 

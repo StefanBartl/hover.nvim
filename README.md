@@ -127,10 +127,12 @@ the registry, and none of them named in its source.
 >
 > **[media.nvim]** — a `.mp4` shown as a frame out of itself rather than as a
 > size in bytes, with the paging keys as a scrub — and `<CR>` plays it, video
-> and sound, in a real mpv window. No image protocol animates from inside
-> Neovim, so a terminal too slow for that redraw would otherwise mean a
-> slideshow; [block graphics](docs/FEATURES/VIDEO.md) are still there as
-> `video.playback = "inline"`, for a terminal fast enough to enjoy them.
+> and sound, in a real mpv window, or without mpv in whatever this machine
+> already opens a video with — nothing extra to install either way. No image
+> protocol animates from inside Neovim, so a terminal too slow for that redraw
+> would otherwise mean a slideshow; [block graphics](docs/FEATURES/VIDEO.md)
+> are still there as `video.playback = "inline"`, for a terminal fast enough
+> to enjoy them.
 >
 > **[gopath.nvim]** — the same reference, followed rather than previewed. hover
 > calls its `resolve_at_cursor()` through a `pcall`, so neither depends on the

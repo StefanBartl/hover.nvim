@@ -421,6 +421,129 @@ describe("playing in a window rather than the float", function()
   end)
 end)
 
+describe("playing without mpv, handed to the system's own player", function()
+  local external = require("hover.preview.external")
+
+  local function stub_media(extra)
+    return vim.tbl_extend("force", {
+      frame = function() end,
+      frames = function() end,
+      available = function()
+        return true
+      end,
+      probed = function()
+        return { duration = 600 }
+      end,
+      player_available = function()
+        return false
+      end,
+    }, extra or {})
+  end
+
+  it("hands hover.init a play_external marker instead of decoding a run", function()
+    external.reset()
+    local saved_media = package.loaded["media"]
+    local saved_ip = package.loaded["lib.nvim.image_preview"]
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return "stub"
+      end,
+    }
+    local played = {}
+    package.loaded["media"] = stub_media({
+      play = function(path)
+        played[#played + 1] = path
+        return true
+      end,
+    })
+
+    local content = video.preview({
+      type = "video",
+      raw = "clip.mp4",
+      path = "/tmp/clip.mp4",
+      ext = "mp4",
+      size = 1024,
+    }, { inline_images = true, play = true, video_playback = "window", page = 1 }, function() end)
+
+    package.loaded["media"] = saved_media
+    package.loaded["lib.nvim.image_preview"] = saved_ip
+    external.reset()
+
+    assert.same({ "/tmp/clip.mp4" }, played, "media.play must actually have been called")
+    assert.are.equal("/tmp/clip.mp4", content.play_external)
+    assert.is_nil(content.play_window, "no mpv -- this is the system player, not a window")
+    assert.is_true(content.transport, "the key stays bound, to dismiss the badge")
+    assert.is_nil(content.pending, "the hand-off already happened; there is nothing to wait for")
+  end)
+
+  it("falls through to inline when media.play fails too", function()
+    external.reset()
+    local saved_media = package.loaded["media"]
+    local saved_ip = package.loaded["lib.nvim.image_preview"]
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return "stub"
+      end,
+    }
+    package.loaded["media"] = stub_media({
+      play = function()
+        return false, "no handler registered"
+      end,
+    })
+
+    local content = video.preview({
+      type = "video",
+      raw = "clip.mp4",
+      path = "/tmp/clip.mp4",
+      ext = "mp4",
+      size = 1024,
+    }, { inline_images = true, play = true, video_playback = "window", page = 1 }, function() end)
+
+    package.loaded["media"] = saved_media
+    package.loaded["lib.nvim.image_preview"] = saved_ip
+    external.reset()
+
+    assert.is_nil(
+      content.play_external,
+      "nothing actually opened -- the badge must not claim it did"
+    )
+    assert.is_nil(content.play_window)
+  end)
+
+  it("is never tried when video_playback is inline", function()
+    external.reset()
+    local saved_media = package.loaded["media"]
+    local saved_ip = package.loaded["lib.nvim.image_preview"]
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return "stub"
+      end,
+    }
+    local played = false
+    package.loaded["media"] = stub_media({
+      play = function()
+        played = true
+        return true
+      end,
+    })
+
+    local content = video.preview({
+      type = "video",
+      raw = "clip.mp4",
+      path = "/tmp/clip.mp4",
+      ext = "mp4",
+      size = 1024,
+    }, { inline_images = true, play = true, video_playback = "inline", page = 1 }, function() end)
+
+    package.loaded["media"] = saved_media
+    package.loaded["lib.nvim.image_preview"] = saved_ip
+    external.reset()
+
+    assert.is_false(played, '"inline" must skip both the window and the system-player tiers')
+    assert.is_nil(content.play_external)
+  end)
+end)
+
 describe("the float a played run is drawn into", function()
   local DEFAULTS = require("hover.config.DEFAULTS")
   local float = require("hover.float")

@@ -78,8 +78,9 @@ clearing their flag, so turning it back on restores what you had.
 | `video.at` | `"10%"` | Where the first still of a video comes from. A number is seconds, `"10%"` is a fraction of the running time, anything else is handed to ffmpeg as a timestamp. Ten percent rather than zero because the first frame of a real video is usually black, a fade-in or a logo. |
 | `video.step` | `"10%"` | How far one press of the paging key moves through the file. A percentage, so ten presses walk a ten-second clip and a two-hour feature end to end alike. A file that reports no duration falls back to five seconds. |
 | `video.width` | `nil` | Width in pixels the still is rendered at; `nil` leaves the choice to media.nvim. Chosen against the float rather than the source — every pixel past what the terminal draws is decode time spent on nothing. |
-| `video.playback` | `"window"` | What `<CR>` does: `"window"` opens a real mpv window (video and sound, no editor redraw in the loop); `"inline"` paints a run of stills into the float instead — see [Playing a video](#playing-a-video). |
-| `video.sound` | `true` | Whether an **inline** played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing. A `"window"` playback always has mpv's own sound and ignores this. |
+| `video.playback` | `"window"` | What `<CR>` does: `"window"` opens a real mpv window, or without mpv the system's own player (`media.play()`, the same call `gf` makes — no extra install); `"inline"` paints a run of stills into the float instead of either — see [Playing a video](#playing-a-video). |
+| `video.system_player_align` | `false` | Experimental, Windows/macOS/Linux: when `"window"` falls back to the system player, best-effort centre whatever new window appears in the next few seconds. Off by default because whether it does anything depends on what is registered on this machine, not on this plugin — see [Playing a video](#playing-a-video). |
+| `video.sound` | `true` | Whether an **inline** played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing. A `"window"` playback always has its player's own sound and ignores this. |
 | `video.play_at` | `0` | Where **playing** starts, which is deliberately not where the still is taken. Same three shapes as `video.at`. A thumbnail wants to skip the fade-in; a viewer wants the beginning. A scrubbed still is the exception and is honoured: from page 2 on, play starts where the paging keys left off. |
 | `video.play_scale` | `2.5` | How much larger the **box** is while playing — `max_width`/`max_lines` scaled, capped to the editor's own rows and columns. The float and the canvas are both built from that one number, so they grow together. A cell carries two pixel rows, so the 20-line default is a 38-pixel picture; this is the sharpness knob. `1` is the still's size. |
 | `video.fps` | `12` | Stills per second in a played run, and the rate they are painted at. |
@@ -134,10 +135,31 @@ cursor move, `q`, `:qa` — stops the window. Playback starts from the scrubbed
 position if the paging keys moved it (`video_play_at` otherwise), exactly as
 the inline route does; the two share the arithmetic.
 
+**Without mpv, `"window"` still beats a muted run of block graphics.** `<CR>`
+hands the file to `media.play()` instead — a configured player, or whatever
+this machine already opens a video with, the same call `gf` makes. Real video
+and sound, nothing extra to install, at the cost of nothing here being able to
+stop it again: closing the hover only drops the float back to the still, and
+the player itself runs until its own window is closed by hand.
+
+**`video.system_player_align`** (default `false`, experimental) is a
+best-effort attempt to centre whatever new window that system player opens,
+approximating mpv's own `--geometry=50%:50%` from outside a process this
+plugin does not own. It can genuinely do nothing: the stock Windows handler
+for a video is a UWP app ("Films & TV") running in a shared container process
+that has historically ignored being moved from outside it; macOS needs the
+terminal to have Accessibility permission for `System Events` to move
+anything at all; Linux needs `xdotool` or `wmctrl`, neither of which can move
+a window under Wayland by that compositor's own design. None of that is
+reported — it centres the window when it can, and changes nothing when it
+cannot.
+
 Set `video.playback = "inline"` for the block-graphics transport described
-below instead — genuinely smooth on a terminal fast enough for it, and it needs
-no separate window. Either mode falls back to the still where its own
-ingredient is missing (mpv for a window, ImageMagick for inline).
+below instead of either of the above — genuinely smooth on a terminal fast
+enough for it, and it needs no separate window. All three tiers fall back
+further down the list where their own ingredient is missing: mpv for a
+window, a working `media.play()` for the system player, ImageMagick for
+inline, and the still underneath all of them.
 
 The rest of this section is the **inline** route. The first press decodes a
 run of stills (`media.frames`), samples them into terminal cells

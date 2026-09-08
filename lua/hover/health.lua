@@ -469,10 +469,10 @@ function M.check()
     health.info("ffmpeg/ffprobe: not on PATH -- media.nvim cannot lift a still out of a video")
   end
 
-  -- Info, not warn: both playback modes degrade cleanly without mpv, and
-  -- which one is missing what depends on `video.playback` -- `"window"` (the
-  -- default) needs mpv for a played video hover to do anything at all,
-  -- `"inline"` only needs it for sound.
+  -- Info, not warn: every playback mode degrades cleanly without mpv, and
+  -- what a missing one costs depends on `video.playback` -- `"window"` (the
+  -- default) falls back to the system's own player, real video and sound
+  -- either way; `"inline"` only needs mpv for sound.
   local window_playback = (require("hover.config").get().video or {}).playback ~= "inline"
   if vim.fn.executable("mpv") == 1 then
     health.ok(
@@ -482,7 +482,7 @@ function M.check()
   else
     health.info(
       window_playback
-          and "mpv: not on PATH -- <CR> on a video hover falls back to block graphics" .. " (or the still, without ImageMagick too) -- `:checkhealth media` has the install command"
+          and "mpv: not on PATH -- <CR> on a video hover falls back to the system's own" .. " player (still video and sound), then to block graphics, then the still"
         or "mpv: not on PATH -- a played video hover stays silent (`:checkhealth media` has the detail)"
     )
   end

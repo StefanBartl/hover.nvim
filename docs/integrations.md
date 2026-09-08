@@ -279,6 +279,7 @@ require("media").frames(path, opts, callback)              --> a run of PNGs, fo
 require("media").audio(path, { at = offset }, callback)    --> mpv, audio only — nil handle when unavailable
 require("media").player_available()                        --> can `<CR>` open a real window at all?
 require("media").play_window(path, { at = offset })         --> a real mpv window, video and sound
+require("media").play(path)                                 --> a configured player, or the system's own
 require("media.ui").summary(probe)                        --> "1920x1080 · 4:32 · h264 · 100 MB"
 ```
 
@@ -293,18 +294,30 @@ What comes back is a PNG, and from there this is an image hover: the same canvas
 geometry, the same draw, the same keys. Which is why the previewer is short —
 the interesting work is on the other side of the seam.
 
-Five things worth knowing when this misbehaves, all in
+Six things worth knowing when this misbehaves, all in
 [`preview/video.lua`](../lua/hover/preview/video.lua),
 [`preview/playback.lua`](../lua/hover/preview/playback.lua),
-[`preview/window.lua`](../lua/hover/preview/window.lua) and
+[`preview/window.lua`](../lua/hover/preview/window.lua),
+[`preview/external.lua`](../lua/hover/preview/external.lua),
+[`preview/align_win.lua`](../lua/hover/preview/align_win.lua) and
 [VIDEO.md](FEATURES/VIDEO.md):
 
-- **`<CR>` reaches for the window first.** `video.playback = "window"` (the
-  default) never calls `media.frame`/`media.frames` at all — `preview/video.lua`
-  hands `hover.init` a `play_window` marker instead, and `preview/window.lua`
-  is the only caller of `media.play_window`/`player_available`. The rest of
-  this section is the `"inline"` route, reached only when that setting says so
-  or `player_available()` says mpv cannot be found.
+- **`<CR>` reaches for the window first, then the system player, then
+  inline.** `video.playback = "window"` (the default) never calls
+  `media.frame`/`media.frames` at all while either of the first two can run.
+  `preview/video.lua` hands `hover.init` a `play_window` or `play_external`
+  marker instead: `preview/window.lua` is the only caller of
+  `media.play_window`/`player_available`, `preview/external.lua` the only
+  caller of `media.play` (the same call `gf` makes). The rest of this section
+  is the `"inline"` route, reached only when `video.playback = "inline"` says
+  so, or both of the above fail to open anything.
+- **`preview/external.lua` cannot stop what it started.** Unlike
+  `preview/window.lua`, which holds mpv's own handle, `media.play()` on
+  Windows hands off through `explorer.exe` and exits itself almost at once —
+  there is no PID of the real player left to hold. `<CR>` a second time only
+  drops the float back to the still; `preview/align_win.lua`'s best-effort
+  window-centring (`video.system_player_align`, off by default) is the only
+  other thing this tier does, and it never reports whether it worked.
 - **`available()` is asked before anything is claimed**, so "ffmpeg is not on
   PATH" is a sentence in the float rather than a failed render. Both binaries
   are required: a percentage offset needs a duration, and the duration comes

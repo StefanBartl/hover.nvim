@@ -527,6 +527,19 @@ function M.preview_opts()
   local shot = type(links.shot) == "table" and links.shot or {}
   local pdf = type(links.pdf) == "table" and links.pdf or {}
   local video = type(c.video) == "table" and c.video or {}
+  -- Not `X ~= nil and X or DEFAULTS.X`: that idiom reads an explicit `false`
+  -- back as unset (`true and false` is `false`, which then falls through to
+  -- `or DEFAULTS...`), the same trap `play_at` avoids for a meaningful `0` --
+  -- except `0` is truthy in Lua and was never actually at risk, where a
+  -- meaningful `false` is. Both booleans below need the real `if`.
+  local video_sound = DEFAULTS.video.sound
+  if video.sound ~= nil then
+    video_sound = video.sound
+  end
+  local video_system_player_align = DEFAULTS.video.system_player_align
+  if video.system_player_align ~= nil then
+    video_system_player_align = video.system_player_align
+  end
   return {
     max_lines = c.max_lines or DEFAULTS.max_lines,
     max_width = c.max_width or DEFAULTS.max_width,
@@ -556,7 +569,8 @@ function M.preview_opts()
     -- "let media.nvim choose" rather than "unset".
     video_width = video.width,
     video_playback = video.playback ~= nil and video.playback or DEFAULTS.video.playback,
-    video_sound = video.sound ~= nil and video.sound or DEFAULTS.video.sound,
+    video_system_player_align = video_system_player_align,
+    video_sound = video_sound,
     -- `~= nil` rather than `or`, because `0` is the default and a meaningful
     -- value: `video.play_at or DEFAULTS...` would read a configured `0` as
     -- unset and put playback back at ten percent, which is the bug this
