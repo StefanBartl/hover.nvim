@@ -145,7 +145,7 @@ end
 --- argument stops being readable -- `borrow(c, f, g, h, true)` says nothing
 --- about which of them pans. A fourth condition is one key here.
 ---@param content Hover.Content|nil
----@param handlers { next_answer?: fun(), has_answers?: boolean, scroll?: fun(delta: integer), resize?: fun(delta: integer), nav?: fun(dx: integer, dy: integer), zoom?: fun(delta: integer), zoomed?: boolean, zoomable?: boolean, zen?: fun() }
+---@param handlers { next_answer?: fun(), has_answers?: boolean, scroll?: fun(delta: integer), resize?: fun(delta: integer), nav?: fun(dx: integer, dy: integer), zoom?: fun(delta: integer), zoomed?: boolean, zoomable?: boolean, zen?: fun(), transport?: fun(), transport_step?: fun(delta: integer) }
 ---@return nil
 function M.borrow(content, handlers)
   handlers = handlers or {}
@@ -191,6 +191,32 @@ function M.borrow(content, handlers)
       take(seen, lhs, function()
         handlers.zen()
       end, "hover: full screen, and back")
+    end
+  end
+
+  -- Transport, before the scroll keys so a key configured for both keeps the
+  -- older meaning -- and bound only for content that says it can play. The
+  -- narrow condition is the same argument the others make: `<Space>` is `l`
+  -- in normal mode, which is worth taking over a video and not worth taking
+  -- over every float.
+  if handlers.transport then
+    local tk = type(cfg.transport_keys) == "table" and cfg.transport_keys or {}
+    for _, lhs in ipairs(M.keylist(tk.toggle)) do
+      take(seen, lhs, function()
+        handlers.transport()
+      end, "hover: play or pause this video")
+    end
+    if handlers.transport_step then
+      for _, lhs in ipairs(M.keylist(tk.forward)) do
+        take(seen, lhs, function()
+          handlers.transport_step(1)
+        end, "hover: one frame forward")
+      end
+      for _, lhs in ipairs(M.keylist(tk.back)) do
+        take(seen, lhs, function()
+          handlers.transport_step(-1)
+        end, "hover: one frame back")
+      end
     end
   end
 

@@ -1,0 +1,202 @@
+---@diagnostic disable: need-check-nil
+-- The test body is the guard; see the note in TESTS/bare_path_spec.lua
+-- (`LLS-42`).
+
+-- TESTS/playback_spec.lua -- the transport for a video hover.
+--
+-- **The decode is not here** -- that needs ffmpeg and a video file, and
+-- media.nvim's suite holds the argv that produces the run. What a run can
+-- check is the state machine, and every case below is one where the wrong
+-- behaviour is invisible rather than loud:
+--
+--   1. **Nothing plays until asked.** A hover appears because a cursor rested
+--      somewhere. If loading a run started it, every glance at a video path
+--      would set a timer going.
+--   2. **A stopped playback frees its timer.** One that outlives its float
+--      paints into an invisible buffer at 12 fps, forever, and nothing on
+--      screen says so.
+--   3. **Stepping clamps rather than wraps.** A run is a window into a file;
+--      wrapping from its end to its start reads as the video looping when it
+--      is not.
+--   4. **Painting never rewrites the picture rows.** The canvas text is
+--      written once and only highlights change after that -- the property the
+--      whole approach rests on, since re-rendering the float at 12 fps is a
+--      strobe.
+
+local blocks_ok, blocks = pcall(require, "images.blocks")
+
+--- A canvas buffer plus a payload of `n` flat frames, alternating colours so
+--- a repaint is observable.
+---@param cols integer
+---@param rows integer
+---@param n integer
+---@return integer buf, string raw
+local function fixture(cols, rows, n)
+  local buf = vim.api.nvim_create_buf(false, true)
+  local lines = blocks.canvas_lines(cols, rows)
+  lines[#lines + 1] = ""
+  vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  vim.bo[buf].modifiable = false
+
+  local parts = {}
+  for i = 1, n do
+    local shade = string.char(math.min(255, i * 10), 0, 255 - math.min(255, i * 10))
+    parts[#parts + 1] = shade:rep(cols * rows)
+  end
+  return buf, table.concat(parts)
+end
+
+---@param buf integer
+---@param raw string
+---@param frames integer
+---@param cols integer
+---@param rows integer
+local function load_into(buf, raw, frames, cols, rows)
+  return require("hover.preview.playback").load({
+    buf = buf,
+    raw = raw,
+    frames = frames,
+    cols = cols,
+    rows = rows,
+    fps = 12,
+    from = 0,
+    duration = 12,
+    status_row = rows,
+  })
+end
+
+describe("the video transport", function()
+  local playback = require("hover.preview.playback")
+
+  after_each(function()
+    playback.stop()
+  end)
+
+  it("loads paused -- a glance at a path is not a request for motion", function()
+    if not blocks_ok then
+      return
+    end
+    local buf, raw = fixture(8, 4, 5)
+    assert.is_true(load_into(buf, raw, 5, 8, 4))
+    assert.is_true(playback.is_active())
+    assert.is_false(playback.is_playing())
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("writes a control row that says where in the source it is", function()
+    if not blocks_ok then
+      return
+    end
+    local buf, raw = fixture(40, 4, 5)
+    load_into(buf, raw, 5, 40, 4)
+    local control = vim.api.nvim_buf_get_lines(buf, 4, 5, false)[1]
+    -- Paused marker, the source clock, and a progress bar.
+    assert.is_truthy(control:find("▮▮", 1, true))
+    assert.is_truthy(control:find("▯", 1, true))
+    -- The clock reads "0:00" through media.ui and "0.0s" without it -- both
+    -- start at zero, and media.nvim being absent is the ordinary case here.
+    assert.is_truthy(control:match("0[:.]0"))
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("paints the picture rows without rewriting them", function()
+    if not blocks_ok then
+      return
+    end
+    local cols, rows = 8, 4
+    local buf, raw = fixture(cols, rows, 5)
+    load_into(buf, raw, 5, cols, rows)
+    local picture_before = vim.api.nvim_buf_get_lines(buf, 0, rows, false)
+
+    playback.step(2)
+    local picture_after = vim.api.nvim_buf_get_lines(buf, 0, rows, false)
+    assert.are.same(picture_before, picture_after)
+
+    -- ... while the highlights that make it a picture did change.
+    local ns = vim.api.nvim_create_namespace("hover.playback")
+    assert.is_true(#vim.api.nvim_buf_get_extmarks(buf, ns, 0, -1, {}) > 0)
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("clamps stepping instead of wrapping", function()
+    if not blocks_ok then
+      return
+    end
+    local buf, raw = fixture(40, 4, 5)
+    load_into(buf, raw, 5, 40, 4)
+
+    playback.step(-5) -- already at frame 1
+    local at_start = vim.api.nvim_buf_get_lines(buf, 4, 5, false)[1]
+    assert.is_truthy(at_start:match("0[:.]0"))
+    assert.is_truthy(at_start:find("▯", 1, true)) -- the bar is not full
+
+    playback.step(99) -- past the end
+    local at_end = vim.api.nvim_buf_get_lines(buf, 4, 5, false)[1]
+    -- Frame 5 of a 12 fps run is a third of a second in, and the bar is full.
+    assert.is_falsy(at_end:find("▯", 1, true))
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("stops cleanly, and stopping twice is not an error", function()
+    if not blocks_ok then
+      return
+    end
+    local buf, raw = fixture(8, 4, 5)
+    load_into(buf, raw, 5, 8, 4)
+    playback.play()
+    assert.is_true(playback.is_playing())
+
+    playback.stop()
+    assert.is_false(playback.is_active())
+    assert.is_false(playback.is_playing())
+    playback.stop()
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it("gives up when the buffer it was painting into is gone", function()
+    if not blocks_ok then
+      return
+    end
+    local buf, raw = fixture(8, 4, 5)
+    load_into(buf, raw, 5, 8, 4)
+    vim.api.nvim_buf_delete(buf, { force = true })
+
+    -- The float closing is what normally calls `stop`; this is the case where
+    -- something else took the buffer first.
+    playback.step(1)
+    assert.is_false(playback.is_active())
+  end)
+end)
+
+describe("the transport keys", function()
+  it("are declared with the toggle, and step in both directions", function()
+    local cfg = require("hover.config")
+    cfg.setup({})
+    local keys = cfg.get().transport_keys
+    assert.is_table(keys)
+    assert.are.same({ "<Space>" }, keys.toggle)
+    assert.are.same({ "]" }, keys.forward)
+    assert.are.same({ "[" }, keys.back)
+  end)
+
+  it("are borrowed only for content that says it can play", function()
+    local keys = require("hover.bindings.keymaps")
+    keys.release()
+
+    keys.borrow({ lines = { "plain text" } }, {})
+    assert.is_nil(vim.fn.maparg("<Space>", "n", false, true).desc)
+    keys.release()
+
+    local calls = 0
+    keys.borrow({ lines = { "x" }, transport = true }, {
+      transport = function()
+        calls = calls + 1
+      end,
+    })
+    local mapped = vim.fn.maparg("<Space>", "n", false, true)
+    assert.is_truthy(mapped.desc)
+    mapped.callback()
+    assert.are.equal(1, calls)
+    keys.release()
+  end)
+end)

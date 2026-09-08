@@ -107,6 +107,32 @@ borrow condition is in [BINDINGS.md](BINDINGS.md).
 | `nav_keys.down` | `{ "j" }` | as above |
 | `position_keys.next` | `{ "<M-n>" }` | **position hovers only**, and only where more than one contribution is registered — see [When two plugins answer](#when-two-plugins-answer) |
 
+## Playing a video
+
+A video hover opens as a still, and **nothing plays until `<Space>`**: a hover
+appears because a cursor rested somewhere for `updatetime`, which is a glance
+rather than a request for motion. The first press decodes a run of stills
+(`media.frames`), samples them into terminal cells (`images.blocks`) and starts
+a timer; the next press pauses. `]` and `[` step one frame.
+
+What moves is text — one `█` per cell with its own highlight — so it collides
+with no terminal graphics protocol and survives every redraw, unlike the still,
+which is an OSC 1337 payload Neovim paints over. The timer only rewrites
+highlights, never the float, because re-rendering at 12 fps would be a strobe.
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `preview.video_fps` | `12` | Stills per second of source, and the rate they are painted at |
+| `preview.video_run` | `24` | Stills per run — two seconds at the default rate |
+| `preview.video_run_width` | media.nvim's | Pixel width of a run's stills before they become cells |
+
+Both `media.nvim` (with ffmpeg) and `images.nvim` (with ImageMagick) have to be
+installed. Without either, `<Space>` is bound but the still stays — the same
+degradation every other optional step here makes.
+
+Measured end to end, a 640x360 clip at 80x36 cells: about 325 ms from the key
+to the first frame, and 4.6 ms to paint each one after that.
+
 ## Contributions
 
 `contribute` is the one field that is not a setting. It takes exactly the table

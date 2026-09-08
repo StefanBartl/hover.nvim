@@ -622,6 +622,25 @@ local function present(content)
     float.set_pinned(true)
   end
 
+  -- A decoded run paints into the float it just opened -- the same division
+  -- as the image below, one step further: the picture is buffer content, so
+  -- the timer never re-renders and the float never flickers.
+  if content.playback then
+    local win = float.win()
+    local playback = require("hover.preview.playback")
+    if win then
+      local spec = vim.tbl_extend("force", content.playback, {
+        buf = vim.api.nvim_win_get_buf(win),
+      })
+      if playback.load(spec) then
+        float.set_on_close(playback.stop)
+        -- Pressing the key was the request to see it move; the pause that
+        -- matters is the one before the key, not after it.
+        playback.play()
+      end
+    end
+  end
+
   -- An image target draws over the float it just opened.
   if content.image_path then
     local win = float.win()
@@ -646,6 +665,8 @@ local function present(content)
     zen = (_open and _open.target) and function()
       M.zen()
     end or nil,
+    transport = content.transport and M.play_toggle or nil,
+    transport_step = content.transport and M.play_step or nil,
     next_answer = M.next_position,
     -- Registered, not answering: see `registry.position_count`. Only a
     -- *position* hover has other answers to step to at all.
@@ -1213,6 +1234,7 @@ local function current_preview_opts()
   opts.max_width, opts.max_lines = box()
   if _open then
     opts.page = _open.page
+    opts.play = _open.play
     opts.offset = _open.offset
     opts.zoom = _open.zoom
     opts.zoom_cx = _open.zoom_cx
@@ -1974,6 +1996,50 @@ function M.status()
     auto[#auto + 1] = { name = name, enabled = config.auto_hover_for(name) }
   end
   return { mode = config.mode(), switches = switches.status(), auto = auto }
+end
+
+--- Play or pause the hover's video, decoding the run on first use.
+---
+--- Two states in one key, and the branch is the whole feature: while nothing
+--- is loaded this asks for a run and re-renders into the playing view; once
+--- one is loaded it only starts and stops the timer, with no re-render at all
+--- -- `render` closes and reopens the float, which at 12 fps is a strobe.
+---
+--- Public so a reader can bind their own key, and so `:Hover` could route to
+--- it later.
+---@return nil
+function M.play_toggle()
+  local playback = require("hover.preview.playback")
+  if playback.is_active() then
+    playback.toggle()
+    return
+  end
+  if not _open then
+    return
+  end
+  local open = _open
+  local target = open.target
+  if not target then
+    return
+  end
+  open.play = true
+  rerender(open, target)
+end
+
+--- Step the loaded run by `delta` frames, pausing it.
+---
+--- Does nothing before a run is loaded: stepping is a transport action, and
+--- the paging keys already scrub the *still* through the file, which is the
+--- right answer for a hover nobody has asked to play.
+---@param delta integer
+---@return nil
+function M.play_step(delta)
+  local playback = require("hover.preview.playback")
+  if not playback.is_active() then
+    return
+  end
+  playback.pause()
+  playback.step(delta)
 end
 
 return M
