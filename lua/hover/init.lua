@@ -1186,15 +1186,23 @@ function M.open()
     return false
   end
 
-  -- A media file goes to `media.play` first, when media.nvim is installed:
-  -- it honours that plugin's `player` option (mpv with your flags, say),
-  -- which the generic openers below cannot know about. Everything else about
-  -- this route is unchanged -- including that it closes the hover, since the
-  -- picture has been handed to something that draws it properly.
+  -- A media file goes to `media.play` first **only when a player is actually
+  -- configured**, and that condition is the whole of the lesson here.
+  --
+  -- Without it this route took over every video and handed it to
+  -- `media.play`'s no-player branch, which ends in `lib.nvim.cross
+  -- .open_default` -- a different opener from the one that demonstrably works
+  -- here for a PDF, and one that on this setup changes the focus and opens
+  -- nothing. A PDF kept working the whole time precisely because it is not a
+  -- media file and never entered the branch. Preferring something is only
+  -- worth doing when there is something to prefer; otherwise the generic
+  -- opener below has the better track record and keeps it.
   local ok_media, media = pcall(require, "media")
   if ok_media and type(media.is_media) == "function" and media.is_media(what) then
-    local played = pcall(media.play, what)
-    if played then
+    local ok_player, argv = pcall(function()
+      return require("media.core.play").player()
+    end)
+    if ok_player and argv and pcall(media.play, what) then
       M.hide()
       return true
     end

@@ -333,16 +333,6 @@ function M.routes()
       run = open_dashboard,
     },
     {
-      -- The name this had until 2026-09-08, kept working. "Status" was
-      -- accurate when it printed a message and stopped being so when it
-      -- became a board you act on -- but it is in muscle memory, in older
-      -- notes, and in anything a host wired up, and a removed verb teaches
-      -- nothing except that it is gone.
-      path = { "status" },
-      desc = "Alias for `:Hover dashboard`",
-      run = open_dashboard,
-    },
-    {
       path = { "pin" },
       desc = "Keep this hover on screen while the cursor goes elsewhere",
       run = function()

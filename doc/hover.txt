@@ -187,8 +187,6 @@ toggles. >
                                          opens by itself, as a board:
                                          <CR> toggles the row, ? lists
                                          the keys, y yanks its command
-  :Hover status                          alias for :Hover dashboard, the
-                                         name it had until 2026-09-08
   :Hover pin                             keep this float while the cursor
                                          goes elsewhere; again releases it
   :Hover zen [on|off|toggle]             the float on almost the whole
