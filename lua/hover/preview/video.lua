@@ -177,31 +177,28 @@ end
 --- One row is reserved for the control line. Without that the canvas fills the
 --- float exactly and the control row pushes the last picture row out of view
 --- -- which reads as the video being cropped, not as a missing row.
+---
+--- Public for the same reason `offset_for` is: it is one half of a pair that
+--- has to agree, and the failure when it does not is silent. `float.open`
+--- clamps the window to the same box this reads; a canvas wider than that
+--- wraps every row onto two and nothing raises an error. The spec asserts the
+--- two against each other, which it can only do by calling this one.
 ---@param probe table|nil
 ---@param opts Hover.PreviewOpts
 ---@return integer cols, integer rows
-local function playback_cells(probe, opts)
-  -- **The playing canvas is deliberately larger than the still's, and this is
-  -- the whole of the sharpness fix.** A cell carries two pixel rows, so the
-  -- 20-line default budget is a picture 38 pixels high -- which is what a
-  -- reader means by "very pixelated". Measured 2026-09-08, per window of 24
-  -- stills: 78x19 cells sampled in 168 ms and painted in 6.4 ms; 140x36 --
-  -- nearly four times the picture -- sampled in 184 ms and painted in 6.4 ms.
-  -- ImageMagick's startup dominates one and extmark count barely moves the
-  -- other, so the small canvas was buying nothing.
+function M.playback_cells(probe, opts)
+  -- **The budget, minus the border, and no scaling of its own.**
+  -- `video.play_scale` is applied where the box itself is decided
+  -- (`hover.box`), so the float and this canvas are the same number seen
+  -- twice rather than two derivations of it. Scaling here as well produced a
+  -- canvas wider than the float that showed it: every row wrapped and the
+  -- control row fell off the bottom. Reported 2026-09-08.
   --
-  -- Capped to the editor rather than only scaled: the float has to fit on the
-  -- screen it is drawn on, and a generous factor on a small terminal must come
-  -- out as the terminal. Six rows and columns are left for the border, the
-  -- control row and the document underneath still being visible.
-  local factor = tonumber(opts.video_play_scale) or 1
-  if factor < 1 then
-    factor = 1
-  end
-  local max_cols = math.max(16, math.floor(((opts.max_width or 80) - 2) * factor))
-  local max_rows = math.max(6, math.floor(((opts.max_lines or 24) - 2) * factor))
-  max_cols = math.max(16, math.min(max_cols, vim.o.columns - 6))
-  max_rows = math.max(6, math.min(max_rows, vim.o.lines - 6))
+  -- One row goes to the control line; without it the canvas fills the float
+  -- exactly and the control row pushes the last picture row out of view --
+  -- which reads as the video being cropped, not as a missing row.
+  local max_cols = math.max(16, (opts.max_width or 80) - 2)
+  local max_rows = math.max(6, (opts.max_lines or 24) - 2)
 
   local ok_scale, scale = pcall(require, "images.scale")
   if ok_scale and probe and probe.width and probe.height then
@@ -236,7 +233,7 @@ local function start_playback(target, opts, probe, on_result)
     return false
   end
 
-  local cols, rows = playback_cells(probe, opts)
+  local cols, rows = M.playback_cells(probe, opts)
   local fps = opts.video_fps or 12
   local count = opts.video_run or 24
   local duration = probe and probe.duration or nil

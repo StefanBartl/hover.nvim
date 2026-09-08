@@ -80,7 +80,7 @@ clearing their flag, so turning it back on restores what you had.
 | `video.width` | `nil` | Width in pixels the still is rendered at; `nil` leaves the choice to media.nvim. Chosen against the float rather than the source — every pixel past what the terminal draws is decode time spent on nothing. |
 | `video.sound` | `true` | Whether a played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing — see [Playing a video](#playing-a-video). |
 | `video.play_at` | `0` | Where **playing** starts, which is deliberately not where the still is taken. Same three shapes as `video.at`. A thumbnail wants to skip the fade-in; a viewer wants the beginning. A scrubbed still is the exception and is honoured: from page 2 on, play starts where the paging keys left off. |
-| `video.play_scale` | `1.75` | How much larger the playing canvas is than the still's budget (`max_width`/`max_lines`), capped to the editor's own rows and columns. A cell carries two pixel rows, so the 20-line default is a 38-pixel picture — this is the sharpness knob. `1` is the still's size. |
+| `video.play_scale` | `1.75` | How much larger the **box** is while playing — `max_width`/`max_lines` scaled, capped to the editor's own rows and columns. The float and the canvas are both built from that one number, so they grow together. A cell carries two pixel rows, so the 20-line default is a 38-pixel picture; this is the sharpness knob. `1` is the still's size. |
 | `video.fps` | `12` | Stills per second in a played run, and the rate they are painted at. |
 | `video.run` | `24` | Stills one decoded window holds — two seconds at 12 fps. |
 | `video.run_width` | `nil` | Pixel width of a run's stills before they are sampled into cells. `nil` sizes it from the canvas (twice its width in cells, floored at media.nvim's default). |
@@ -166,8 +166,15 @@ of 24 stills: **78x19 cells sampled in 168 ms and painted in 6.4 ms; 140x36 —
 nearly four times the picture — sampled in 184 ms and painted in 6.4 ms.**
 ImageMagick's startup dominates the sampling and the paint is extmarks, so the
 small canvas was never buying performance. The cap matters more than the
-factor: whatever it asks for, the canvas stays inside the editor's own rows and
+factor: whatever it asks for, the box stays inside the editor's own rows and
 columns.
+
+It is the **box** that scales, not the canvas alone — `hover.box()`, the one
+place that already reconciles zen and resize. Scaling the canvas by itself
+shipped for a few hours on 2026-09-08 and was the wrap you would expect: the
+previewer built 113 cells across while the float was still clamped to 80, so
+every row wrapped onto two and the control row fell off the bottom. Nothing
+errored. A second derivation of one number is the bug, every time.
 
 Inside `Hover.PreviewOpts` these arrive as `video_play_at`, `video_play_scale`,
 `video_fps`, `video_run`, `video_run_width` and `video_sound` — the names a

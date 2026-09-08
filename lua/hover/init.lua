@@ -118,6 +118,28 @@ local function box()
   if _open and _open.zen then
     width = math.max(20, vim.o.columns - 4)
     height = math.max(3, vim.o.lines - 4)
+  elseif _open and _open.play then
+    -- **A played video gets a larger box, and it has to be *this* number.**
+    -- A cell carries two pixel rows, so the default box is a picture 38
+    -- pixels tall -- which is what "very pixelated" means when someone
+    -- reports it, and enlarging it costs almost nothing (`video.play_scale`
+    -- carries the measurements).
+    --
+    -- The first attempt scaled the canvas inside `preview.video` instead, and
+    -- walked straight into what this function's own header warns about: the
+    -- previewer built 110x31 cells while `present` still clamped the float to
+    -- 80x20, so every canvas row wrapped and the control row fell off the
+    -- bottom. A second derivation of one number is the bug, every time.
+    -- Reported 2026-09-08 with a screenshot of the wrap markers.
+    --
+    -- Clamped to the screen here rather than downstream for the same reason:
+    -- `measure` would clamp the float and the canvas would never hear about
+    -- it, which is the wrap again with extra steps.
+    local play_scale = tonumber(c.video and c.video.play_scale) or 1
+    if play_scale > 1 then
+      width = math.min(math.floor(width * play_scale), math.max(20, vim.o.columns - 4))
+      height = math.min(math.floor(height * play_scale), math.max(3, vim.o.lines - 4))
+    end
   end
   local factor = resize_factor()
   return math.max(1, math.floor(width * factor + 0.5)),
