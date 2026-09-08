@@ -619,7 +619,9 @@ worth asserting.
     -- `at` and `step` take seconds, a percentage of the running time, or
     -- an ffmpeg timestamp. Percentages mean ten presses of the paging key
     -- walk any file end to end, whatever its length.
-    video = { at = "10%", step = "10%", width = nil, sound = true },
+    video = { at = "10%", step = "10%", width = nil, sound = true,
+              play_at = 0, play_scale = 1.75, fps = 12, run = 24,
+              run_width = nil },
     -- `pin` is on because the float is not focusable and its dismissal hangs
     -- on CursorMoved: unpinned, a full-screen hover closes on the first `j`.
     zen = { pin = true },
@@ -778,7 +780,19 @@ does otherwise, silently.
 
 Playback decodes two seconds at a time and asks for the next window a second
 before it needs it, so a film plays on instead of stopping at the end of the
-first one.
+first one. A step is a position in the file rather than an index into that
+window: stepping past its edge fetches the window holding the target, and a
+held key coalesces into one decode at a time.
+
+Playing starts at `video.play_at` (default 0, the beginning of the file), not
+at `video.at` -- that is where the *still* is taken, ten percent in so a
+thumbnail is not a fade-in. A still the reader has scrubbed keeps its position.
+
+The bar under the picture measures the film, matching the clock beside it.
+
+`video.play_scale` (default 1.75) is the sharpness knob: a cell carries two
+pixel rows, so the still's budget is a 38-pixel-tall picture. The playing
+canvas is that budget scaled, capped to the editor's own rows and columns.
 
 The keys are configurable through `transport_keys`.
 

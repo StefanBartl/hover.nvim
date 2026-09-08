@@ -62,7 +62,11 @@ local M = {}
 --- socket coming up, a `time-pos` reply): each carries the generation it was
 --- issued under, and a reply that arrives after `stop()` or a fresh `load()`
 --- is simply dropped rather than writing into a run nobody asked for any more.
----@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer, gen: integer, path: string|nil, audio: Media.Audio.Handle|nil, audio_starting: boolean, audio_pending: boolean, request: (fun(from: number, cb: fun(run: Hover.Playback.Run|nil, err: string|nil)): nil)|nil, next_run: Hover.Playback.Run|nil, requesting: boolean, exhausted: boolean }|nil
+--- `seeking_to`, `scrubbing` and `scrub_target` are the scrub across window
+--- boundaries: the position asked for while its window is still decoding, the
+--- "a decode is already in flight" guard, and the newest place asked for. See
+--- `scrub_to`.
+---@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer, gen: integer, path: string|nil, audio: Media.Audio.Handle|nil, audio_starting: boolean, audio_pending: boolean, request: (fun(from: number, cb: fun(run: Hover.Playback.Run|nil, err: string|nil)): nil)|nil, next_run: Hover.Playback.Run|nil, requesting: boolean, exhausted: boolean, seeking_to: number|nil, scrubbing: boolean, scrub_target: number }|nil
 local state = nil
 
 --- Bumped by every `load()`, never by anything else — the one source of
@@ -144,6 +148,21 @@ function M.stop()
   state = nil
 end
 
+--- Where the picture is in the file, in seconds.
+---
+--- `seeking_to` takes precedence while a scrub's window is still decoding: the
+--- reader has already asked to be somewhere else, the clock should say so
+--- immediately, and the picture catches up when ffmpeg answers. Reporting the
+--- old position for those few hundred milliseconds makes a key press look
+--- dropped.
+---@return number
+function M.position()
+  if not state then
+    return 0
+  end
+  return state.seeking_to or (state.from + (state.index - 1) / state.fps)
+end
+
 ---@internal
 --- The control row, rebuilt from the current position.
 ---
@@ -156,13 +175,30 @@ local function status_line()
     return ""
   end
   local ui_ok, ui = pcall(require, "media.ui")
-  local at = state.from + (state.index - 1) / state.fps
+  local at = M.position()
   local now = ui_ok and ui.duration(at) or ("%.1fs"):format(at)
   local total = (ui_ok and state.duration) and ui.duration(state.duration) or nil
 
+  -- **The bar measures the film, not the window.** It used to be the index
+  -- within the decoded run, which is two seconds long — so it filled up and
+  -- reset every two seconds forever, and a reader reported it as "it loads and
+  -- starts over" rather than as a position. It is next to a clock that reads
+  -- `0:55 / 9:05`; anything but the same fraction is a second, contradictory
+  -- answer to the question the clock already answers.
+  --
+  -- Without a duration there is no film to measure, and the window is the only
+  -- thing left to report — which is honest there, since nothing else on the
+  -- row claims a total either.
   local width = math.max(8, state.cols - 28)
-  local filled = state.frames > 1 and math.floor((state.index - 1) / (state.frames - 1) * width)
-    or width
+  local fraction
+  if state.duration and state.duration > 0 then
+    fraction = math.min(1, math.max(0, at / state.duration))
+  elseif state.frames > 1 then
+    fraction = (state.index - 1) / (state.frames - 1)
+  else
+    fraction = 1
+  end
+  local filled = math.floor(fraction * width + 0.5)
   local bar = ("▮"):rep(filled) .. ("▯"):rep(width - filled)
 
   return ("%s%s %s%s  %s"):format(
@@ -246,6 +282,12 @@ local function prefetch()
   if state.next_run or state.requesting or state.exhausted then
     return
   end
+  -- A scrub owns the decoder until its window lands, and what it is fetching
+  -- is where the picture is going. Prefetching the continuation of where it
+  -- came from would race that decode for the same slot.
+  if state.seeking_to or state.scrubbing then
+    return
+  end
   if state.index < state.frames - math.max(4, math.floor(state.fps)) then
     return
   end
@@ -290,6 +332,15 @@ end
 ---@return nil
 local function advance(pos)
   if not state then
+    return
+  end
+  -- A scrub's window has not landed yet, so `from` still describes where the
+  -- picture *was* and mpv is already somewhere else: deriving a frame from the
+  -- two would paint whatever the clamp happened to produce. The control row is
+  -- still refreshed, since `position` already reports the place asked for, and
+  -- the picture follows the moment the decode arrives.
+  if state.seeking_to then
+    draw()
     return
   end
   if pos then
@@ -362,33 +413,145 @@ function M.load(spec)
     next_run = nil,
     requesting = false,
     exhausted = spec.request == nil,
+    -- No scrub in flight: the run starts exactly where the caller decoded it.
+    seeking_to = nil,
+    scrubbing = false,
+    scrub_target = spec.from or 0,
   }
   return draw()
 end
 
---- Advance by `delta` frames and repaint, without starting the timer.
+---@internal
+--- Move to `target` seconds when it lies outside the decoded window: seek mpv
+--- there and fetch a window that starts there.
 ---
---- Clamped rather than wrapped: a run is a window into a file, and jumping
---- from its end back to its start would read as the video looping when it is
---- not. When mpv is loaded it is seeked to match — always paused by the time
---- this runs (`hover.play_step` pauses first), so this only keeps mpv's own
---- position honest for whenever play resumes; it does not itself start or
---- stop anything.
+--- **Coalesced, because a held key outruns ffmpeg.** A window costs about
+--- 0.6 s to decode and sample, and a reader leaning on the step key produces
+--- one request every few milliseconds. Issuing them all would start an ffmpeg
+--- per press and paint the answers in whatever order they landed. So one
+--- decode is in flight at a time, `scrub_target` is always the newest place
+--- asked for, and when a decode lands on a stale target the next one is issued
+--- immediately — the reader waits for one window, never for a queue of them.
+---@param target number
+---@return nil
+local function scrub_to(target)
+  if not state then
+    return
+  end
+  if state.audio then
+    pcall(state.audio.seek, target)
+  end
+  -- The prefetched window is the continuation of where the picture *was*, and
+  -- after a seek it continues nothing. `exhausted` goes with it: the end of
+  -- the file is no longer a settled fact once the position moves.
+  state.next_run = nil
+  state.requesting = false
+  state.exhausted = false
+
+  if not state.request then
+    -- Nothing can be decoded (no resolvable offset), so the window on screen
+    -- is all there is. mpv has still been seeked, which is the honest half of
+    -- the answer, and the clock is left telling the truth about the picture.
+    return
+  end
+
+  state.seeking_to = target
+  state.scrub_target = target
+  draw()
+  if state.scrubbing then
+    return
+  end
+  state.scrubbing = true
+
+  local function issue()
+    if not state then
+      return
+    end
+    local want = state.scrub_target
+    local gen = state.gen
+    state.request(want, function(run)
+      if not state or state.gen ~= gen then
+        return
+      end
+      if run then
+        state.from = want
+        state.raw = run.raw
+        state.frames = run.frames
+        state.index = 1
+      end
+      if state.scrub_target ~= want then
+        issue()
+        return
+      end
+      state.scrubbing = false
+      state.seeking_to = nil
+      draw()
+    end)
+  end
+  issue()
+end
+
+--- Step by `delta` frames and repaint, without starting the timer.
+---
+--- **A step is a position in the file, not an index into the window.** It used
+--- to be the latter, clamped to `[1, frames]` — and since a window is two
+--- seconds, that made the transport keys unable to leave them: stepping back
+--- stopped dead at the start of the current window, and pressing play then
+--- resumed from there. Right after play began, that window started at the
+--- opening offset, so it read exactly as "it jumps back to 0:54 and plays on
+--- from there". Reported 2026-09-08.
+---
+--- So the target is computed in seconds and, when it falls outside the window
+--- on screen, `scrub_to` fetches the window that contains it. Inside one —
+--- which is the common case, a press or two — nothing is decoded at all and
+--- the step is the repaint it always was.
+---
+--- Clamped to the file rather than wrapped: running off the end back to the
+--- beginning would read as the video looping when it is not.
+---
+--- mpv is seeked to match. It is always paused by the time this runs
+--- (`hover.play_step` pauses first), so this only keeps mpv's own position
+--- honest for whenever play resumes; it does not itself start or stop
+--- anything.
 ---@param delta integer
 ---@return nil
 function M.step(delta)
   if not M.is_active() or not state then
     return
   end
-  local next_index = math.min(state.frames, math.max(1, state.index + delta))
-  if next_index == state.index then
+
+  local target = M.position() + delta / state.fps
+  if target < 0 then
+    target = 0
+  end
+  if state.duration and state.duration > 0 then
+    -- One frame short of the end: a window starting exactly at the duration
+    -- decodes nothing, and the reader would have stepped into a dead stop.
+    target = math.min(target, math.max(0, state.duration - 1 / state.fps))
+  end
+
+  local first = state.from
+  local last = state.from + (state.frames - 1) / state.fps
+  -- Without a decoder the window is the whole of what exists, so its edges are
+  -- the file's: clamped exactly as this behaved before a step could leave one.
+  if not state.request then
+    target = math.max(first, math.min(last, target))
+  end
+  if not state.seeking_to and target >= first and target <= last then
+    local index = math.floor((target - first) * state.fps + 0.5) + 1
+    index = math.max(1, math.min(state.frames, index))
+    if index == state.index then
+      return
+    end
+    state.index = index
+    if state.audio then
+      pcall(state.audio.seek, first + (index - 1) / state.fps)
+    end
+    draw()
     return
   end
-  state.index = next_index
-  if state.audio then
-    pcall(state.audio.seek, state.from + (state.index - 1) / state.fps)
-  end
-  draw()
+
+  scrub_to(target)
 end
 
 --- Start playing from the current frame.
@@ -404,10 +567,16 @@ function M.play()
   if not M.is_active() or not state or state.playing then
     return
   end
-  -- At the end, play restarts the run rather than doing nothing: the key was
-  -- pressed to see something move.
-  if state.index >= state.frames then
+  -- At the end, play restarts the window rather than doing nothing: the key
+  -- was pressed to see something move. mpv is seeked back with it — resetting
+  -- the index alone would have the picture start over while the sound carried
+  -- on from where it stopped, and the next `time-pos` would undo the reset
+  -- anyway.
+  if not state.seeking_to and state.index >= state.frames then
     state.index = 1
+    if state.audio then
+      pcall(state.audio.seek, state.from)
+    end
   end
   state.playing = true
 
@@ -416,7 +585,10 @@ function M.play()
   elseif state.path and not state.audio_starting then
     state.audio_starting = true
     local gen = state.gen
-    local at = state.from + (state.index - 1) / state.fps
+    -- `position`, not the window arithmetic: a scrub whose window is still
+    -- decoding has already moved where playing should begin, and mpv started
+    -- at the old place would have to be seeked immediately afterwards.
+    local at = M.position()
     local ok_audio, audio = pcall(require, "media.core.audio")
     if not ok_audio or not audio.available() then
       state.audio_starting = false

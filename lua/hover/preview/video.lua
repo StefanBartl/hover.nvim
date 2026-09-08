@@ -181,8 +181,27 @@ end
 ---@param opts Hover.PreviewOpts
 ---@return integer cols, integer rows
 local function playback_cells(probe, opts)
-  local max_cols = math.max(16, (opts.max_width or 80) - 2)
-  local max_rows = math.max(6, (opts.max_lines or 24) - 2)
+  -- **The playing canvas is deliberately larger than the still's, and this is
+  -- the whole of the sharpness fix.** A cell carries two pixel rows, so the
+  -- 20-line default budget is a picture 38 pixels high -- which is what a
+  -- reader means by "very pixelated". Measured 2026-09-08, per window of 24
+  -- stills: 78x19 cells sampled in 168 ms and painted in 6.4 ms; 140x36 --
+  -- nearly four times the picture -- sampled in 184 ms and painted in 6.4 ms.
+  -- ImageMagick's startup dominates one and extmark count barely moves the
+  -- other, so the small canvas was buying nothing.
+  --
+  -- Capped to the editor rather than only scaled: the float has to fit on the
+  -- screen it is drawn on, and a generous factor on a small terminal must come
+  -- out as the terminal. Six rows and columns are left for the border, the
+  -- control row and the document underneath still being visible.
+  local factor = tonumber(opts.video_play_scale) or 1
+  if factor < 1 then
+    factor = 1
+  end
+  local max_cols = math.max(16, math.floor(((opts.max_width or 80) - 2) * factor))
+  local max_rows = math.max(6, math.floor(((opts.max_lines or 24) - 2) * factor))
+  max_cols = math.max(16, math.min(max_cols, vim.o.columns - 6))
+  max_rows = math.max(6, math.min(max_rows, vim.o.lines - 6))
 
   local ok_scale, scale = pcall(require, "images.scale")
   if ok_scale and probe and probe.width and probe.height then
@@ -220,15 +239,39 @@ local function start_playback(target, opts, probe, on_result)
   local cols, rows = playback_cells(probe, opts)
   local fps = opts.video_fps or 12
   local count = opts.video_run or 24
+  local duration = probe and probe.duration or nil
 
-  -- **Where the run starts, in seconds.** `video_at` is a percentage by
-  -- default, and this used to be recorded as a flat `0` whenever it was not
-  -- already a number — which put the control row's clock at zero on every
-  -- video and, once windows started rolling, asked for the second window from
-  -- two seconds into the file rather than two seconds past where the first one
-  -- ended. `nil` here means the offset could not be resolved (a file with no
-  -- duration), and the transport then plays the one window it has.
-  local from_seconds = M.to_seconds(opts.video_at or "10%", probe and probe.duration or nil)
+  -- **Where the run starts, in seconds — and it is not where the still came
+  -- from.** `video_at` is a thumbnail offset, ten percent in by default so the
+  -- picture is not a fade-in or a distributor's slate. Playing borrowed that
+  -- number, so a nine-minute video began at 0:54 and a two-minute one at 0:14,
+  -- with no way back to the opening. Reported 2026-09-08, and the two settings
+  -- are separate from here on: `video_play_at` is the beginning of the file
+  -- unless configured otherwise.
+  --
+  -- A *scrubbed* still is the exception, and not an inconsistency: page 2
+  -- onward is a position the reader chose with the paging keys, so play starts
+  -- from what is on screen rather than from the top.
+  --
+  -- `nil` means the offset could not be resolved (a percentage of a file that
+  -- reports no duration), and the transport then plays the one window it has.
+  local page = math.max(1, math.floor(opts.page or 1))
+  local play_at = opts.video_play_at
+  if play_at == nil then
+    play_at = 0
+  end
+  if page > 1 then
+    play_at = M.offset_for(page, opts.video_at or "10%", opts.video_step or "10%", duration)
+  end
+  local from_seconds = M.to_seconds(play_at, duration)
+
+  -- Sized from the canvas when nothing is configured: a still is sampled down
+  -- to `cols` pixels across, and decoding much more than twice that is decode
+  -- time and cache bytes spent on detail the downsample averages away — while
+  -- decoding *less* than the canvas is the pixelation the larger canvas exists
+  -- to remove. media.nvim's own default is the floor, so a small float does
+  -- not end up with a smaller source than it had before.
+  local run_width = opts.video_run_width or math.max(320, cols * 2)
 
   --- Decode one window and sample it into cells.
   ---
@@ -244,7 +287,7 @@ local function start_playback(target, opts, probe, on_result)
       from = at,
       fps = fps,
       count = count,
-      width = opts.video_run_width,
+      width = run_width,
     }, function(pngs, err)
       if not pngs or #pngs == 0 then
         cb(nil, err)
@@ -263,7 +306,7 @@ local function start_playback(target, opts, probe, on_result)
     end)
   end
 
-  decode(from_seconds or opts.video_at or "10%", function(run, err)
+  decode(from_seconds or play_at, function(run, err)
     if not run then
       on_result(badge_with_summary(target, err and ("(" .. err .. ")") or nil))
       return
@@ -282,7 +325,7 @@ local function start_playback(target, opts, probe, on_result)
         rows = rows,
         fps = fps,
         from = from_seconds or 0,
-        duration = probe and probe.duration or nil,
+        duration = duration,
         status_row = #lines - 1,
         -- `playback.play` starts audio from here, when there is a track to
         -- start and the reader has not turned it off — see `M.play` for why
