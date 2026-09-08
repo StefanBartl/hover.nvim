@@ -80,7 +80,7 @@ moment.
 | `video.at` | `"10%"` | where the first still comes from |
 | `video.step` | `"10%"` | how far one key press moves |
 | `video.play_at` | `0` | where *playing* starts -- see below |
-| `video.play_scale` | `1.75` | how much larger the playing canvas is than the still's budget (how *fine* each cell is, is images.nvim's `cells`) |
+| `video.play_scale` | `2.5` | how much larger the playing canvas is than the still's budget (how *fine* each cell is, is images.nvim's `cells`) |
 
 **`at` and `step` are both percentages, and that is the design.** Ten presses walk any file end
 to end: a ten-second clip and a two-hour feature both get ten stills spread
