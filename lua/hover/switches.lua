@@ -394,14 +394,56 @@ function M.on_report(name)
   if not spec then
     return ("unknown switch %q"):format(tostring(name))
   end
-  if not spec.auto_type or require("hover.config").auto_hover_for(spec.auto_type) then
-    return spec.on_msg
+  local note = M.auto_gate_note(name)
+  return note and (spec.on_msg .. "\n  " .. note) or spec.on_msg
+end
+
+--- The one sentence that describes the second axis holding a switch shut:
+--- the switch is on, and the `auto_hover` type it feeds is not. `nil` when
+--- there is nothing of the sort to say, which is the common case.
+---
+--- **Split out of `on_report` because the board wants the same sentence in a
+--- place where there is no announcement.** `:Hover dashboard` writes silently
+--- -- the glyph is the report, and thirty toggles used to mean thirty
+--- notifications -- so the fact this sentence carries would have been lost
+--- with them. It is drawn instead, in the row's explanation and in a footer.
+--- Two readers, one string: the alternative was a second copy that says
+--- almost the same thing, which is how the label and the route came to
+--- disagree in the first place.
+---@param name string
+---@return string|nil
+function M.auto_gate_note(name)
+  local spec = SWITCHES[name]
+  if not spec or not spec.auto_type then
+    return nil
   end
-  return spec.on_msg
-    .. ("\n  ...but %s targets still do not open by themselves: `:Hover auto %s`, or `:Hover show`."):format(
-      spec.auto_type,
-      spec.auto_type
-    )
+  if require("hover.config").auto_hover_for(spec.auto_type) then
+    return nil
+  end
+  return ("...but %s targets still do not open by themselves: `:Hover auto %s`, or `:Hover show`."):format(
+    spec.auto_type,
+    spec.auto_type
+  )
+end
+
+--- Turn every switch on or off in one write.
+---
+--- **Through `M.set`, not around it.** Writing the twelve flag paths directly
+--- would be shorter and would skip the implication chain and the cache drop,
+--- which is precisely the "second toggle path" this module exists to prevent.
+--- Iterating costs one redundant `preview_opts` comparison per switch and
+--- buys the guarantee that flipping everything is the same operation as
+--- flipping each thing.
+---
+--- Silent by construction: a caller that flips everything wants one sentence
+--- about what it did rather than twelve about the parts, and it is the caller
+--- that knows how to say it (`hover.set_all`).
+---@param on boolean
+---@return nil
+function M.set_all(on)
+  for _, name in ipairs(ORDER) do
+    M.set(name, on, { silent = true })
+  end
 end
 
 --- Every switch's current state, in display order, for `:Hover dashboard` and
@@ -423,7 +465,15 @@ end
 --- in `auto_hover`, so the preview exists and the trigger never asks for it.
 --- Carried here rather than re-derived by each reader -- the reason every
 --- other field is.
----@return { name: string, label: string, enabled: boolean, flag: boolean, implies: string|nil, auto_type: string|nil, route: string[] }[]
+--- `desc` is the switch's own sentence, and it was missing here until the
+--- board tried to show it: `hover.status_view` has read `sw.desc` since the
+--- dwell tooltip was built, this table never carried the field, and a `nil`
+--- description is exactly the shape "this row has nothing to explain" -- so
+--- the tooltip declined silently on every switch row and looked like a
+--- feature nobody had got round to. Fourth consumer of `SWITCHES` to be
+--- served a field this report did not forward; the first three are written up
+--- above `effective`.
+---@return { name: string, label: string, desc: string, enabled: boolean, flag: boolean, implies: string|nil, auto_type: string|nil, route: string[] }[]
 function M.status()
   local out = {}
   for _, name in ipairs(ORDER) do
@@ -431,6 +481,7 @@ function M.status()
     out[#out + 1] = {
       name = name,
       label = spec.label,
+      desc = spec.desc,
       enabled = effective(name),
       flag = flag_at(spec.path) == true,
       implies = spec.implies,

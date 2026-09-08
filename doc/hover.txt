@@ -181,8 +181,10 @@ toggles. >
                                          every volume switch
   :Hover open                            hand what the float is showing
                                          to whatever opens it outside
-                                         Neovim -- a media file goes to
-                                         media.nvim's configured player
+                                         Neovim -- a media file to
+                                         media.nvim's configured player,
+                                         anything else to the system
+                                         default app, as a double-click
   :Hover dashboard                       the mode, every switch and what
                                          opens by itself, as a board:
                                          <CR> toggles the row, ? lists
@@ -206,6 +208,9 @@ toggles. >
                                          report it and list the rest
   :Hover mode [auto|manual|off]          set the mode; omitted, report it
   :Hover toggle                          off if on, back to auto if off
+  :Hover all [on|off|toggle]             every switch, every type and the
+                                         mode at once; on means mode auto
+                                         and page screenshots included
 
   :Hover links [on|off|toggle]           link syntax hovers at all
   :Hover links web [on|off|toggle]       http(s) links hover
