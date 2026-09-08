@@ -218,9 +218,9 @@ end
 --- counter on a fallible timer would — a late tick just asks mpv again and
 --- paints whatever frame belongs to the answer, which is either the next one
 --- or, after a stall, the one after that. Reaching the end of the *run* (not
---- the file) pauses rather than requesting more: the rolling window that
---- would decode the next run while this one plays is `docs/ROADMAP.md`'s, not
---- this function's.
+--- the file) swaps in the next window when one has been prefetched, and pauses
+--- only when there is none -- the end of the file, or a decode that has not
+--- landed yet.
 ---@internal
 --- Where the current window ends, in source seconds — and therefore where the
 --- next one begins.
