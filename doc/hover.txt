@@ -779,8 +779,10 @@ of a half block. `:checkhealth images` prints a row of each geometry.
 
 Sound joins by itself when the file has an audio track and mpv is on PATH. The
 picture then follows mpv's clock rather than counting its own frames, so it
-cannot drift: each paint asks mpv where it is and shows the frame belonging
-there. Without mpv, or with `video.sound = false`, the run plays exactly as it
+cannot drift -- but it does not wait for it either: the frame to draw comes
+from a local clock that mpv corrects four times a second. Asking once per frame
+made the IPC round trip a ceiling on the frame rate (300 ms of latency gave
+3 fps), which is fixed. Without mpv, or with `video.sound = false`, the run plays exactly as it
 does otherwise, silently.
 
 Playback decodes two seconds at a time and asks for the next window a second

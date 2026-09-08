@@ -22,16 +22,28 @@
 --- same division `preview.media.draw_into` makes for a still, one step
 --- further.
 ---
---- **Sound leads, the picture follows — it is not the other way round.** A
---- Lua timer is not a clock a listener would forgive drifting from, so the
---- picture does not run on one. When `media.core.audio` hands back a
---- playing mpv, the timer stops counting frames and instead asks mpv *where
---- it is* once per tick and paints whichever frame belongs to that position.
---- Drawn late, the next tick simply asks again and jumps to wherever mpv has
---- gotten to — it never accumulates a lag the way two independently
---- free-running clocks would. Without mpv (not installed, no audio track,
---- `video_sound = false`), the timer falls back to counting frames exactly as
---- it always has; sound is additive, never a precondition for motion.
+--- **Sound leads, the picture follows — but the picture does not wait for it.**
+--- A Lua timer is not a clock a listener would forgive drifting from, so the
+--- picture does not free-run on one: `media.core.audio`'s mpv is asked where
+--- it is four times a second, and every answer moves the picture to wherever
+--- mpv actually got to. Between those corrections the frame to draw comes from
+--- `uv.hrtime`, which is what makes a paint cost nothing but a paint.
+---
+--- **That indirection is the whole of a real bug.** Until 2026-09-08 the timer
+--- asked mpv once per painted frame and skipped the tick while an answer was
+--- outstanding — so the IPC round trip was a hard ceiling on the frame rate.
+--- Measured against a stub with a known latency: 0 ms gives 11.3 fps, 80 ms
+--- gives 11.0, **150 ms gives 5.7 and 300 ms gives 3.0**. A round trip
+--- averages 9.5 ms on this machine but was measured as high as 377, and every
+--- two seconds playback runs an ffmpeg and an ImageMagick for the next window,
+--- so the spikes are not rare. A reader reported 1-2 frames per second, and
+--- the sound starting a second before the picture — which is the same thing,
+--- seen at the start.
+---
+--- Without mpv (not installed, no audio track, `video_sound = false`), the
+--- timer counts frames exactly as it always has; sound is additive, never a
+--- precondition for motion. It is also what runs before the first correction
+--- lands, so the picture moves from the first tick.
 ---
 --- **A run is a window, and the window rolls.** One decode covers two seconds
 --- (24 stills at 12 fps), which is what makes the first frame arrive quickly —
@@ -66,7 +78,7 @@ local M = {}
 --- boundaries: the position asked for while its window is still decoding, the
 --- "a decode is already in flight" guard, and the newest place asked for. See
 --- `scrub_to`.
----@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer, gen: integer, path: string|nil, audio: Media.Audio.Handle|nil, audio_starting: boolean, audio_pending: boolean, request: (fun(from: number, cb: fun(run: Hover.Playback.Run|nil, err: string|nil)): nil)|nil, next_run: Hover.Playback.Run|nil, requesting: boolean, exhausted: boolean, seeking_to: number|nil, scrubbing: boolean, scrub_target: number }|nil
+---@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer, gen: integer, path: string|nil, audio: Media.Audio.Handle|nil, audio_starting: boolean, audio_pending: boolean, clock_pos: number|nil, clock_at: integer, synced_at: integer, syncing: boolean, request: (fun(from: number, cb: fun(run: Hover.Playback.Run|nil, err: string|nil)): nil)|nil, next_run: Hover.Playback.Run|nil, requesting: boolean, exhausted: boolean, seeking_to: number|nil, scrubbing: boolean, scrub_target: number }|nil
 local state = nil
 
 --- Bumped by every `load()`, never by anything else — the one source of
@@ -146,6 +158,85 @@ function M.stop()
     pcall(state.audio.stop)
   end
   state = nil
+end
+
+---@internal
+--- How long the local clock may run before it is checked against mpv again.
+---
+--- Four times a second. Drift between `uv.hrtime` and a sound card over a
+--- quarter of a second is well under a millisecond -- far below one frame at
+--- 12 fps -- while the round trips this saves are the whole point.
+local SYNC_INTERVAL_NS = 250 * 1e6
+
+---@internal
+--- Where mpv is now, from the local clock.
+---
+--- **Why there is a local clock at all, when mpv has the authoritative one.**
+--- The transport used to ask mpv for `time-pos` once per painted frame and
+--- skip the tick while an answer was outstanding, which made the IPC round
+--- trip a hard ceiling on the frame rate. Measured 2026-09-08 against a stub
+--- with a known latency: 0 ms gives 11.3 fps, 80 ms gives 11.0, **150 ms gives
+--- 5.7 and 300 ms gives 3.0**. A real round trip averages 9.5 ms on this
+--- machine but was measured as high as 377 ms, and playback runs an ffmpeg and
+--- an ImageMagick every two seconds for the next window -- so the spikes are
+--- not rare, and a reader reported 1-2 frames per second.
+---
+--- So the picture runs on `uv.hrtime` and mpv is asked four times a second to
+--- correct it. Sound still leads: every correction moves the picture to
+--- wherever mpv actually is, so this cannot drift the way two free-running
+--- clocks would. What it no longer does is *wait* for the answer.
+---@return number|nil  # seconds, or nil before the first sync has landed
+local function clock_now()
+  if not state or not state.clock_pos then
+    return nil
+  end
+  if not state.playing then
+    return state.clock_pos
+  end
+  return state.clock_pos + (vim.uv.hrtime() - state.clock_at) / 1e9
+end
+
+---@internal
+--- Move the local clock to `pos` (mpv's position, or a seek target).
+---@param pos number|nil
+---@return nil
+local function clock_set(pos)
+  if not state then
+    return
+  end
+  state.clock_pos = pos
+  state.clock_at = vim.uv.hrtime()
+end
+
+---@internal
+--- Ask mpv where it is, if it is time to, and correct the local clock when the
+--- answer arrives.
+---
+--- Never blocks a paint: the tick that calls this draws from the local clock
+--- regardless, and a reply that arrives three frames later simply corrects the
+--- clock then. `syncing` keeps one request in flight at a time, so a slow
+--- answer cannot queue up behind itself.
+---@return nil
+local function sync_clock()
+  if not state or not state.audio or state.syncing then
+    return
+  end
+  local now = vim.uv.hrtime()
+  if state.clock_pos and (now - state.synced_at) < SYNC_INTERVAL_NS then
+    return
+  end
+  state.syncing = true
+  state.synced_at = now
+  local gen = state.gen
+  state.audio.time_pos(function(pos)
+    if not state or state.gen ~= gen then
+      return
+    end
+    state.syncing = false
+    if type(pos) == "number" then
+      clock_set(pos)
+    end
+  end)
 end
 
 --- Where the picture is in the file, in seconds.
@@ -406,6 +497,12 @@ function M.load(spec)
     audio = nil,
     audio_starting = false,
     audio_pending = false,
+    -- The local clock has nothing to run from until mpv answers once; until
+    -- then `advance(nil)` counts frames, exactly as a run without sound does.
+    clock_pos = nil,
+    clock_at = 0,
+    synced_at = 0,
+    syncing = false,
     -- Absent when the caller cannot decode more (no duration to count from,
     -- an offset it could not resolve): the transport then behaves exactly as
     -- it did before windows rolled, stopping at the end of the one it has.
@@ -440,6 +537,9 @@ local function scrub_to(target)
   end
   if state.audio then
     pcall(state.audio.seek, target)
+    -- mpv is on its way there; the local clock must not keep reporting the
+    -- place it was seeked away from, or the next tick paints backwards.
+    clock_set(target)
   end
   -- The prefetched window is the continuation of where the picture *was*, and
   -- after a seek it continues nothing. `exhausted` goes with it: the end of
@@ -546,6 +646,7 @@ function M.step(delta)
     state.index = index
     if state.audio then
       pcall(state.audio.seek, first + (index - 1) / state.fps)
+      clock_set(first + (index - 1) / state.fps)
     end
     draw()
     return
@@ -576,9 +677,15 @@ function M.play()
     state.index = 1
     if state.audio then
       pcall(state.audio.seek, state.from)
+      clock_set(state.from)
     end
   end
   state.playing = true
+  -- The clock was frozen at the pause; restarting its reference point is what
+  -- keeps the time spent paused out of it.
+  if state.clock_pos then
+    clock_set(state.clock_pos)
+  end
 
   if state.audio then
     pcall(state.audio.resume)
@@ -636,24 +743,10 @@ function M.play()
         advance(nil)
         return
       end
-      if state.audio_pending then
-        -- The previous tick's `time-pos` request has not answered yet;
-        -- skipping this tick rather than queuing a second keeps replies
-        -- matched to the request that asked for them one at a time.
-        return
-      end
-      state.audio_pending = true
-      local gen = state.gen
-      state.audio.time_pos(function(pos)
-        if not state or state.gen ~= gen then
-          return
-        end
-        state.audio_pending = false
-        if not state.playing then
-          return
-        end
-        advance(pos)
-      end)
+      -- A resync may be due; it never blocks this tick, and the frame is
+      -- drawn from the local clock either way.
+      sync_clock()
+      advance(clock_now())
     end)
   )
 end
@@ -667,7 +760,14 @@ function M.pause()
     return
   end
   stop_timer()
+  -- Freeze the local clock where it *is*, not at the last sync: `clock_now`
+  -- stops advancing the moment `playing` goes false, and without this the
+  -- frozen value would be up to a quarter of a second stale.
+  local frozen = clock_now()
   state.playing = false
+  if frozen then
+    clock_set(frozen)
+  end
   if state.audio then
     pcall(state.audio.pause)
   end
