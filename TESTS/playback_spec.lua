@@ -303,6 +303,57 @@ describe("the video transport", function()
       vim.api.nvim_buf_delete(buf, { force = true })
     end
   )
+
+  it("stops a still-attached mpv on VimLeavePre, not only on a deliberate close", function()
+    -- A float torn down as part of `:qa` does not run `on_close` the way a
+    -- reader dismissing it does -- an mpv started right before quitting
+    -- would otherwise outlive Neovim entirely and keep playing on its own.
+    if not blocks_ok then
+      return
+    end
+    local buf, raw = fixture(8, 4, 5)
+    local stopped = 0
+    local saved = package.loaded["media.core.audio"]
+    package.loaded["media.core.audio"] = {
+      available = function()
+        return true
+      end,
+      start = function(_, _, callback)
+        callback({
+          pause = function() end,
+          resume = function() end,
+          seek = function() end,
+          time_pos = function(cb)
+            cb(nil)
+          end,
+          stop = function()
+            stopped = stopped + 1
+          end,
+        }, nil)
+      end,
+    }
+
+    require("hover.preview.playback").load({
+      buf = buf,
+      raw = raw,
+      frames = 5,
+      cols = 8,
+      rows = 4,
+      fps = 12,
+      from = 0,
+      duration = 12,
+      status_row = 4,
+      path = "/tmp/clip.mp4",
+    })
+    playback.play()
+    assert.equals(0, stopped)
+
+    vim.api.nvim_exec_autocmds("VimLeavePre", { modeline = false })
+    assert.equals(1, stopped, "the exit sweep must stop the mpv it still holds")
+
+    package.loaded["media.core.audio"] = saved
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
 end)
 
 describe("the transport keys", function()

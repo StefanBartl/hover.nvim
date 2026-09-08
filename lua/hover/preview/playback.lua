@@ -58,6 +58,35 @@ local next_gen = 0
 
 local NS = vim.api.nvim_create_namespace("hover.playback")
 
+--- Whether `hook_cleanup` has already installed its autocmd, this session.
+local _cleanup_hooked = false
+
+---@internal
+--- Register the one exit sweep, once, the first time audio is actually
+--- started — mirroring `preview.media._hook_cleanup`. An mpv is a real OS
+--- process outside Neovim's own lifetime: `M.stop()` kills it on every path
+--- that closes the hover deliberately (the float's `on_close`, a fresh
+--- `load()`), but quitting Neovim itself does not run those — a float torn
+--- down as part of shutdown does not fire `WinClosed`/`on_close` the way a
+--- reader dismissing it does. Without this, an mpv started right before
+--- `:qa` outlives the editor and keeps playing on its own, exactly the
+--- failure this module's header already names for the picture-side timer.
+---@return nil
+local function hook_cleanup()
+  if _cleanup_hooked then
+    return
+  end
+  _cleanup_hooked = true
+  require("lib.nvim.bindings.autocmd").create("VimLeavePre", function()
+    if state and state.audio then
+      M.stop()
+    end
+  end, {
+    group = "HoverPlayback",
+    desc = "hover: stop any mpv still attached to a played video hover at exit",
+  })
+end
+
 --- Whether a run is loaded and drawable right now.
 ---@return boolean
 function M.is_active()
@@ -292,6 +321,7 @@ function M.play()
     if not ok_audio or not audio.available() then
       state.audio_starting = false
     else
+      hook_cleanup()
       audio.start(state.path, { at = at }, function(handle)
         -- The run this was asked for may already be gone, or a later one
         -- loaded in its place — either way `gen` no longer matches, and an
