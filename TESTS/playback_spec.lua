@@ -22,6 +22,12 @@
 --      written once and only highlights change after that -- the property the
 --      whole approach rests on, since re-rendering the float at 12 fps is a
 --      strobe.
+--   5. **Sound is additive, never a precondition.** A run with no `path`
+--      never even looks for `media.core.audio` -- the fallback path is
+--      unchanged from before sound existed. A run *with* one starts it on
+--      play, pauses it in place rather than killing it, seeks it on a step,
+--      and stops it on teardown -- and a reply that arrives after the run it
+--      was asked for is gone gets its mpv stopped rather than kept.
 
 local blocks_ok, blocks = pcall(require, "images.blocks")
 
@@ -169,6 +175,134 @@ describe("the video transport", function()
     playback.step(1)
     assert.is_false(playback.is_active())
   end)
+
+  it("starts, pauses, seeks and stops audio when the run has a path", function()
+    if not blocks_ok then
+      return
+    end
+    local buf, raw = fixture(40, 4, 5)
+    local calls = { pause = 0, resume = 0, seek = {}, stop = 0, started_at = nil }
+    local saved = package.loaded["media.core.audio"]
+    package.loaded["media.core.audio"] = {
+      available = function()
+        return true
+      end,
+      start = function(_, opts, callback)
+        calls.started_at = opts.at
+        callback({
+          pause = function()
+            calls.pause = calls.pause + 1
+          end,
+          resume = function()
+            calls.resume = calls.resume + 1
+          end,
+          seek = function(s)
+            calls.seek[#calls.seek + 1] = s
+          end,
+          time_pos = function(cb)
+            cb(nil) -- the fake never answers a position; the fallback still has to work
+          end,
+          stop = function()
+            calls.stop = calls.stop + 1
+          end,
+        }, nil)
+      end,
+    }
+
+    require("hover.preview.playback").load({
+      buf = buf,
+      raw = raw,
+      frames = 5,
+      cols = 40,
+      rows = 4,
+      fps = 12,
+      from = 0,
+      duration = 12,
+      status_row = 4,
+      path = "/tmp/clip.mp4",
+    })
+    playback.play()
+    assert.equals(0, calls.started_at)
+
+    -- `pause` is also the next point the control row is guaranteed to have
+    -- repainted (the timer's own repaint is on the next event-loop tick,
+    -- which a synchronous test does not wait for) -- and the note marker
+    -- joins the paused/playing glyph there, the one thing on screen that
+    -- says sound is in play at all.
+    playback.pause()
+    assert.equals(1, calls.pause)
+    local control = vim.api.nvim_buf_get_lines(buf, 4, 5, false)[1]
+    assert.is_truthy(control:find("♪", 1, true))
+
+    playback.step(1)
+    assert.equals(1, #calls.seek)
+
+    playback.play() -- audio already started once; this resumes it in place
+    assert.equals(1, calls.resume)
+    assert.equals(0, calls.started_at) -- still the one start, not a second
+
+    playback.stop()
+    assert.equals(1, calls.stop)
+
+    package.loaded["media.core.audio"] = saved
+    vim.api.nvim_buf_delete(buf, { force = true })
+  end)
+
+  it(
+    "stops a late-arriving audio handle rather than keeping it, once the run it answers for is gone",
+    function()
+      if not blocks_ok then
+        return
+      end
+      local buf, raw = fixture(8, 4, 5)
+      local resolve
+      local stopped = 0
+      local saved = package.loaded["media.core.audio"]
+      package.loaded["media.core.audio"] = {
+        available = function()
+          return true
+        end,
+        start = function(_, _, callback)
+          -- Deferred on purpose: this is the race `state.gen` exists for --
+          -- mpv's socket answering after the reader has already moved on.
+          resolve = function()
+            callback({
+              pause = function() end,
+              resume = function() end,
+              seek = function() end,
+              time_pos = function(cb)
+                cb(nil)
+              end,
+              stop = function()
+                stopped = stopped + 1
+              end,
+            }, nil)
+          end
+        end,
+      }
+
+      require("hover.preview.playback").load({
+        buf = buf,
+        raw = raw,
+        frames = 5,
+        cols = 8,
+        rows = 4,
+        fps = 12,
+        from = 0,
+        duration = 12,
+        status_row = 4,
+        path = "/tmp/clip.mp4",
+      })
+      playback.play()
+      playback.stop() -- gone before mpv's socket ever answered
+
+      resolve()
+      assert.equals(1, stopped)
+
+      package.loaded["media.core.audio"] = saved
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
+  )
 end)
 
 describe("the transport keys", function()

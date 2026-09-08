@@ -78,6 +78,7 @@ clearing their flag, so turning it back on restores what you had.
 | `video.at` | `"10%"` | Where the first still of a video comes from. A number is seconds, `"10%"` is a fraction of the running time, anything else is handed to ffmpeg as a timestamp. Ten percent rather than zero because the first frame of a real video is usually black, a fade-in or a logo. |
 | `video.step` | `"10%"` | How far one press of the paging key moves through the file. A percentage, so ten presses walk a ten-second clip and a two-hour feature end to end alike. A file that reports no duration falls back to five seconds. |
 | `video.width` | `nil` | Width in pixels the still is rendered at; `nil` leaves the choice to media.nvim. Chosen against the float rather than the source — every pixel past what the terminal draws is decode time spent on nothing. |
+| `video.sound` | `true` | Whether a played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing — see [Playing a video](#playing-a-video). |
 
 ## Keys
 
@@ -136,10 +137,19 @@ highlights, never the float, because re-rendering at 12 fps would be a strobe.
 | `preview.video_fps` | `12` | Stills per second of source, and the rate they are painted at |
 | `preview.video_run` | `24` | Stills per run — two seconds at the default rate |
 | `preview.video_run_width` | media.nvim's | Pixel width of a run's stills before they become cells |
+| `preview.video_sound` | `true` | Same as `video.sound` above, the name it takes once threaded into `Hover.PreviewOpts` |
 
 Both `media.nvim` (with ffmpeg) and `images.nvim` (with ImageMagick) have to be
-installed. Without either, `<Space>` is bound but the still stays — the same
+installed. Without either, `<CR>` is bound but the still stays — the same
 degradation every other optional step here makes.
+
+**Sound rides along when there is something to play it with:** a track in the
+file and mpv on PATH. Neither is required — no track, or no mpv, and the run
+plays exactly as it did before sound existed, muted. When both are there, the
+timer stops counting frames and instead asks mpv *where it is* once per tick,
+painting whichever frame belongs to the answer — the picture is drawn against
+mpv's own clock rather than a Lua timer's, which is what keeps it from
+drifting away from the sound over a longer run.
 
 Measured end to end, a 640x360 clip at 80x36 cells: about 325 ms from the key
 to the first frame, and 4.6 ms to paint each one after that.

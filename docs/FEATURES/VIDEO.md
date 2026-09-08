@@ -18,8 +18,9 @@ MP4 · 42.1 MB
 That is every question about a video except the one anybody actually has, which
 is *what is in it*.
 
-The one it does **not** answer is playback. Nothing in a terminal Neovim can
-play a video, and the reason is worth stating precisely rather than hedging:
+What it does **not** answer with a real picture is playback — nothing in a
+terminal Neovim can decode and paint video the way a real player does, and
+the reason is worth stating precisely rather than hedging:
 
 - The only image protocol that reaches the terminal from inside Neovim is
   OSC 1337. It carries a whole base64 payload per write and has no notion of a
@@ -33,10 +34,12 @@ play a video, and the reason is worth stating precisely rather than hedging:
   Measured on 2026-08-05: on Windows in WezTerm, nothing sent from inside Neovim
   renders through it at all. Only OSC 1337 arrives.
 
-So the honest answer is a still. `gf` over the hover opens the file in whatever
-plays video on that machine, and
-[media.nvim](https://github.com/StefanBartl/media.nvim)'s `:Media play` does the
-same from anywhere.
+So the default is a still, and it stays a still until asked otherwise. `gf`
+over the hover opens the file in whatever plays video on that machine, and
+[media.nvim](https://github.com/StefanBartl/media.nvim)'s `:Media play` does
+the same from anywhere. The transport key (below) is the third option: real
+motion, drawn as block graphics rather than a real picture, which sidesteps
+every point above because text is not a graphics protocol.
 
 ---
 
@@ -90,6 +93,42 @@ mtime. Stepping back through a file already walked is a `stat` and a draw.
 **Why 10% and not the first frame.** The first frame of a real video is usually
 black, a fade-in, a distributor's logo, or a slate. Ten percent is past all four
 in anything that is not a clip, and in a clip it is still an image of the clip.
+
+---
+
+## Playing it, and sound
+
+A hover appearing is a glance — the cursor rested somewhere for `updatetime`,
+which is not a request for motion. `transport_keys.toggle` (`<CR>` by
+default) is that request: it decodes a short run with `media.frames()`,
+draws it as block graphics (`images.blocks`, the same reasoning as above —
+text survives redraws, an image protocol does not), and starts a timer.
+`.` / `,` step one frame back or forward, pausing first — mpv's own
+frame-step keys, picked so a float does not eat a leader key or a bracket
+motion (`<Space>`, `]`, `[` were tried and reverted; see `transport_keys` in
+`config/DEFAULTS.lua`).
+
+**Sound joins automatically when there is something to play it with.** If
+the file has an audio track and [mpv](https://mpv.io) is on PATH,
+`media.audio()` starts it alongside the run — no separate opt-in beyond
+`video.sound` (default `true`, one flag to turn it off). Neither ingredient
+is required: no track, or no mpv, and the run plays exactly as it did before
+sound existed, muted, never an error.
+
+**Why this does not drift the way picture-plus-sound usually does.** The
+picture does not run on its own clock and hope the sound stays close — the
+timer asks mpv *where it is* once per tick and paints whatever frame belongs
+to that answer, so a late tick just jumps to wherever the sound has gotten
+to rather than falling further behind it. See
+[`media.core.audio`](https://github.com/StefanBartl/media.nvim)'s module
+header for the design and why it had to be a real player rather than a
+decoder.
+
+```lua
+require("hover").setup({
+  video = { sound = false },  -- keep it muted even when mpv is available
+})
+```
 
 ---
 
@@ -172,6 +211,6 @@ one `QUIET.md` makes in general.
 ```lua
 require("hover").setup({
   auto_hover = { video = true },
-  video = { at = "10%", step = "10%", width = 800 },
+  video = { at = "10%", step = "10%", width = 800, sound = true },
 })
 ```

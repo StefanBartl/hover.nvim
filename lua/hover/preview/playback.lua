@@ -1,6 +1,6 @@
 ---@module 'hover.preview.playback'
----@brief The transport for a video hover: one run of stills, a timer, and a
----control row.
+---@brief The transport for a video hover: one run of stills, a timer, a
+---control row — and, when there is a track and mpv is on PATH, sound.
 ---@description
 --- **Nothing plays until it is asked to.** A hover appears because a cursor
 --- rested somewhere for `updatetime`, which is not a request for sound and
@@ -22,6 +22,17 @@
 --- same division `preview.media.draw_into` makes for a still, one step
 --- further.
 ---
+--- **Sound leads, the picture follows — it is not the other way round.** A
+--- Lua timer is not a clock a listener would forgive drifting from, so the
+--- picture does not run on one. When `media.core.audio` hands back a
+--- playing mpv, the timer stops counting frames and instead asks mpv *where
+--- it is* once per tick and paints whichever frame belongs to that position.
+--- Drawn late, the next tick simply asks again and jumps to wherever mpv has
+--- gotten to — it never accumulates a lag the way two independently
+--- free-running clocks would. Without mpv (not installed, no audio track,
+--- `video_sound = false`), the timer falls back to counting frames exactly as
+--- it always has; sound is additive, never a precondition for motion.
+---
 --- Measured end to end, 640x360 source at 80x36 cells: 168 ms to decode 24
 --- stills (3 ms cached), 153 ms to sample them into cells, 4.6 ms to paint one
 --- — about 325 ms from the key to the first frame, and 5% of a 12 fps budget
@@ -31,8 +42,19 @@ local M = {}
 
 --- The one active playback. Single-instance for the same reason the hover
 --- float is: there is one float, and this draws into it.
----@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer }|nil
+---
+--- `gen` guards every callback that crosses an async boundary (mpv's IPC
+--- socket coming up, a `time-pos` reply): each carries the generation it was
+--- issued under, and a reply that arrives after `stop()` or a fresh `load()`
+--- is simply dropped rather than writing into a run nobody asked for any more.
+---@type { timer: uv.uv_timer_t|nil, buf: integer|nil, ns: integer, raw: string, frames: integer, index: integer, cols: integer, rows: integer, fps: number, playing: boolean, duration: number|nil, from: number, status_row: integer, gen: integer, path: string|nil, audio: Media.Audio.Handle|nil, audio_starting: boolean, audio_pending: boolean }|nil
 local state = nil
+
+--- Bumped by every `load()`, never by anything else — the one source of
+--- generation numbers, kept outside `state` because `stop()` sets `state` to
+--- `nil` and a dropped-callback check needs somewhere to compare against even
+--- then.
+local next_gen = 0
 
 local NS = vim.api.nvim_create_namespace("hover.playback")
 
@@ -62,14 +84,19 @@ local function stop_timer()
   end
 end
 
---- Tear the playback down: stop the timer, forget the run.
+--- Tear the playback down: stop the timer, stop mpv if it was started, forget
+--- the run.
 ---
 --- Registered as the float's `on_close`, so it runs however the hover goes
 --- away — a cursor move, `q`, a re-render. A timer that outlives its window
---- paints into a buffer nobody can see, at 12 fps, forever.
+--- paints into a buffer nobody can see, at 12 fps, forever; an mpv that
+--- outlives it is the same mistake with a speaker instead of a screen.
 ---@return nil
 function M.stop()
   stop_timer()
+  if state and state.audio then
+    pcall(state.audio.stop)
+  end
   state = nil
 end
 
@@ -94,8 +121,9 @@ local function status_line()
     or width
   local bar = ("▮"):rep(filled) .. ("▯"):rep(width - filled)
 
-  return ("%s %s%s  %s"):format(
+  return ("%s%s %s%s  %s"):format(
     state.playing and "▶" or "▮▮",
+    state.audio and "♪" or "",
     now,
     total and (" / " .. total) or "",
     bar
@@ -138,14 +166,54 @@ local function draw()
   return true
 end
 
+---@internal
+--- One tick's worth of progress: from mpv's `time-pos` when there is a
+--- playing mpv, a plain frame count otherwise.
+---
+--- The audio-driven branch never accumulates lag the way incrementing a
+--- counter on a fallible timer would — a late tick just asks mpv again and
+--- paints whatever frame belongs to the answer, which is either the next one
+--- or, after a stall, the one after that. Reaching the end of the *run* (not
+--- the file) pauses rather than requesting more: the rolling window that
+--- would decode the next run while this one plays is `docs/ROADMAP.md`'s, not
+--- this function's.
+---@param pos number|nil  # mpv's `time-pos`, or nil for the no-audio fallback
+---@return nil
+local function advance(pos)
+  if not state then
+    return
+  end
+  if pos then
+    local idx = math.floor((pos - state.from) * state.fps) + 1
+    if idx >= state.frames then
+      state.index = state.frames
+      M.pause()
+      return
+    end
+    state.index = math.max(1, idx)
+    draw()
+    return
+  end
+  if state.index >= state.frames then
+    M.pause()
+    return
+  end
+  state.index = state.index + 1
+  draw()
+end
+
 --- Load a decoded run into the float and show its first frame, paused.
 ---
 --- `raw` is what `images.blocks.sample` produced for `frames` stills; the
---- caller owns the decode so this stays synchronous and cheap.
----@param spec { buf: integer, raw: string, frames: integer, cols: integer, rows: integer, fps: number, from: number, duration: number|nil, status_row: integer }
+--- caller owns the decode so this stays synchronous and cheap. `spec.path`,
+--- when present, is where `M.play` starts mpv from — `preview.video` sets it
+--- only when there is a track to start and sound has not been turned off, so
+--- this never has to make that decision itself.
+---@param spec { buf: integer, raw: string, frames: integer, cols: integer, rows: integer, fps: number, from: number, duration: number|nil, status_row: integer, path: string|nil }
 ---@return boolean ok
 function M.load(spec)
   M.stop()
+  next_gen = next_gen + 1
   state = {
     timer = nil,
     buf = spec.buf,
@@ -160,6 +228,11 @@ function M.load(spec)
     duration = spec.duration,
     from = spec.from or 0,
     status_row = spec.status_row,
+    gen = next_gen,
+    path = spec.path,
+    audio = nil,
+    audio_starting = false,
+    audio_pending = false,
   }
   return draw()
 end
@@ -168,7 +241,10 @@ end
 ---
 --- Clamped rather than wrapped: a run is a window into a file, and jumping
 --- from its end back to its start would read as the video looping when it is
---- not.
+--- not. When mpv is loaded it is seeked to match — always paused by the time
+--- this runs (`hover.play_step` pauses first), so this only keeps mpv's own
+--- position honest for whenever play resumes; it does not itself start or
+--- stop anything.
 ---@param delta integer
 ---@return nil
 function M.step(delta)
@@ -180,10 +256,20 @@ function M.step(delta)
     return
   end
   state.index = next_index
+  if state.audio then
+    pcall(state.audio.seek, state.from + (state.index - 1) / state.fps)
+  end
   draw()
 end
 
 --- Start playing from the current frame.
+---
+--- Starting mpv is asked for at most once per loaded run: `state.audio` is
+--- the "already have it" check and `state.audio_starting` the "asked for it,
+--- still waiting" one, so pressing play twice while mpv's socket is still
+--- coming up cannot start a second process. A run with no `state.path` (no
+--- track, sound turned off, `preview.video` never set one) never asks at
+--- all — the fallback path below is unchanged from before sound existed.
 ---@return nil
 function M.play()
   if not M.is_active() or not state or state.playing then
@@ -195,6 +281,41 @@ function M.play()
     state.index = 1
   end
   state.playing = true
+
+  if state.audio then
+    pcall(state.audio.resume)
+  elseif state.path and not state.audio_starting then
+    state.audio_starting = true
+    local gen = state.gen
+    local at = state.from + (state.index - 1) / state.fps
+    local ok_audio, audio = pcall(require, "media.core.audio")
+    if not ok_audio or not audio.available() then
+      state.audio_starting = false
+    else
+      audio.start(state.path, { at = at }, function(handle)
+        -- The run this was asked for may already be gone, or a later one
+        -- loaded in its place — either way `gen` no longer matches, and an
+        -- mpv nobody will stop or draw against is stopped right here instead.
+        if not state or state.gen ~= gen then
+          if handle then
+            pcall(handle.stop)
+          end
+          return
+        end
+        state.audio_starting = false
+        if handle then
+          state.audio = handle
+          if not state.playing then
+            pcall(handle.pause)
+          end
+        end
+        -- No else: `handle == nil` means no mpv, or its socket never came
+        -- up — the fallback below is already running, muted exactly as it
+        -- would have been before this feature existed.
+      end)
+    end
+  end
+
   local timer = vim.uv.new_timer()
   state.timer = timer
   timer:start(
@@ -204,19 +325,35 @@ function M.play()
       if not state or not state.playing then
         return
       end
-      if state.index >= state.frames then
-        -- The run is over. Stop rather than loop, and leave the last frame
-        -- and the control row on screen saying so.
-        M.pause()
+      if not state.audio then
+        advance(nil)
         return
       end
-      state.index = state.index + 1
-      draw()
+      if state.audio_pending then
+        -- The previous tick's `time-pos` request has not answered yet;
+        -- skipping this tick rather than queuing a second keeps replies
+        -- matched to the request that asked for them one at a time.
+        return
+      end
+      state.audio_pending = true
+      local gen = state.gen
+      state.audio.time_pos(function(pos)
+        if not state or state.gen ~= gen then
+          return
+        end
+        state.audio_pending = false
+        if not state.playing then
+          return
+        end
+        advance(pos)
+      end)
     end)
   )
 end
 
---- Stop advancing, leaving the current frame on screen.
+--- Stop advancing, leaving the current frame on screen. Pauses mpv in place
+--- rather than stopping it — resuming is then instant, with no socket to
+--- reconnect.
 ---@return nil
 function M.pause()
   if not state then
@@ -224,6 +361,9 @@ function M.pause()
   end
   stop_timer()
   state.playing = false
+  if state.audio then
+    pcall(state.audio.pause)
+  end
   draw()
 end
 
