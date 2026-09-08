@@ -159,10 +159,25 @@ divided, which belongs to images.nvim (`display.ascii_fallback.cells`). A cell
 holds two colours whatever character is in it — the terminal decides that — but
 a half block can only place them top and bottom, while a sextant divides the
 cell into six and keeps the diagonal edges. The same 113x32 canvas is a 113x64
-picture with half blocks and a **226x96** one with sextants, at 8.03 ms per
-painted frame against 8.32 ms — very nearly free. Sextants are the default
-there; `:checkhealth images` prints a row of each geometry, because whether a
-terminal draws Unicode 13 block characters is not something Neovim can ask it.
+picture with half blocks and a **226x96** one with sextants. Sextants are the
+default there; `:checkhealth images` prints a row of each geometry, because
+whether a terminal draws Unicode 13 block characters is not something Neovim
+can ask it.
+
+**That the finer geometries are free took one more fix, and finding it took a
+reader.** A half block is always `▀`, so only its colours change; a sextant
+picks a different glyph per cell per frame, and the paint therefore rewrote
+every line of the canvas with `nvim_buf_set_lines` twelve times a second. That
+is not a cheap thing done often — it bumps `changedtick`, runs every `on_lines`
+listener, invalidates the extmarks on the lines it replaces, and marks every
+window showing the buffer for a full redraw. Headless it is invisible, which is
+why three rounds of measurement here missed it: the paint measured 8-15 ms and
+looked healthy while a terminal ran at 1-2 fps. The reader found it in one line
+by switching to half blocks and watching it go smooth. `images.blocks` now
+paints an overlay `virt_text` mark per run of same-coloured cells, carrying the
+glyphs as well as the highlight, and touches the buffer never
+(`images.nvim@67964af`): `changedtick` stands still across a run in all three
+geometries, and the sextant paint fell from 14.9 ms to 4.4.
 
 **The picture runs on a local clock that mpv corrects, not on mpv itself.**
 Until 2026-09-08 the transport asked mpv for its position once per painted
@@ -176,6 +191,17 @@ second with the sound running a second ahead of the picture. Now the frame to
 draw comes from `uv.hrtime`, corrected against mpv four times a second: sound
 still leads, because every correction moves the picture to wherever mpv
 actually is, but a paint never waits for an answer.
+
+**The sound joins the picture, and never the other way round.** mpv takes about
+a second to answer its IPC socket, and the transport does not wait for it — it
+paints from frame one immediately. Until 2026-09-08 mpv's clock then took over
+unadjusted, and mpv was still at the offset play began from: a second behind,
+so the picture snapped back to meet it, reported as *"the sound comes in and the
+video starts over from the beginning"*. mpv is now started paused, seeked to
+wherever the picture has got to when its handle arrives, and only then resumed —
+so nothing on screen moves backwards and no sound is heard from the wrong place
+while it comes up. A short catch-up guard covers the ticks right after that
+seek, where mpv still reports the position it is leaving.
 
 **Sound joins automatically when there is something to play it with.** If
 the file has an audio track and [mpv](https://mpv.io) is on PATH,
