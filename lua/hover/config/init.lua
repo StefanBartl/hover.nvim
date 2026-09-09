@@ -540,6 +540,10 @@ function M.preview_opts()
   if video.system_player_align ~= nil then
     video_system_player_align = video.system_player_align
   end
+  local video_use_mpv = DEFAULTS.video.use_mpv
+  if video.use_mpv ~= nil then
+    video_use_mpv = video.use_mpv
+  end
   return {
     max_lines = c.max_lines or DEFAULTS.max_lines,
     max_width = c.max_width or DEFAULTS.max_width,
@@ -569,6 +573,7 @@ function M.preview_opts()
     -- "let media.nvim choose" rather than "unset".
     video_width = video.width,
     video_playback = video.playback ~= nil and video.playback or DEFAULTS.video.playback,
+    video_use_mpv = video_use_mpv,
     video_system_player_align = video_system_player_align,
     video_sound = video_sound,
     -- `~= nil` rather than `or`, because `0` is the default and a meaningful

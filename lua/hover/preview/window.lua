@@ -50,7 +50,24 @@ function M.open(spec)
     return false, "media.nvim has no windowed player — update it"
   end
 
-  local h, err = media.play_window(spec.path, { at = spec.at })
+  -- Which monitor the terminal is on right now, so mpv's `--geometry`
+  -- centres there instead of on screen 0 -- one quick, synchronous query
+  -- (see `preview.monitor`'s own doc for why this is safe to assume and
+  -- why it is Windows-only for the index itself, not just the bounds).
+  -- Both `require` and the call itself are guarded: an older hover.nvim
+  -- checkout without this module, or any other unexpected shape, must not
+  -- turn "mpv would have played happily" into a crash.
+  local ok_mon, monitor = pcall(require, "hover.preview.monitor")
+  local detected
+  if ok_mon and type(monitor) == "table" and type(monitor.detect) == "function" then
+    local ok_detect, result = pcall(monitor.detect)
+    detected = ok_detect and result or nil
+  end
+
+  local h, err = media.play_window(spec.path, {
+    at = spec.at,
+    screen = detected and detected.screen or nil,
+  })
   if not h then
     return false, err or "mpv could not be started"
   end

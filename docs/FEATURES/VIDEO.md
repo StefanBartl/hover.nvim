@@ -85,6 +85,7 @@ moment.
 | `video.at` | `"10%"` | where the first still comes from |
 | `video.step` | `"10%"` | how far one key press moves |
 | `video.playback` | `"window"` | what the transport key does -- a real mpv window, or without mpv the system's own player, or `"inline"` block graphics -- see below |
+| `video.use_mpv` | `true` | whether `"window"` may reach for mpv at all -- `false` is "I have it, do not use it", not the same as `"inline"` -- see below |
 | `video.system_player_align` | `false` | experimental: best-effort centre the system player's window when there is no mpv window -- see below |
 | `video.play_at` | `0` | where *playing* starts -- see below |
 | `video.play_scale` | `2.5` | how much larger the playing canvas is than the still's budget (how *fine* each cell is, is images.nvim's `cells`) -- `"inline"` only |
@@ -134,9 +135,22 @@ media.nvim keeps its own `VimLeavePre` backstop for the exit that runs no
 teardown at all. Playback starts from the scrubbed position exactly as the
 route below does — `video.playback_offset` is the one function both share, so
 the two cannot drift apart the way two hand-kept copies of that arithmetic
-once did.
+once did. `preview.window` also asks `preview.monitor` which screen the
+terminal is on right now and passes it to mpv's `--geometry`, so the window
+centres where the reader actually is on a multi-monitor machine rather than
+always screen 0 — `preview.monitor`'s own doc has the reasoning (the
+foreground window at the moment `<CR>` is pressed) and why the screen *index*
+is Windows-only, verified against a real two-monitor machine.
 
-**Without mpv, `"window"` still beats a muted run of block graphics.**
+**`video.use_mpv = false` asks for something `playback = "inline"` does
+not.** "I have mpv installed, but this plugin should not touch it" — `<CR>`
+then skips past the mpv tier straight to the one below, real video and sound
+still, rather than falling all the way to silent block graphics. It silences
+inline's optional sound too (`video.sound`), since "do not use mpv" means
+none of it, not just the window.
+
+**Without mpv (or with `use_mpv = false`), `"window"` still beats a muted run
+of block graphics.**
 `preview.external` hands the file to `media.play()` instead — a configured
 player, or whatever this machine already opens a video with, the same call
 `gf` already makes for "open externally". Real video and sound, nothing extra
@@ -153,7 +167,8 @@ first the way the window tier's `M.open` does.
 
 **`video.system_player_align` (default `false`, experimental) reaches for the
 same "centred, like mpv" feel from outside a process this plugin does not
-own.** There is no `--geometry` to pass a system player the way
+own** — on the same monitor `preview.monitor` found for the mpv tier, not
+always the primary one. There is no `--geometry` to pass a system player the way
 `media.core.player` passes mpv one, so the only way left is to watch for the
 window that appears right after the hand-off and move it. `preview.
 align_win` does this on all three platforms, and is honest that it can fail

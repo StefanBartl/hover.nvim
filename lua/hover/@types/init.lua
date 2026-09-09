@@ -136,7 +136,8 @@
 ---@field step? number|string # Offset a paging key adds. Default "10%".
 ---@field width? integer # Render width in pixels. Default nil (media.nvim decides).
 ---@field playback? "window"|"inline" # What the transport key does. Default "window" -- a real mpv window, or without mpv the system's own player; "inline" paints a run of stills into the float instead of either.
----@field system_player_align? boolean # Experimental, Windows only: best-effort centre the window the system player (not mpv) opens. Default false; can silently do nothing -- see `preview.align_win`.
+---@field use_mpv? boolean # Whether "window" may reach for mpv at all. Default true. false is "I have mpv, do not use it" -- skips straight to the system-player fallback (and silences inline's optional sound too), unlike playback = "inline" which gives up that fallback's real video and sound as well.
+---@field system_player_align? boolean # Experimental, cross-platform: best-effort centre the window the system player (not mpv) opens. Default false; can silently do nothing -- see `preview.align_win`.
 ---@field sound? boolean # Start audio alongside an inline played run. Default true. (A window always has its player's own sound.)
 ---@field play_at? number|string # Where playing starts, as opposed to where the still is taken. Default 0 -- the beginning of the file.
 ---@field play_scale? number # How much larger the playing canvas is than the still's budget, capped to the editor. Default 1.75; 1 is the still's own size.
@@ -338,7 +339,8 @@
 ---@field video_step? number|string # How far one paging key moves through a video.
 ---@field video_width? integer # Width the still is rendered at; nil leaves the choice to media.nvim.
 ---@field video_playback? "window"|"inline" # What the transport key does: `"window"` (default) opens a real mpv window, or without mpv hands the file to the system's own player; `"inline"` paints a run of stills into the float instead of either.
----@field video_system_player_align? boolean # Experimental, Windows only: best-effort attempt to centre whatever window the system player opens, when there is no mpv window to fall back on. Default false; silently does nothing when it cannot (see `preview.align_win`).
+---@field video_use_mpv? boolean # Whether the "window" tier may reach for mpv at all. Default true; false skips straight to the system-player fallback (and silences inline's optional sound) without giving up that fallback's real video and sound the way playback = "inline" does.
+---@field video_system_player_align? boolean # Experimental, cross-platform: best-effort centre the window the system player (not mpv) opens. Default false; see `preview.align_win`.
 ---@field video_play_at? number|string # Where a played run starts. Default 0; the still's own `video_at` is a thumbnail offset and deliberately not this.
 ---@field video_play_scale? number # Multiplier on the preview budget for the playing canvas, capped to the editor's rows and columns.
 ---@field play? boolean # Build the playing view (a decoded run) instead of the still. Set by the transport key, never by configuration.

@@ -53,7 +53,14 @@ param(
   [int]$TimeoutMs = 6000,
   [int]$PollMs = 300,
   [int]$MinWidth = 250,
-  [int]$MinHeight = 150
+  [int]$MinHeight = 150,
+  # The monitor to centre inside, from `preview.monitor`'s detection --
+  # -1 (the default) means "not given", and PrimaryScreen is the fallback,
+  # exactly as before that module existed.
+  [int]$TargetX = -1,
+  [int]$TargetY = -1,
+  [int]$TargetW = -1,
+  [int]$TargetH = -1
 )
 
 $ErrorActionPreference = "SilentlyContinue"
@@ -118,9 +125,14 @@ while ((Get-Date) -lt $deadline) {
 }
 
 if ($found) {
-  $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-  $x = $area.X + [Math]::Max(0, [int](($area.Width - $found.w) / 2))
-  $y = $area.Y + [Math]::Max(0, [int](($area.Height - $found.h) / 2))
+  if ($TargetW -ge 0) {
+    $areaX = $TargetX; $areaY = $TargetY; $areaW = $TargetW; $areaH = $TargetH
+  } else {
+    $area = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $areaX = $area.X; $areaY = $area.Y; $areaW = $area.Width; $areaH = $area.Height
+  }
+  $x = $areaX + [Math]::Max(0, [int](($areaW - $found.w) / 2))
+  $y = $areaY + [Math]::Max(0, [int](($areaH - $found.h) / 2))
   # SWP_NOSIZE (0x0001) | SWP_NOZORDER (0x0004): move only, touch neither the
   # size the player chose for itself nor which window is on top of which.
   [HoverWin32]::SetWindowPos($found.hwnd, [IntPtr]::Zero, $x, $y, 0, 0, 0x0005) | Out-Null
@@ -136,9 +148,20 @@ end
 --- terminal to have Accessibility permission -- absent that, every `tell`
 --- below answers nothing, which the surrounding `try` already treats the
 --- same as "did not find one".
+---@param target { x: integer, y: integer, w: integer, h: integer }|nil
 ---@return string
-local function script_macos()
-  return [[
+local function script_macos(target)
+  local target_decl = target
+      and ("set haveTarget to true\nset targetX to %d\nset targetY to %d\nset targetW to %d\nset targetH to %d"):format(
+        target.x,
+        target.y,
+        target.w,
+        target.h
+      )
+    or "set haveTarget to false"
+  return ([[
+%s
+
 on windowList()
   set result to {}
   tell application "System Events"
@@ -180,25 +203,36 @@ end repeat
 
 if foundProc is not "" then
   try
-    tell application "Finder" to set screenBounds to bounds of window of desktop
-    set screenW to (item 3 of screenBounds) - (item 1 of screenBounds)
-    set screenH to (item 4 of screenBounds) - (item 2 of screenBounds)
+    if haveTarget then
+      set screenX to targetX
+      set screenY to targetY
+      set screenW to targetW
+      set screenH to targetH
+    else
+      -- No detected monitor: the screen the *script* runs on, same as before
+      -- `preview.monitor` existed. Not necessarily where the reader is.
+      tell application "Finder" to set screenBounds to bounds of window of desktop
+      set screenX to item 1 of screenBounds
+      set screenY to item 2 of screenBounds
+      set screenW to (item 3 of screenBounds) - (item 1 of screenBounds)
+      set screenH to (item 4 of screenBounds) - (item 2 of screenBounds)
+    end if
     tell application "System Events"
       tell process foundProc
         set winSize to size of window foundWin
         set winW to item 1 of winSize
         set winH to item 2 of winSize
-        set newX to ((screenW - winW) / 2) as integer
-        set newY to ((screenH - winH) / 2) as integer
-        if newX < 0 then set newX to 0
-        if newY < 0 then set newY to 0
+        set newX to (screenX + (screenW - winW) / 2) as integer
+        set newY to (screenY + (screenH - winH) / 2) as integer
+        if newX < screenX then set newX to screenX
+        if newY < screenY then set newY to screenY
         set position of window foundWin to {newX, newY}
         set frontmost to true
       end tell
     end tell
   end try
 end if
-]]
+]]):format(target_decl)
 end
 
 ---@internal
@@ -207,21 +241,30 @@ end
 --- its size, so it lands at a fixed offset rather than a true centre.
 --- Neither can do anything under Wayland, by that compositor's own design --
 --- the script still exits cleanly, having simply found nothing to move.
+---@param target { x: integer, y: integer, w: integer, h: integer }|nil
 ---@return string
-local function script_linux()
-  return [[
+local function script_linux(target)
+  local target_decl = target
+      and ("TARGET_X=%d\nTARGET_Y=%d\nTARGET_W=%d\nTARGET_H=%d\n"):format(
+        target.x,
+        target.y,
+        target.w,
+        target.h
+      )
+    or ""
+  return ([[
 #!/usr/bin/env bash
 TIMEOUT_S=6
 POLL_S=0.3
-
+%s
 have() { command -v "$1" >/dev/null 2>&1; }
 
-deadline=$(( $(date +%s) + TIMEOUT_S ))
+deadline=$(( $(date +%%s) + TIMEOUT_S ))
 
 if have xdotool; then
   before="$(xdotool search --onlyvisible . 2>/dev/null)"
   found=""
-  while [ "$(date +%s)" -lt "$deadline" ]; do
+  while [ "$(date +%%s)" -lt "$deadline" ]; do
     sleep "$POLL_S"
     after="$(xdotool search --onlyvisible . 2>/dev/null)"
     for id in $after; do
@@ -233,17 +276,24 @@ if have xdotool; then
     [ -n "$found" ] && break
   done
   if [ -n "$found" ]; then
-    geom="$(xdotool getdisplaygeometry 2>/dev/null)"
-    screen_w="$(echo "$geom" | awk '{print $1}')"
-    screen_h="$(echo "$geom" | awk '{print $2}')"
+    if [ -n "${TARGET_W:-}" ]; then
+      # A detected monitor, from preview.monitor -- not necessarily screen 0,
+      # which is all `getdisplaygeometry` alone would ever answer.
+      screen_x="$TARGET_X"; screen_y="$TARGET_Y"; screen_w="$TARGET_W"; screen_h="$TARGET_H"
+    else
+      geom="$(xdotool getdisplaygeometry 2>/dev/null)"
+      screen_x=0; screen_y=0
+      screen_w="$(echo "$geom" | awk '{print $1}')"
+      screen_h="$(echo "$geom" | awk '{print $2}')"
+    fi
     wgeom="$(xdotool getwindowgeometry --shell "$found" 2>/dev/null)"
     win_w="$(echo "$wgeom" | grep '^WIDTH=' | cut -d= -f2)"
     win_h="$(echo "$wgeom" | grep '^HEIGHT=' | cut -d= -f2)"
     if [ -n "$screen_w" ] && [ -n "$win_w" ]; then
-      x=$(( (screen_w - win_w) / 2 ))
-      y=$(( (screen_h - win_h) / 2 ))
-      [ "$x" -lt 0 ] && x=0
-      [ "$y" -lt 0 ] && y=0
+      x=$(( screen_x + (screen_w - win_w) / 2 ))
+      y=$(( screen_y + (screen_h - win_h) / 2 ))
+      [ "$x" -lt "$screen_x" ] && x=$screen_x
+      [ "$y" -lt "$screen_y" ] && y=$screen_y
       xdotool windowmove "$found" "$x" "$y" 2>/dev/null
       xdotool windowactivate "$found" 2>/dev/null
     fi
@@ -251,7 +301,7 @@ if have xdotool; then
 elif have wmctrl; then
   before="$(wmctrl -l 2>/dev/null | awk '{print $1}')"
   found=""
-  while [ "$(date +%s)" -lt "$deadline" ]; do
+  while [ "$(date +%%s)" -lt "$deadline" ]; do
     sleep "$POLL_S"
     after="$(wmctrl -l 2>/dev/null | awk '{print $1}')"
     for id in $after; do
@@ -263,13 +313,16 @@ elif have wmctrl; then
     [ -n "$found" ] && break
   done
   if [ -n "$found" ]; then
-    # No size query in wmctrl alone: a fixed offset, not a true centre.
-    wmctrl -ir "$found" -e 0,100,100,-1,-1 2>/dev/null
+    # No size query in wmctrl alone: a fixed offset from the target's
+    # top-left corner (or 100,100 on screen 0 without one), not a true centre.
+    off_x=$(( ${TARGET_X:-0} + 100 ))
+    off_y=$(( ${TARGET_Y:-0} + 100 ))
+    wmctrl -ir "$found" -e 0,"$off_x","$off_y",-1,-1 2>/dev/null
     wmctrl -ia "$found" 2>/dev/null
   fi
 fi
 exit 0
-]]
+]]):format(target_decl)
 end
 
 ---@internal
@@ -315,6 +368,19 @@ function M.try_centre_new_window()
     return
   end
 
+  -- Which monitor the terminal is on right now -- the same fact
+  -- `preview.window` asks `preview.monitor` for, so mpv and the system
+  -- player centre in the same place rather than one of them defaulting to
+  -- whichever screen this script happens to run on.
+  local ok_mon, monitor = pcall(require, "hover.preview.monitor")
+  local detected
+  if ok_mon and type(monitor) == "table" and type(monitor.detect) == "function" then
+    local ok_detect, result = pcall(monitor.detect)
+    detected = ok_detect and result or nil
+  end
+  local target = detected and { x = detected.x, y = detected.y, w = detected.w, h = detected.h }
+    or nil
+
   local argv, ext
   if platform == "windows" then
     argv, ext =
@@ -334,11 +400,14 @@ function M.try_centre_new_window()
     argv, ext = { "bash" }, ".sh"
   end
 
-  local content = ({
-    windows = script_windows,
-    macos = script_macos,
-    linux = script_linux,
-  })[platform]()
+  local content
+  if platform == "windows" then
+    content = script_windows()
+  elseif platform == "macos" then
+    content = script_macos(target)
+  else
+    content = script_linux(target)
+  end
 
   local path = vim.fn.stdpath("cache") .. "/hover_align_video_window" .. ext
   local fd = io.open(path, "w")
@@ -349,6 +418,19 @@ function M.try_centre_new_window()
   fd:close()
 
   argv[#argv + 1] = path
+  if platform == "windows" and target then
+    -- macOS/Linux bake the target into the generated script text (no PID or
+    -- CLI-arg passing needed there); PowerShell's own `param()` block takes
+    -- it as real arguments instead.
+    argv[#argv + 1] = "-TargetX"
+    argv[#argv + 1] = tostring(target.x)
+    argv[#argv + 1] = "-TargetY"
+    argv[#argv + 1] = tostring(target.y)
+    argv[#argv + 1] = "-TargetW"
+    argv[#argv + 1] = tostring(target.w)
+    argv[#argv + 1] = "-TargetH"
+    argv[#argv + 1] = tostring(target.h)
+  end
   -- No `detach = true`: measured 2026-09-09 on Windows, a detached
   -- `vim.system` call here did not survive to actually run the poll --
   -- plain `vim.system` (async, no `:wait()`) already does not block the
