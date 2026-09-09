@@ -792,7 +792,14 @@ closed by hand.
 Linux) is a best-effort attempt to centre whatever window that system player
 opens, on the same detected monitor the mpv tier targets. It can genuinely do
 nothing -- a UWP default handler on Windows, a terminal without Accessibility
-permission on macOS, Wayland on Linux -- and never reports when it does not.
+permission on macOS, Wayland on Linux, or a fullscreen window (reported
+against VLC), which none of the above ever reaches -- and never reports when
+it does not.
+
+`video.system_player_prefer_classic` (default true, only consulted when
+`system_player_align` is true) is the fix for that last case: try a known,
+scriptable player by name first (`vlc --no-fullscreen`, today), and only fall
+to the system's own handler when none of them is on PATH.
 
 Set `video.playback = "inline"` for the block-graphics transport described
 below instead of either of the above, which is genuinely smooth on a terminal

@@ -13,12 +13,19 @@
 --- process's window from outside it is something every desktop restricts to
 --- a different degree:
 ---
----   - **Windows.** A classic window (VLC, MPC-HC) moves cleanly with
----     `SetWindowPos`. The stock handler for a video, "Films & TV", is a UWP
----     app running inside a shared `ApplicationFrameHost.exe` container, and
----     that container's window has historically ignored being moved from
----     outside it. Measured on this machine 2026-09-09: the registered
----     handler for `.mp4` *is* that UWP app.
+---   - **Windows.** A classic, restored window (VLC, MPC-HC) moves with
+---     `SetWindowPos`; a maximized one is restored first, or the move is a
+---     silent no-op. Neither reaches a true borderless-fullscreen window,
+---     which many players remember as their last session state and which
+---     this script cannot distinguish from "correctly aligned" once it
+---     covers the monitor either way -- reported 2026-09-09 against VLC,
+---     which is what `preview.external`'s known-player list (launched with
+---     an anti-fullscreen flag) exists to avoid in the first place. The
+---     stock handler for a video, "Films & TV", is a UWP app running inside
+---     a shared `ApplicationFrameHost.exe` container, and that container's
+---     window has historically ignored being moved from outside it.
+---     Measured on this machine 2026-09-09: the registered handler for
+---     `.mp4` *is* that UWP app.
 ---   - **macOS.** `System Events` can move most apps' windows, but only once
 ---     the terminal running Neovim has been granted Accessibility permission
 ---     (System Settings → Privacy & Security → Accessibility) — without it,
@@ -79,6 +86,8 @@ public class HoverWin32 {
   [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
   [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
   [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
   public struct RECT { public int Left, Top, Right, Bottom; }
 }
 "@
@@ -133,6 +142,16 @@ if ($found) {
   }
   $x = $areaX + [Math]::Max(0, [int](($areaW - $found.w) / 2))
   $y = $areaY + [Math]::Max(0, [int](($areaH - $found.h) / 2))
+  # A maximized window ignores SetWindowPos outright -- restore it first, or
+  # the move below is a silent no-op. This does not reach a true borderless
+  # fullscreen window (one resized to cover the monitor without ever calling
+  # the OS "maximize", which is not IsZoomed and has no restore to ask for);
+  # that case is why preview.external tries a known player with an
+  # anti-fullscreen flag before ever getting here.
+  if ([HoverWin32]::IsZoomed($found.hwnd)) {
+    [HoverWin32]::ShowWindow($found.hwnd, 9) | Out-Null  # SW_RESTORE
+    Start-Sleep -Milliseconds 100
+  }
   # SWP_NOSIZE (0x0001) | SWP_NOZORDER (0x0004): move only, touch neither the
   # size the player chose for itself nor which window is on top of which.
   [HoverWin32]::SetWindowPos($found.hwnd, [IntPtr]::Zero, $x, $y, 0, 0, 0x0005) | Out-Null

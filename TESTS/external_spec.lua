@@ -135,3 +135,138 @@ describe("hover.preview.external", function()
     assert.equals(1, asks)
   end)
 end)
+
+describe("hover.preview.external, preferring a known player", function()
+  -- A fullscreen window defeats `align_win`'s `SetWindowPos` before it
+  -- starts (reported 2026-09-09, against VLC opening in its remembered
+  -- fullscreen state) -- so when alignment is wanted, a known, scriptable
+  -- player is tried by name first, with a flag that keeps it out of
+  -- fullscreen. `vim.fn.executable` and `vim.system` are real OS boundaries
+  -- and stubbed directly here, the same way `TESTS/bare_git_spec.lua` does.
+
+  local real_executable, real_system
+
+  before_each(function()
+    external.reset()
+    package.loaded["media"] = {
+      play = function()
+        return true
+      end,
+    }
+    real_executable = vim.fn.executable
+    real_system = vim.system
+  end)
+
+  after_each(function()
+    vim.fn.executable = real_executable
+    vim.system = real_system
+    package.loaded["media"] = nil
+  end)
+
+  it("launches a known player directly, bypassing media.play, when one is found", function()
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.executable = function(name)
+      return name == "vlc" and 1 or 0
+    end
+    local media_played = false
+    package.loaded["media"].play = function()
+      media_played = true
+      return true
+    end
+    local seen_argv
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.system = function(argv, _opts)
+      -- A fake handle, not the real spawn: the code under test only checks
+      -- that this call did not raise, never the process it would have
+      -- started -- and "vlc" plainly is not on this test runner's PATH.
+      seen_argv = argv
+      return { pid = 1 }
+    end
+
+    local ok = external.open("/tmp/clip.mp4", { align = true })
+
+    assert.is_true(ok)
+    assert.is_false(media_played, "a known player was found -- media.play must not also run")
+    assert.same({ "vlc", "--no-fullscreen", "/tmp/clip.mp4" }, seen_argv)
+  end)
+
+  it("falls to media.play when no known player is on PATH", function()
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.executable = function()
+      return 0
+    end
+    local media_played = false
+    package.loaded["media"].play = function()
+      media_played = true
+      return true
+    end
+
+    local ok = external.open("/tmp/clip.mp4", { align = true })
+
+    assert.is_true(ok)
+    assert.is_true(media_played)
+  end)
+
+  it("is never tried when align is not requested, even if a player is found", function()
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.executable = function(name)
+      return name == "vlc" and 1 or 0
+    end
+    local system_called = false
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.system = function(...)
+      system_called = true
+      return real_system(...)
+    end
+    local media_played = false
+    package.loaded["media"].play = function()
+      media_played = true
+      return true
+    end
+
+    local ok = external.open("/tmp/clip.mp4", { align = false })
+
+    assert.is_true(ok)
+    assert.is_true(media_played, "no alignment requested -- the system handler is the only tier")
+    assert.is_false(system_called)
+  end)
+
+  it("is skipped when prefer_classic is turned off, even with align on", function()
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.executable = function(name)
+      return name == "vlc" and 1 or 0
+    end
+    local media_played = false
+    package.loaded["media"].play = function()
+      media_played = true
+      return true
+    end
+
+    local ok = external.open("/tmp/clip.mp4", { align = true, prefer_classic = false })
+
+    assert.is_true(ok)
+    assert.is_true(media_played)
+  end)
+
+  it("still asks align_win to centre the window after a known player launch", function()
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.fn.executable = function(name)
+      return name == "vlc" and 1 or 0
+    end
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.system = function(_argv, _opts)
+      return { pid = 1 }
+    end
+    local asked = false
+    package.loaded["hover.preview.align_win"] = {
+      try_centre_new_window = function()
+        asked = true
+      end,
+    }
+
+    external.open("/tmp/clip.mp4", { align = true })
+
+    assert.is_true(asked)
+    package.loaded["hover.preview.align_win"] = nil
+  end)
+end)

@@ -544,6 +544,10 @@ function M.preview_opts()
   if video.use_mpv ~= nil then
     video_use_mpv = video.use_mpv
   end
+  local video_system_player_prefer_classic = DEFAULTS.video.system_player_prefer_classic
+  if video.system_player_prefer_classic ~= nil then
+    video_system_player_prefer_classic = video.system_player_prefer_classic
+  end
   return {
     max_lines = c.max_lines or DEFAULTS.max_lines,
     max_width = c.max_width or DEFAULTS.max_width,
@@ -575,6 +579,7 @@ function M.preview_opts()
     video_playback = video.playback ~= nil and video.playback or DEFAULTS.video.playback,
     video_use_mpv = video_use_mpv,
     video_system_player_align = video_system_player_align,
+    video_system_player_prefer_classic = video_system_player_prefer_classic,
     video_sound = video_sound,
     -- `~= nil` rather than `or`, because `0` is the default and a meaningful
     -- value: `video.play_at or DEFAULTS...` would read a configured `0` as
