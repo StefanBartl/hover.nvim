@@ -535,16 +535,39 @@ return {
     ---
     --- **Off by default because whether it does anything depends on what is
     --- registered, not on this plugin.** A classic window (VLC, MPC-HC)
-    --- moves cleanly. The stock Windows handler for a video is a UWP app
-    --- ("Films & TV"), which runs inside a shared container process that has
-    --- historically ignored being moved from outside it -- measured true on
-    --- the machine this shipped from; macOS needs the terminal to have
-    --- Accessibility permission, and Linux needs `xdotool`/`wmctrl` and no
-    --- Wayland compositor in the way. Either way this never reports failure:
-    --- it centres the window when it can, and changes nothing when it
-    --- cannot. See `preview.align_win`.
+    --- generally moves with `SetWindowPos` -- unless it opens fullscreen,
+    --- which ignores that outright, and is what a system default handler
+    --- remembering its last session state does more often than not
+    --- (reported 2026-09-09 against VLC). `system_player_prefer_classic`
+    --- below is the fix for that case. Windows' own stock handler for a
+    --- video is a UWP app ("Films & TV"), which runs inside a shared
+    --- container process that has historically ignored being moved from
+    --- outside it -- measured true on the machine this shipped from; macOS
+    --- needs the terminal to have Accessibility permission, and Linux needs
+    --- `xdotool`/`wmctrl` and no Wayland compositor in the way. Either way
+    --- this never reports failure: it centres the window when it can, and
+    --- changes nothing when it cannot. See `preview.align_win`.
     ---@type boolean
     system_player_align = false,
+
+    --- Experimental, and only consulted when `system_player_align` is
+    --- `true` -- irrelevant otherwise, since its whole point is making
+    --- alignment possible. A fullscreen window defeats `SetWindowPos` before
+    --- it starts (see `system_player_align` above), and the system's own
+    --- file association is the one thing here with no lever against that:
+    --- its remembered "last time" state is not something this plugin can ask
+    --- about, let alone override. So with this `true` (the default), the
+    --- system-player fallback tries a short list of known, scriptable
+    --- players by name first -- `vlc --no-fullscreen`, today -- and only
+    --- falls to the system's own handler when none of them is on PATH. Set
+    --- to `false` to always go through the system handler even with
+    --- alignment on, e.g. because a preferred player is not in the (short,
+    --- honest) list `preview.external` knows. See its module doc for why a
+    --- classic player still goes through the same `try_centre_new_window`
+    --- afterward -- avoiding fullscreen only makes that step able to do
+    --- anything, it is not a replacement for it.
+    ---@type boolean
+    system_player_prefer_classic = true,
 
     --- Whether an *inline* played run may start audio, when the file has a
     --- track and mpv is on PATH. On by default for the same reason

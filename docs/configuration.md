@@ -81,6 +81,7 @@ clearing their flag, so turning it back on restores what you had.
 | `video.playback` | `"window"` | What `<CR>` does: `"window"` opens a real mpv window, or without mpv the system's own player (`media.play()`, the same call `gf` makes — no extra install); `"inline"` paints a run of stills into the float instead of either — see [Playing a video](#playing-a-video). |
 | `video.use_mpv` | `true` | Whether `"window"` may reach for mpv at all. `false` is "I have mpv, do not use it" — skips straight to the system-player fallback (and silences inline's optional sound), unlike `playback = "inline"` which also gives up that fallback's real video and sound. |
 | `video.system_player_align` | `false` | Experimental, Windows/macOS/Linux: when `"window"` falls back to the system player, best-effort centre whatever new window appears in the next few seconds. Off by default because whether it does anything depends on what is registered on this machine, not on this plugin — see [Playing a video](#playing-a-video). |
+| `video.system_player_prefer_classic` | `true` | Experimental; only consulted when `system_player_align` is `true`. Tries a known, scriptable player by name first (`vlc --no-fullscreen`, today) before the system's own handler, since a fullscreen window defeats alignment outright — see [Playing a video](#playing-a-video). |
 | `video.sound` | `true` | Whether an **inline** played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing. A `"window"` playback always has its player's own sound and ignores this. |
 | `video.play_at` | `0` | Where **playing** starts, which is deliberately not where the still is taken. Same three shapes as `video.at`. A thumbnail wants to skip the fade-in; a viewer wants the beginning. A scrubbed still is the exception and is honoured: from page 2 on, play starts where the paging keys left off. |
 | `video.play_scale` | `2.5` | How much larger the **box** is while playing — `max_width`/`max_lines` scaled, capped to the editor's own rows and columns. The float and the canvas are both built from that one number, so they grow together. A cell carries two pixel rows, so the 20-line default is a 38-pixel picture; this is the sharpness knob. `1` is the still's size. |
@@ -167,6 +168,16 @@ anything at all; Linux needs `xdotool` or `wmctrl`, neither of which can move
 a window under Wayland by that compositor's own design. None of that is
 reported — it centres the window when it can, and changes nothing when it
 cannot.
+
+**A fullscreen window is the case none of that reaches, and the one reported
+in practice** (VLC, opened via the system's own file association, in its
+remembered fullscreen state): a window covering the whole monitor either
+ignores the move outright or is indistinguishable from "aligned" either way.
+`video.system_player_prefer_classic` (default `true`, only consulted when
+`system_player_align` is `true`) is the fix — try a short, honest list of
+known, scriptable players by name first (`vlc --no-fullscreen`, today), and
+only fall to the system's own handler when none of them is on PATH. Set to
+`false` to always go through the system handler even with alignment on.
 
 Set `video.playback = "inline"` for the block-graphics transport described
 below instead of either of the above — genuinely smooth on a terminal fast

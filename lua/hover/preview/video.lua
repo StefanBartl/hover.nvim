@@ -460,7 +460,10 @@ function M.preview(target, opts, on_result)
       local ok_ext, external = pcall(require, "hover.preview.external")
       if
         ok_ext
-        and external.open(target.path, { align = opts.video_system_player_align == true })
+        and external.open(target.path, {
+          align = opts.video_system_player_align == true,
+          prefer_classic = opts.video_system_player_prefer_classic ~= false,
+        })
       then
         local content =
           badge_with_summary(target, "▶ handed to your system's video player — <CR> to dismiss")

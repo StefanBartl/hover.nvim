@@ -87,6 +87,7 @@ moment.
 | `video.playback` | `"window"` | what the transport key does -- a real mpv window, or without mpv the system's own player, or `"inline"` block graphics -- see below |
 | `video.use_mpv` | `true` | whether `"window"` may reach for mpv at all -- `false` is "I have it, do not use it", not the same as `"inline"` -- see below |
 | `video.system_player_align` | `false` | experimental: best-effort centre the system player's window when there is no mpv window -- see below |
+| `video.system_player_prefer_classic` | `true` | only consulted when `system_player_align` is `true`: try a known player (`vlc --no-fullscreen`) before the system handler, since fullscreen defeats alignment -- see below |
 | `video.play_at` | `0` | where *playing* starts -- see below |
 | `video.play_scale` | `2.5` | how much larger the playing canvas is than the still's budget (how *fine* each cell is, is images.nvim's `cells`) -- `"inline"` only |
 
@@ -174,8 +175,9 @@ window that appears right after the hand-off and move it. `preview.
 align_win` does this on all three platforms, and is honest that it can fail
 silently on each:
 
-- **Windows** moves a classic window (VLC, MPC-HC) cleanly with
-  `SetWindowPos`. The stock handler for a video, "Films & TV", is a UWP app
+- **Windows** moves a classic, restored window (VLC, MPC-HC) with
+  `SetWindowPos` — a maximized one is restored first, or the move is a
+  silent no-op. The stock handler for a video, "Films & TV", is a UWP app
   running inside a shared `ApplicationFrameHost.exe` container, and that
   container's window has historically ignored being moved from outside it —
   measured true on the machine this shipped from.
@@ -188,6 +190,20 @@ silently on each:
   its size, so it lands at a fixed offset rather than a true centre). Neither
   can move anything under Wayland, by that compositor's own security model —
   there is no escape hatch, only silence.
+
+None of the three reaches a true fullscreen window, though — one resized to
+cover the monitor without ever calling the OS "maximize" has no restore to
+ask for, and covering the monitor either way is indistinguishable from
+"aligned". Reported 2026-09-09 against VLC, which opens fullscreen when that
+was its last remembered state — the system's own file association gives no
+way to ask about that, let alone override it. `video.
+system_player_prefer_classic` (default `true`, only consulted when this
+setting is also `true`) is the fix: `preview.external` tries a short,
+honest list of known, scriptable players by name first — `vlc
+--no-fullscreen`, today — and only falls to the system's own handler when
+none of them is on PATH. A player found this way still goes through the
+same `try_centre_new_window` afterward; avoiding fullscreen is what makes
+that step able to do anything at all, not a replacement for it.
 
 None of the three ever reports failure. Each writes a disposable script to
 `stdpath("cache")` and runs it hidden: centres the window when it can, and

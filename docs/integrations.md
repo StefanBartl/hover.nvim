@@ -319,7 +319,12 @@ Seven things worth knowing when this misbehaves, all in
   there is no PID of the real player left to hold. `<CR>` a second time only
   drops the float back to the still; `preview/align_win.lua`'s best-effort
   window-centring (`video.system_player_align`, off by default) is the only
-  other thing this tier does, and it never reports whether it worked.
+  other thing this tier does, and it never reports whether it worked. When
+  alignment is wanted, `preview/external.lua` also tries a short list of
+  known, scriptable players by name first (`vlc --no-fullscreen`, gated by
+  `video.system_player_prefer_classic`) before the system's own handler — a
+  fullscreen window (reported against VLC's own remembered state) defeats
+  `SetWindowPos` before it starts.
 - **`preview/monitor.lua` answers one question for both of the above:**
   which monitor is the terminal on right now, from the foreground window at
   the moment `<CR>` was pressed. `preview/window.lua` passes its `screen`
