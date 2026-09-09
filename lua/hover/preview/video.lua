@@ -367,7 +367,16 @@ local function start_playback(target, opts, probe, on_result)
         -- `playback.play` starts audio from here, when there is a track to
         -- start and the reader has not turned it off — see `M.play` for why
         -- an mpv the file has no sound for is simply never worth starting.
-        path = (opts.video_sound ~= false and probe and probe.has_audio) and target.path or nil,
+        -- `video_use_mpv = false` also silences this: "do not use mpv" means
+        -- none of it, not just the window this file never reaches from here.
+        path = (
+          opts.video_sound ~= false
+          and opts.video_use_mpv ~= false
+          and probe
+          and probe.has_audio
+        )
+            and target.path
+          or nil,
         -- Only when the first offset is a real number of seconds: without one
         -- there is nothing to add a window length to, and a request from the
         -- wrong place would show the wrong part of the film.
@@ -424,6 +433,7 @@ function M.preview(target, opts, on_result)
     -- fast enough to enjoy it.
     if
       opts.video_playback ~= "inline"
+      and opts.video_use_mpv ~= false
       and type(media.player_available) == "function"
       and media.player_available()
     then

@@ -42,6 +42,7 @@ generated and gitignored, so it is not in the checkout — run it when you want 
 | `hover.preview.window` | The **window** tier: a real mpv window, single-instance, tied to the float's lifetime |
 | `hover.preview.external` | The tier below the window: hand the file to `media.play()` (a configured player, or the system's own) when there is no mpv |
 | `hover.preview.align_win` | Best-effort, opt-in: centre whatever window `preview.external` handed off to, on Windows/macOS/Linux |
+| `hover.preview.monitor` | Which monitor the terminal is on right now — one synchronous query, shared by `preview.window`'s `--screen` and `preview.align_win`'s centring target |
 
 The two directions a plugin and the hover reach each other through — the registry inbound,
 a named `pcall` outbound — are in [integrations.md](integrations.md).

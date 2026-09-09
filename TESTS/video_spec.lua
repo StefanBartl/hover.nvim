@@ -292,6 +292,64 @@ describe("playing in a window rather than the float", function()
     -- rewrites of the inline paint, because the ceiling is the editor's redraw
     -- of a float-sized region, not the Lua. `<CR>` opens a real mpv window.
     assert.are.equal("window", DEFAULTS.video.playback)
+    -- And mpv is used whenever it is there, by default -- `use_mpv = false`
+    -- is a deliberate opt-out ("I have it, do not touch it"), not the norm.
+    assert.are.equal(true, DEFAULTS.video.use_mpv)
+  end)
+
+  it("skips mpv when video_use_mpv is false, even though mpv is available", function()
+    -- "I have mpv installed but do not want it used" is a real, separate
+    -- request from playback = "inline": that setting also gives up the
+    -- system player's real video and sound, which use_mpv = false must not.
+    local saved_media = package.loaded["media"]
+    local saved_ip = package.loaded["lib.nvim.image_preview"]
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return "stub"
+      end,
+    }
+    local played = {}
+    package.loaded["media"] = {
+      frame = function() end,
+      frames = function() end,
+      available = function()
+        return true
+      end,
+      probed = function()
+        return { duration = 600 }
+      end,
+      -- mpv genuinely is available -- the point of this test is that
+      -- `use_mpv = false` still skips it, not that mpv is missing.
+      player_available = function()
+        return true
+      end,
+      play = function(path)
+        played[#played + 1] = path
+        return true
+      end,
+    }
+
+    local content = video.preview({
+      type = "video",
+      raw = "clip.mp4",
+      path = "/tmp/clip.mp4",
+      ext = "mp4",
+      size = 1024,
+    }, {
+      inline_images = true,
+      play = true,
+      video_playback = "window",
+      video_use_mpv = false,
+      page = 1,
+    }, function() end)
+
+    package.loaded["media"] = saved_media
+    package.loaded["lib.nvim.image_preview"] = saved_ip
+    require("hover.preview.external").reset()
+
+    assert.is_nil(content.play_window, "use_mpv = false must skip the mpv tier")
+    assert.same({ "/tmp/clip.mp4" }, played, "and fall to the system-player tier, not silence")
+    assert.are.equal("/tmp/clip.mp4", content.play_external)
   end)
 
   it("hands hover.init a play_window marker instead of decoding a run", function()

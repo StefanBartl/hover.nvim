@@ -294,12 +294,13 @@ What comes back is a PNG, and from there this is an image hover: the same canvas
 geometry, the same draw, the same keys. Which is why the previewer is short —
 the interesting work is on the other side of the seam.
 
-Six things worth knowing when this misbehaves, all in
+Seven things worth knowing when this misbehaves, all in
 [`preview/video.lua`](../lua/hover/preview/video.lua),
 [`preview/playback.lua`](../lua/hover/preview/playback.lua),
 [`preview/window.lua`](../lua/hover/preview/window.lua),
 [`preview/external.lua`](../lua/hover/preview/external.lua),
-[`preview/align_win.lua`](../lua/hover/preview/align_win.lua) and
+[`preview/align_win.lua`](../lua/hover/preview/align_win.lua),
+[`preview/monitor.lua`](../lua/hover/preview/monitor.lua) and
 [VIDEO.md](FEATURES/VIDEO.md):
 
 - **`<CR>` reaches for the window first, then the system player, then
@@ -310,7 +311,8 @@ Six things worth knowing when this misbehaves, all in
   `media.play_window`/`player_available`, `preview/external.lua` the only
   caller of `media.play` (the same call `gf` makes). The rest of this section
   is the `"inline"` route, reached only when `video.playback = "inline"` says
-  so, or both of the above fail to open anything.
+  so, `video.use_mpv = false` skips only the first of the two (unlike
+  `"inline"`, which skips both), or none of the above open anything.
 - **`preview/external.lua` cannot stop what it started.** Unlike
   `preview/window.lua`, which holds mpv's own handle, `media.play()` on
   Windows hands off through `explorer.exe` and exits itself almost at once —
@@ -318,6 +320,14 @@ Six things worth knowing when this misbehaves, all in
   drops the float back to the still; `preview/align_win.lua`'s best-effort
   window-centring (`video.system_player_align`, off by default) is the only
   other thing this tier does, and it never reports whether it worked.
+- **`preview/monitor.lua` answers one question for both of the above:**
+  which monitor is the terminal on right now, from the foreground window at
+  the moment `<CR>` was pressed. `preview/window.lua` passes its `screen`
+  index straight to `media.play_window`'s new `opts.screen`
+  (`media.core.player`'s `--screen`, only verified to matter on Windows);
+  `preview/align_win.lua` bakes the same rectangle into whichever platform
+  script it writes, so both tiers centre in the same place rather than one
+  defaulting to whatever screen happens to run the query.
 - **`available()` is asked before anything is claimed**, so "ffmpeg is not on
   PATH" is a sentence in the float rather than a failed render. Both binaries
   are required: a percentage offset needs a duration, and the duration comes

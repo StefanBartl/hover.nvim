@@ -515,17 +515,32 @@ return {
     ---@type "window"|"inline"
     playback = "window",
 
-    --- Experimental, and Windows only: when `"window"` falls back to the
-    --- system player (no mpv), best-effort centre whatever new window
-    --- appears in the next few seconds -- mpv's own `--geometry=50%:50%`,
-    --- approximated from outside a process this plugin does not own.
+    --- Whether `"window"` may reach for mpv at all. `true` (the default)
+    --- means "use it if it is there"; `false` means "I have mpv installed
+    --- but do not want this plugin to touch it" -- a real, separate request
+    --- from `playback = "inline"`, which also gives up the system-player
+    --- fallback's real video and sound. With this `false` and `playback`
+    --- still `"window"`, `<CR>` skips straight past mpv to that fallback
+    --- (`media.play()` -- a configured player, or the system's own), and
+    --- inline's optional sound (`video.sound`) is silenced too: "do not use
+    --- mpv" means none of it, not just the window.
+    ---@type boolean
+    use_mpv = true,
+
+    --- Experimental, cross-platform (Windows/macOS/Linux): when `"window"`
+    --- falls back to the system player (no mpv, or `use_mpv = false`),
+    --- best-effort centre whatever new window appears in the next few
+    --- seconds -- mpv's own `--geometry=50%:50%`, approximated from outside
+    --- a process this plugin does not own.
     ---
     --- **Off by default because whether it does anything depends on what is
     --- registered, not on this plugin.** A classic window (VLC, MPC-HC)
     --- moves cleanly. The stock Windows handler for a video is a UWP app
     --- ("Films & TV"), which runs inside a shared container process that has
     --- historically ignored being moved from outside it -- measured true on
-    --- the machine this shipped from. Either way this never reports failure:
+    --- the machine this shipped from; macOS needs the terminal to have
+    --- Accessibility permission, and Linux needs `xdotool`/`wmctrl` and no
+    --- Wayland compositor in the way. Either way this never reports failure:
     --- it centres the window when it can, and changes nothing when it
     --- cannot. See `preview.align_win`.
     ---@type boolean

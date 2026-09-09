@@ -79,6 +79,7 @@ clearing their flag, so turning it back on restores what you had.
 | `video.step` | `"10%"` | How far one press of the paging key moves through the file. A percentage, so ten presses walk a ten-second clip and a two-hour feature end to end alike. A file that reports no duration falls back to five seconds. |
 | `video.width` | `nil` | Width in pixels the still is rendered at; `nil` leaves the choice to media.nvim. Chosen against the float rather than the source — every pixel past what the terminal draws is decode time spent on nothing. |
 | `video.playback` | `"window"` | What `<CR>` does: `"window"` opens a real mpv window, or without mpv the system's own player (`media.play()`, the same call `gf` makes — no extra install); `"inline"` paints a run of stills into the float instead of either — see [Playing a video](#playing-a-video). |
+| `video.use_mpv` | `true` | Whether `"window"` may reach for mpv at all. `false` is "I have mpv, do not use it" — skips straight to the system-player fallback (and silences inline's optional sound), unlike `playback = "inline"` which also gives up that fallback's real video and sound. |
 | `video.system_player_align` | `false` | Experimental, Windows/macOS/Linux: when `"window"` falls back to the system player, best-effort centre whatever new window appears in the next few seconds. Off by default because whether it does anything depends on what is registered on this machine, not on this plugin — see [Playing a video](#playing-a-video). |
 | `video.sound` | `true` | Whether an **inline** played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing. A `"window"` playback always has its player's own sound and ignores this. |
 | `video.play_at` | `0` | Where **playing** starts, which is deliberately not where the still is taken. Same three shapes as `video.at`. A thumbnail wants to skip the fade-in; a viewer wants the beginning. A scrubbed still is the exception and is honoured: from page 2 on, play starts where the paging keys left off. |
@@ -133,19 +134,32 @@ the float shows a short "playing" panel rather than a picture, because there is
 no picture in it to show. `<CR>` again — or closing the hover any other way, a
 cursor move, `q`, `:qa` — stops the window. Playback starts from the scrubbed
 position if the paging keys moved it (`video_play_at` otherwise), exactly as
-the inline route does; the two share the arithmetic.
+the inline route does; the two share the arithmetic. It also asks which
+monitor the terminal is on right now and passes that to mpv's `--geometry`,
+so the window centres where the reader actually is on a multi-monitor
+machine rather than always on screen 0.
 
-**Without mpv, `"window"` still beats a muted run of block graphics.** `<CR>`
-hands the file to `media.play()` instead — a configured player, or whatever
-this machine already opens a video with, the same call `gf` makes. Real video
-and sound, nothing extra to install, at the cost of nothing here being able to
-stop it again: closing the hover only drops the float back to the still, and
-the player itself runs until its own window is closed by hand.
+**`video.use_mpv = false`** is a separate request from `playback = "inline"`:
+"I have mpv installed, but do not want this plugin to use it." `<CR>` then
+skips straight past the mpv tier to the one below — real video and sound
+still, just not through mpv — where `playback = "inline"` would also give up
+that fallback's real player for silent block graphics. `use_mpv = false`
+silences inline's optional sound too (`video.sound`), since "do not use mpv"
+means none of it, not just the window.
+
+**Without mpv (or with `use_mpv = false`), `"window"` still beats a muted run
+of block graphics.** `<CR>` hands the file to `media.play()` instead — a
+configured player, or whatever this machine already opens a video with, the
+same call `gf` makes. Real video and sound, nothing extra to install, at the
+cost of nothing here being able to stop it again: closing the hover only
+drops the float back to the still, and the player itself runs until its own
+window is closed by hand.
 
 **`video.system_player_align`** (default `false`, experimental) is a
-best-effort attempt to centre whatever new window that system player opens,
-approximating mpv's own `--geometry=50%:50%` from outside a process this
-plugin does not own. It can genuinely do nothing: the stock Windows handler
+best-effort attempt to centre whatever new window that system player opens —
+on the same detected monitor the mpv tier's `--geometry` targets, not always
+the primary one — approximating mpv's own `--geometry=50%:50%` from outside a
+process this plugin does not own. It can genuinely do nothing: the stock Windows handler
 for a video is a UWP app ("Films & TV") running in a shared container process
 that has historically ignored being moved from outside it; macOS needs the
 terminal to have Accessibility permission for `System Events` to move
