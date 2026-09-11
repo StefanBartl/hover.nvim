@@ -260,6 +260,22 @@ local BLOCK = {
 }
 
 ---@internal
+--- Where a list item opens and closes, carried through the flattening as two
+--- characters no HTML document contains, each wrapped in its own line break
+--- so it always lands alone on a split line.
+---
+--- **Sentinels rather than writing the bullet in directly**, which is what an
+--- earlier version of this did and got wrong: `<li><p>text</p></li>` puts a
+--- `</p>` between the marker and any text, and a bullet written in place of
+--- `<li>` then sits alone on its own line with the paragraph one line below
+--- it -- not attached to anything. Worse, an empty `<li></li>` (common in
+--- menus rendered without JS) produced a bullet with nothing after it at all.
+--- With both ends marked, "did this item ever get any text" is a fact carried
+--- through the flattening rather than a guess made after it: closing without
+--- having seen a line of content means no bullet is ever emitted for it.
+local LI_OPEN, LI_CLOSE = "\1", "\2"
+
+---@internal
 --- Break `line` at `width` display columns, on word boundaries.
 ---
 --- The float sets `wrap` and `linebreak`, so a long line *looks* right
@@ -363,8 +379,10 @@ function M.page_text(body, opts)
   html = html:gsub("%s+", " ")
 
   -- A list is the one structure worth keeping, because losing it turns a list
-  -- of options into a sentence that reads as nonsense.
-  html = html:gsub("<li%f[%W][^>]*>", "\n• ")
+  -- of options into a sentence that reads as nonsense. The marker goes in as
+  -- a sentinel, not the bullet itself -- see `LI_OPEN`.
+  html = html:gsub("<li%f[%W][^>]*>", "\n" .. LI_OPEN .. "\n")
+  html = html:gsub("</li%s*>", "\n" .. LI_CLOSE .. "\n")
   html = html:gsub("<br%s*/?>", "\n")
   for _, tag in ipairs(BLOCK) do
     html = html:gsub("<" .. tag .. "%f[%W][^>]*>", "\n")
@@ -373,12 +391,23 @@ function M.page_text(body, opts)
 
   html = unescape((html:gsub("<[^>]*>", " ")))
 
-  local out = {}
+  local out, in_item = {}, false
   for _, raw in ipairs(vim.split(html, "\n", { plain = true })) do
     -- One space for any run of whitespace: HTML's own rule, and what keeps a
     -- source file's indentation from arriving as a ragged left margin.
     local line = vim.trim((raw:gsub("%s+", " ")))
-    if line ~= "" then
+    if line == LI_OPEN then
+      in_item = true
+    elseif line == LI_CLOSE then
+      -- Closed without ever seeing a line of text: no bullet was emitted for
+      -- it, so there is nothing to undo -- `in_item` just stops applying to
+      -- whatever line comes next, which was never part of this item.
+      in_item = false
+    elseif line ~= "" then
+      if in_item then
+        line = "• " .. line
+        in_item = false
+      end
       for _, piece in ipairs(wrap(line, max_width)) do
         out[#out + 1] = piece
         if #out >= max_lines then

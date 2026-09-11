@@ -100,6 +100,23 @@ describe("hover.preview.url.page_text", function()
     )
   end)
 
+  it("emits no bullet for an empty <li>, rather than one attached to nothing", function()
+    -- Common in menus rendered without JS: a placeholder `<li></li>` that
+    -- never gets text. A bullet written in as soon as `<li>` is seen has
+    -- nothing to attach to here and shows up as a stray line.
+    assert.same(
+      { "• one", "• three" },
+      text("<body><ul><li>one</li><li></li><li>three</li></ul></body>")
+    )
+  end)
+
+  it("attaches the bullet to a list item's text even with a block tag between them", function()
+    -- `<li><p>text</p></li>` puts a `</p>` between the marker and the text --
+    -- writing the bullet in at `<li>` would leave it alone on its own line,
+    -- one line above the paragraph rather than in front of it.
+    assert.same({ "• text" }, text("<body><ul><li><p>text</p></li></ul></body>"))
+  end)
+
   it("breaks lines where a block element does, and nowhere an inline one does", function()
     assert.same(
       { "First.", "Second.", "Third and a bold word." },
