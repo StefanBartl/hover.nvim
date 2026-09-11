@@ -198,6 +198,34 @@ describe("hover.preview.url.page_text", function()
   it("answers nothing for a page that is only markup", function()
     assert.same({}, text("<body><div><span></span></div></body>"))
   end)
+
+  it("still reads a page under the scan limit in full", function()
+    -- The limit is 512 KiB; this is nowhere near it, so nothing here is
+    -- about truncation -- it pins that clamping a body that fits does
+    -- nothing to it.
+    assert.same({ "short" }, text("<body><p>short</p></body>"))
+  end)
+
+  it("clamps content past the scan limit rather than paying for all of it", function()
+    -- The limit applies after DROP has already finished (see `SCAN_LIMIT`),
+    -- to whatever ordinary content is left -- so a marker placed well past
+    -- it must not survive, or the clamp is not actually bounding anything.
+    local filler = ("y"):rep(600 * 1024)
+    local html = "<body><p>start</p>" .. filler .. "<p>END_MARKER</p></body>"
+    local result = text(html, { max_lines = 5 })
+    assert.same("start", result[1])
+    assert.is_nil(table.concat(result, "\n"):find("END_MARKER", 1, true))
+  end)
+
+  it("removes a <script> larger than the scan limit whole, not truncated into view", function()
+    -- DROP runs against the untouched body, before the clamp is ever
+    -- applied -- a <script> this large is matched and removed in full, which
+    -- is what proves the clamp can never land inside one and leak its
+    -- source as text.
+    local filler = ("a"):rep(600 * 1024)
+    local html = "<body><p>keep</p><script>var x = '" .. filler .. "';</script></body>"
+    assert.same({ "keep" }, text(html))
+  end)
 end)
 
 describe("the answer kept between renders", function()
