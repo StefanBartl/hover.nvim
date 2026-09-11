@@ -103,21 +103,28 @@ for sound, and a missing one means today's silent playback, exactly as before th
 player existed.
 Either way `:checkhealth media` has the install command and the `bin.mpv` escape hatch.
 
-**The browser for page screenshots is the one place the report will appear to contradict
-itself, and that is deliberate.** With `:Hover links web shot` on you may see both of
-these:
+**The browser for page screenshots used to be the one place the report would contradict
+itself.** `docs/install.json`'s `chrome` entry now declares its own default install
+locations (`paths`, resolved by `lib.nvim.deps` the same way `preview.shot`'s resolver
+does), so on a normal install the two lines now agree:
 
 ```
 ✅ page screenshots: C:\Program Files\Google\Chrome\Application\chrome.exe
+✅ chrome found (as C:\Program Files\Google\Chrome\Application\chrome.exe)
+```
+
+The contradiction can still show up on a genuinely atypical install — `links.shot.command`
+pointing at a location `docs/install.json`'s static `paths` list doesn't know about, say:
+
+```
+✅ page screenshots: D:\custom\chrome.exe
    -- found off PATH, so the `chrome NOT found` line below is expected and not a problem
 ⚠️ chrome NOT found (optional)
 ```
 
-Both are true and only the first one counts. The declared-tools section asks `PATH`, and
-the Chrome installer does not extend it — the same thing `soffice` does. hover.nvim
-searches the usual install locations itself, so the line that names a path is the one that
-says what would actually be run. `links.shot.command` names one outright when the search
-picks the wrong browser.
+Both are true and only the first one counts there too: the declared-tools section only
+ever knows the locations it was told about, while this line asks the previewer directly,
+which is what actually runs.
 
 ## When it is not the right tool
 

@@ -208,12 +208,14 @@ local function check_config()
 
   -- The browser, and only once the switch that needs one is on.
   --
-  -- **Reported here because `lib.nvim.deps` cannot answer it.** That check
-  -- asks whether `chrome` is on PATH, and on Windows it is not: the installer
-  -- does not extend PATH, so a machine with Chrome plainly installed reports
-  -- it missing -- the same false alarm `soffice` already carries a note about
-  -- in `docs/install.json`. This asks the previewer, which searches the usual
-  -- install locations, and names the binary it would actually run.
+  -- **Reported here too, not only via `lib.nvim.deps`.** `docs/install.json`'s
+  -- `chrome` entry now declares `paths` (the same default install locations
+  -- `preview.shot`'s own resolver knows), so the declared-tools section below
+  -- usually agrees with this line. It can still disagree on a genuinely
+  -- atypical install (a `links.shot.command` pointing somewhere `paths`'
+  -- static list doesn't know about), which is why this line still asks the
+  -- previewer directly rather than trusting the declared-tools section alone
+  -- -- see the reconciliation branch below.
   if config.shot_enabled() then
     -- Read off `preview_opts` rather than walked out of the options table by
     -- hand: that is where the shape is already normalized, and a second walk
