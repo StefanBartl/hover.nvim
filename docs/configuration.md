@@ -80,8 +80,9 @@ clearing their flag, so turning it back on restores what you had.
 | `video.width` | `nil` | Width in pixels the still is rendered at; `nil` leaves the choice to media.nvim. Chosen against the float rather than the source — every pixel past what the terminal draws is decode time spent on nothing. |
 | `video.playback` | `"window"` | What `<CR>` does: `"window"` opens a real mpv window, or without mpv the system's own player (`media.play()`, the same call `gf` makes — no extra install); `"inline"` paints a run of stills into the float instead of either — see [Playing a video](#playing-a-video). |
 | `video.use_mpv` | `true` | Whether `"window"` may reach for mpv at all. `false` is "I have mpv, do not use it" — skips straight to the system-player fallback (and silences inline's optional sound), unlike `playback = "inline"` which also gives up that fallback's real video and sound. |
-| `video.system_player_align` | `false` | Experimental, Windows/macOS/Linux: when `"window"` falls back to the system player, best-effort centre whatever new window appears in the next few seconds. Off by default because whether it does anything depends on what is registered on this machine, not on this plugin — see [Playing a video](#playing-a-video). |
-| `video.system_player_prefer_classic` | `true` | Experimental; only consulted when `system_player_align` is `true`. Tries a known, scriptable player by name first (`vlc --no-fullscreen`, today) before the system's own handler, since a fullscreen window defeats alignment outright — see [Playing a video](#playing-a-video). |
+| `video.experimental.system_player_align` | `false` | Experimental, Windows/macOS/Linux: when `"window"` falls back to the system player, best-effort centre whatever new window appears in the next few seconds. Off by default because whether it does anything depends on what is registered on this machine, not on this plugin — see [Playing a video](#playing-a-video). |
+| `video.experimental.system_player_prefer_classic` | `true` | Only consulted when `system_player_align` is `true`. Tries a known, scriptable player by name first (`vlc --no-fullscreen`, today) before the system's own handler, since a fullscreen window defeats alignment outright — see [Playing a video](#playing-a-video). |
+| `video.experimental.system_player_search_installs` | `true` | Only consulted when `system_player_align` is `true`. When that known player misses on PATH (a Windows installer routinely does not extend it), also tries the install locations Windows puts it in before giving up on it — see [Playing a video](#playing-a-video). |
 | `video.sound` | `true` | Whether an **inline** played run may start audio (`media.audio`, mpv) when the file has a track and mpv is on PATH. Everything it needs degrades to silent playback by itself, so `true` costs nothing when the ingredients are missing. A `"window"` playback always has its player's own sound and ignores this. |
 | `video.play_at` | `0` | Where **playing** starts, which is deliberately not where the still is taken. Same three shapes as `video.at`. A thumbnail wants to skip the fade-in; a viewer wants the beginning. A scrubbed still is the exception and is honoured: from page 2 on, play starts where the paging keys left off. |
 | `video.play_scale` | `2.5` | How much larger the **box** is while playing — `max_width`/`max_lines` scaled, capped to the editor's own rows and columns. The float and the canvas are both built from that one number, so they grow together. A cell carries two pixel rows, so the 20-line default is a 38-pixel picture; this is the sharpness knob. `1` is the still's size. |
@@ -156,7 +157,7 @@ cost of nothing here being able to stop it again: closing the hover only
 drops the float back to the still, and the player itself runs until its own
 window is closed by hand.
 
-**`video.system_player_align`** (default `false`, experimental) is a
+**`video.experimental.system_player_align`** (default `false`) is a
 best-effort attempt to centre whatever new window that system player opens —
 on the same detected monitor the mpv tier's `--geometry` targets, not always
 the primary one — approximating mpv's own `--geometry=50%:50%` from outside a
@@ -173,11 +174,18 @@ cannot.
 in practice** (VLC, opened via the system's own file association, in its
 remembered fullscreen state): a window covering the whole monitor either
 ignores the move outright or is indistinguishable from "aligned" either way.
-`video.system_player_prefer_classic` (default `true`, only consulted when
+`video.experimental.system_player_prefer_classic` (default `true`, only consulted when
 `system_player_align` is `true`) is the fix — try a short, honest list of
 known, scriptable players by name first (`vlc --no-fullscreen`, today), and
 only fall to the system's own handler when none of them is on PATH. Set to
 `false` to always go through the system handler even with alignment on.
+
+PATH alone can miss a player that is plainly installed: a Windows installer
+routinely does not extend it (the same problem `docs/install.json` documents
+for `soffice`, and `preview.shot` already works around for a browser). So,
+unless `video.experimental.system_player_search_installs` (default `true`,
+same rule) is turned off, a name that misses on PATH is tried again against
+its known Windows install locations before this falls back further.
 
 Set `video.playback = "inline"` for the block-graphics transport described
 below instead of either of the above — genuinely smooth on a terminal fast

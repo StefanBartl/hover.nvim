@@ -43,6 +43,16 @@
 --- `align_win.try_centre_new_window` exactly as the generic path does;
 --- avoiding fullscreen is what makes that step able to do anything at all,
 --- not a replacement for it.
+---
+--- **PATH alone can miss a player that is plainly installed.** Reported
+--- 2026-09-12: a classic desktop VLC that IS the registered handler still
+--- did not get launched directly -- `vim.fn.executable("vlc")` found nothing,
+--- because the Windows installer does not extend PATH (`docs/install.json`
+--- documents the identical problem for `soffice`, and `preview.shot` for
+--- Chrome). So, unless `opts.search_installs` is turned off, a name that
+--- misses on PATH is tried again against a short list of the install
+--- locations Windows actually puts it in -- the same fallback `preview.shot`
+--- already does for a browser.
 
 local M = {}
 
@@ -57,15 +67,61 @@ local KNOWN_PLAYERS = {
 }
 
 ---@internal
---- The first known player found on PATH, launched on `path`. `nil` opts out
---- of nothing here -- an empty `KNOWN_PLAYERS` (or none installed) simply
---- means this tries none and the caller falls to `media.play()`.
+--- Where a Windows installer puts a known player when it does not extend
+--- PATH, keyed by the same `bin` name `KNOWN_PLAYERS` tries first. Same
+--- shape and the same reasoning as `preview.shot`'s `install_paths`: two
+--- roots, because a machine-wide install lands in `%ProgramFiles%` and a
+--- 32-bit build (still VLC's own default download) in `%ProgramFiles(x86)%`.
+---@type table<string, string>
+local INSTALL_TAILS = {
+  vlc = [[\VideoLAN\VLC\vlc.exe]],
+}
+
+---@internal
+--- Absolute paths a Windows install of `bin` is likely sitting at, or an
+--- empty list off Windows (nothing here is Windows-specific data elsewhere,
+--- so this is the one function that has to ask).
+---@param bin string
+---@return string[]
+local function install_paths(bin)
+  local tail = INSTALL_TAILS[bin]
+  if not tail or not (vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1) then
+    return {}
+  end
+  local out = {}
+  for _, root in ipairs({ os.getenv("PROGRAMFILES"), os.getenv("ProgramFiles(x86)") }) do
+    if type(root) == "string" and root ~= "" then
+      out[#out + 1] = root .. tail
+    end
+  end
+  return out
+end
+
+---@internal
+--- The first known player found on PATH -- or, when `search_installs` is not
+--- turned off, at one of its known install locations -- launched on `path`.
+--- `nil` opts out of nothing here -- an empty `KNOWN_PLAYERS` (or none
+--- installed anywhere this looks) simply means this tries none and the
+--- caller falls to `media.play()`.
 ---@param path string
+---@param search_installs boolean
 ---@return boolean ok
-local function try_known_player(path)
+local function try_known_player(path, search_installs)
   for _, player in ipairs(KNOWN_PLAYERS) do
+    local bin = nil
     if vim.fn.executable(player.bin) == 1 then
-      local argv = { player.bin }
+      bin = player.bin
+    elseif search_installs then
+      for _, candidate in ipairs(install_paths(player.bin)) do
+        if vim.fn.executable(candidate) == 1 then
+          bin = candidate
+          break
+        end
+      end
+    end
+
+    if bin then
+      local argv = { bin }
       for _, a in ipairs(player.args) do
         argv[#argv + 1] = a
       end
@@ -103,11 +159,14 @@ end
 --- module doc for why nothing here can close the first one before trying
 --- again the way `preview.window` does.
 ---@param path string
----@param opts? { align?: boolean, prefer_classic?: boolean } `align`:
---- best-effort attempt to centre whatever new window appears afterwards --
---- see `align_win`. `prefer_classic` (default true, and irrelevant unless
---- `align` is also set): try a known classic player by name first, since a
---- fullscreen window defeats alignment before it starts.
+---@param opts? { align?: boolean, prefer_classic?: boolean, search_installs?: boolean }
+--- `align`: best-effort attempt to centre whatever new window appears
+--- afterwards -- see `align_win`. `prefer_classic` (default true, and
+--- irrelevant unless `align` is also set): try a known classic player by
+--- name first, since a fullscreen window defeats alignment before it starts.
+--- `search_installs` (default true, same "irrelevant unless `align`" rule):
+--- when that name misses on PATH, also try its known Windows install
+--- locations before giving up on it.
 ---@return boolean ok
 function M.open(path, opts)
   if launched_for == path then
@@ -118,7 +177,7 @@ function M.open(path, opts)
   local opened = false
 
   if opts.align and opts.prefer_classic ~= false then
-    opened = try_known_player(path)
+    opened = try_known_player(path, opts.search_installs ~= false)
   end
 
   if not opened then

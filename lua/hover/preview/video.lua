@@ -463,6 +463,7 @@ function M.preview(target, opts, on_result)
         and external.open(target.path, {
           align = opts.video_system_player_align == true,
           prefer_classic = opts.video_system_player_prefer_classic ~= false,
+          search_installs = opts.video_system_player_search_installs ~= false,
         })
       then
         local content =

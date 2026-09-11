@@ -788,7 +788,7 @@ being able to stop it again: closing the hover only drops the float back to
 the still, and the player itself keeps running until its own window is
 closed by hand.
 
-`video.system_player_align` (default false, experimental, Windows/macOS/
+`video.experimental.system_player_align` (default false, Windows/macOS/
 Linux) is a best-effort attempt to centre whatever window that system player
 opens, on the same detected monitor the mpv tier targets. It can genuinely do
 nothing -- a UWP default handler on Windows, a terminal without Accessibility
@@ -796,10 +796,16 @@ permission on macOS, Wayland on Linux, or a fullscreen window (reported
 against VLC), which none of the above ever reaches -- and never reports when
 it does not.
 
-`video.system_player_prefer_classic` (default true, only consulted when
-`system_player_align` is true) is the fix for that last case: try a known,
+`video.experimental.system_player_prefer_classic` (default true, only
+consulted when `system_player_align` is true) is the fix for that last case: try a known,
 scriptable player by name first (`vlc --no-fullscreen`, today), and only fall
 to the system's own handler when none of them is on PATH.
+
+PATH alone can miss a player that is plainly installed -- a Windows
+installer routinely does not extend it. `video.experimental.
+system_player_search_installs` (default true, same rule) is the fix: a name
+that misses on PATH is tried again against its known Windows install
+locations before this falls back further.
 
 Set `video.playback = "inline"` for the block-graphics transport described
 below instead of either of the above, which is genuinely smooth on a terminal

@@ -86,8 +86,9 @@ moment.
 | `video.step` | `"10%"` | how far one key press moves |
 | `video.playback` | `"window"` | what the transport key does -- a real mpv window, or without mpv the system's own player, or `"inline"` block graphics -- see below |
 | `video.use_mpv` | `true` | whether `"window"` may reach for mpv at all -- `false` is "I have it, do not use it", not the same as `"inline"` -- see below |
-| `video.system_player_align` | `false` | experimental: best-effort centre the system player's window when there is no mpv window -- see below |
-| `video.system_player_prefer_classic` | `true` | only consulted when `system_player_align` is `true`: try a known player (`vlc --no-fullscreen`) before the system handler, since fullscreen defeats alignment -- see below |
+| `video.experimental.system_player_align` | `false` | best-effort centre the system player's window when there is no mpv window -- see below |
+| `video.experimental.system_player_prefer_classic` | `true` | only consulted when `system_player_align` is `true`: try a known player (`vlc --no-fullscreen`) before the system handler, since fullscreen defeats alignment -- see below |
+| `video.experimental.system_player_search_installs` | `true` | only consulted when `system_player_align` is `true`: when that known player misses on PATH, also try its known Windows install locations -- see below |
 | `video.play_at` | `0` | where *playing* starts -- see below |
 | `video.play_scale` | `2.5` | how much larger the playing canvas is than the still's budget (how *fine* each cell is, is images.nvim's `cells`) -- `"inline"` only |
 
@@ -166,7 +167,7 @@ of the same file — `preview.external` tracks the last path it handed off and
 treats a repeat for the same path as a no-op, since it has no handle to close
 first the way the window tier's `M.open` does.
 
-**`video.system_player_align` (default `false`, experimental) reaches for the
+**`video.experimental.system_player_align` (default `false`) reaches for the
 same "centred, like mpv" feel from outside a process this plugin does not
 own** — on the same monitor `preview.monitor` found for the mpv tier, not
 always the primary one. There is no `--geometry` to pass a system player the way
@@ -196,7 +197,7 @@ cover the monitor without ever calling the OS "maximize" has no restore to
 ask for, and covering the monitor either way is indistinguishable from
 "aligned". Reported 2026-09-09 against VLC, which opens fullscreen when that
 was its last remembered state — the system's own file association gives no
-way to ask about that, let alone override it. `video.
+way to ask about that, let alone override it. `video.experimental.
 system_player_prefer_classic` (default `true`, only consulted when this
 setting is also `true`) is the fix: `preview.external` tries a short,
 honest list of known, scriptable players by name first — `vlc
@@ -204,6 +205,17 @@ honest list of known, scriptable players by name first — `vlc
 none of them is on PATH. A player found this way still goes through the
 same `try_centre_new_window` afterward; avoiding fullscreen is what makes
 that step able to do anything at all, not a replacement for it.
+
+**PATH alone can miss a player that is plainly installed, though.** Reported
+2026-09-12: a classic desktop VLC that IS the machine's registered handler
+still did not get launched directly, because the Windows installer does not
+extend PATH — the exact problem `docs/install.json` already documents for
+`soffice`, and that `preview.shot` already works around for a browser. So,
+unless `video.experimental.system_player_search_installs` (default `true`,
+same "only consulted when `system_player_align` is `true`" rule) is turned
+off, a name that misses on PATH is tried again against the install locations
+Windows actually puts it in — `%ProgramFiles%\VideoLAN\VLC\vlc.exe` and the
+`(x86)` twin, today.
 
 None of the three ever reports failure. Each writes a disposable script to
 `stdpath("cache")` and runs it hidden: centres the window when it can, and
