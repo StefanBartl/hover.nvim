@@ -276,6 +276,54 @@ local BLOCK = {
 local LI_OPEN, LI_CLOSE = "\1", "\2"
 
 ---@internal
+--- How much of a page `page_text` carries into the *unsafe* half of its own
+--- pipeline, in bytes -- the whitespace, list and block-break passes, the tag
+--- strip, the entity decode. Roughly forty `gsub` calls live past this point,
+--- and a 2 MB page (curl's own `--max-filesize`) run through all of them on
+--- every keystroke of a hover is a stutter the reader would feel, on
+--- Neovim's single main loop.
+---
+--- **Applied after `DROP` runs, not before, and that ordering is the point.**
+--- Clamping the raw body first would mean a cut that lands inside a
+--- `<script>` whose `</script>` is beyond the cut leaves that script's own
+--- source sitting in the slice with no closing tag left for `DROP`'s match to
+--- find -- so it would survive every later pass as plain text, which is
+--- exactly the content this module exists to keep out. `DROP` runs against
+--- the *full* body first and always finishes what it starts; only what is
+--- left afterward -- ordinary markup, already past its most dangerous
+--- content -- is ever clamped.
+---
+--- 512 KiB and not smaller: readable content sits at the top of a
+--- well-formed document, well inside this, and past it the extraction is a
+--- *degradation* -- "a miss degrades to less text, not to wrong text",
+--- `M.page_text`'s own rule -- rather than a failure.
+local SCAN_LIMIT = 512 * 1024
+
+---@internal
+--- `body`, cut to at most `limit` bytes and pulled back to the last complete
+--- tag boundary if the cut landed inside one.
+---
+--- **The pullback is not cosmetic.** A slice that ends mid-`<a href="…`, with
+--- no `>` in it, would leave that fragment sitting in the output once the
+--- generic tag strip fails to find a close for it -- a stray `<a href="` a
+--- reader cannot make sense of. Cutting back to the last `>` means every tag
+--- in the slice is either whole or entirely absent, never half of one. Called
+--- only after `DROP` has already run (see `SCAN_LIMIT`), so what a cut here
+--- can ever land inside is ordinary content markup, not a `<script>` or
+--- `<style>` body.
+---@param body string
+---@param limit integer
+---@return string
+local function clamp(body, limit)
+  if #body <= limit then
+    return body
+  end
+  local slice = body:sub(1, limit)
+  local unterminated = slice:find("<[^>]*$")
+  return unterminated and slice:sub(1, unterminated - 1) or slice
+end
+
+---@internal
 --- Break `line` at `width` display columns, on word boundaries.
 ---
 --- The float sets `wrap` and `linebreak`, so a long line *looks* right
@@ -333,10 +381,12 @@ end
 --- Comments go first *and before the extract*, or a commented-out `</main>`
 --- ends it at a boundary the author did not write. The dropped elements go
 --- before the block breaks, because a `<nav>` that has already had its `</p>`s
---- turned into newlines is no longer one string to remove. Source whitespace
---- collapses before any break is inserted, or an indented paragraph arrives as
---- five lines. And entities go *last*, so a decoded `&lt;` cannot be mistaken
---- for a tag by the strip that follows.
+--- turned into newlines is no longer one string to remove -- and, not
+--- incidentally, before the clamp: see `SCAN_LIMIT` for why `DROP` always
+--- finishes what it starts, on the full body, before anything is cut for
+--- size. Source whitespace collapses before any break is inserted, or an
+--- indented paragraph arrives as five lines. And entities go *last*, so a
+--- decoded `&lt;` cannot be mistaken for a tag by the strip that follows.
 ---@param body string
 ---@param opts { max_width?: integer, max_lines?: integer }
 ---@return string[]
@@ -367,6 +417,12 @@ function M.page_text(body, opts)
     html = html:gsub("<" .. tag .. "%f[%W][^>]*>.-</" .. tag .. "%s*>", " ")
     html = html:gsub("<" .. tag .. "%f[%W][^>]*/>", " ")
   end
+
+  -- Every pass above ran against the full body, and finished: nothing that
+  -- reaches here still has an unmatched `<script>`, `<style>` or any other
+  -- `DROP` element in it, so cutting for size from this point on can never
+  -- expose one mid-content. See `SCAN_LIMIT` and `clamp`.
+  html = clamp(html, SCAN_LIMIT)
 
   -- **Every run of source whitespace becomes one space, before any break is
   -- inserted.** A newline in HTML is whitespace and nothing more -- an author
