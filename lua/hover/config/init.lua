@@ -536,17 +536,24 @@ function M.preview_opts()
   if video.sound ~= nil then
     video_sound = video.sound
   end
-  local video_system_player_align = DEFAULTS.video.system_player_align
-  if video.system_player_align ~= nil then
-    video_system_player_align = video.system_player_align
+  local experimental = type(video.experimental) == "table" and video.experimental or {}
+  local video_system_player_align = DEFAULTS.video.experimental.system_player_align
+  if experimental.system_player_align ~= nil then
+    video_system_player_align = experimental.system_player_align
   end
   local video_use_mpv = DEFAULTS.video.use_mpv
   if video.use_mpv ~= nil then
     video_use_mpv = video.use_mpv
   end
-  local video_system_player_prefer_classic = DEFAULTS.video.system_player_prefer_classic
-  if video.system_player_prefer_classic ~= nil then
-    video_system_player_prefer_classic = video.system_player_prefer_classic
+  local video_system_player_prefer_classic =
+    DEFAULTS.video.experimental.system_player_prefer_classic
+  if experimental.system_player_prefer_classic ~= nil then
+    video_system_player_prefer_classic = experimental.system_player_prefer_classic
+  end
+  local video_system_player_search_installs =
+    DEFAULTS.video.experimental.system_player_search_installs
+  if experimental.system_player_search_installs ~= nil then
+    video_system_player_search_installs = experimental.system_player_search_installs
   end
   return {
     max_lines = c.max_lines or DEFAULTS.max_lines,
@@ -580,6 +587,7 @@ function M.preview_opts()
     video_use_mpv = video_use_mpv,
     video_system_player_align = video_system_player_align,
     video_system_player_prefer_classic = video_system_player_prefer_classic,
+    video_system_player_search_installs = video_system_player_search_installs,
     video_sound = video_sound,
     -- `~= nil` rather than `or`, because `0` is the default and a meaningful
     -- value: `video.play_at or DEFAULTS...` would read a configured `0` as
