@@ -3,7 +3,12 @@
     {
       "bin": "soffice",
       "required": false,
-      "why": "Turns an office document (doc/docx/odt and friends) under the cursor into a picture in the hover window instead of a plain format badge — the conversion runs through pdfport.nvim's soffice producer. On Windows the LibreOffice installer does not extend PATH, so this can report missing on a machine where LibreOffice is plainly installed: add the LibreOffice `program` directory to PATH, or `:Hover office off` to stop asking.",
+      "why": "Turns an office document (doc/docx/odt and friends) under the cursor into a picture in the hover window instead of a plain format badge — the conversion runs through pdfport.nvim's soffice producer. On Windows and macOS the LibreOffice installer does not extend PATH; `paths` below covers the default install location on both, so this only still reports missing on a genuinely atypical install (add the LibreOffice `program` directory to PATH yourself then, or `:Hover office off` to stop asking).",
+      "paths": {
+        "win": ["$PROGRAMFILES\\LibreOffice\\program\\soffice.exe"],
+        "mac": ["/Applications/LibreOffice.app/Contents/MacOS/soffice"],
+        "linux": ["/usr/bin/soffice"]
+      },
       "pkg": {
         "apt": "libreoffice",
         "dnf": "libreoffice",
@@ -18,8 +23,28 @@
     },
     {
       "bin": "chrome",
+      "bin_alternatives": ["google-chrome", "google-chrome-stable", "chromium", "chromium-browser", "brave", "msedge", "microsoft-edge"],
       "required": false,
-      "why": "Renders a hovered http(s) link as a picture of the page, instead of previewing it as text — `:Hover links web shot` turns it on, and it is off by default because a render *executes* the page rather than downloading it. Any Chromium-based browser answers: chrome, chromium, brave or msedge, searched in that order. Not on PATH is the normal case rather than the exception — measured on Windows, the Chrome installer does not extend PATH at all, so this reports missing on a machine where Chrome is plainly installed. hover.nvim looks in the usual install locations by itself and will find it there; `links.shot.command` names one outright. Same problem `soffice` above describes.",
+      "why": "Renders a hovered http(s) link as a picture of the page, instead of previewing it as text — `:Hover links web shot` turns it on, and it is off by default because a render *executes* the page rather than downloading it. Any Chromium-based browser answers: chrome, chromium, brave or msedge, searched in that order. Not on PATH is the normal case rather than the exception — measured on Windows, the Chrome installer does not extend PATH at all. `paths` below covers the default per-user and system-wide install locations on Windows/macOS/Linux (the same list `hover/preview/shot.lua`'s own resolver uses at runtime), so this only still reports missing on a genuinely atypical install; `links.shot.command` names one outright. Same problem `soffice` above describes.",
+      "paths": {
+        "win": [
+          "$PROGRAMFILES\\Google\\Chrome\\Application\\chrome.exe",
+          "$PROGRAMFILES\\Chromium\\Application\\chrome.exe",
+          "$PROGRAMFILES\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+          "$PROGRAMFILES\\Microsoft\\Edge\\Application\\msedge.exe",
+          "$LOCALAPPDATA\\Google\\Chrome\\Application\\chrome.exe",
+          "$LOCALAPPDATA\\Chromium\\Application\\chrome.exe",
+          "$LOCALAPPDATA\\BraveSoftware\\Brave-Browser\\Application\\brave.exe",
+          "$LOCALAPPDATA\\Microsoft\\Edge\\Application\\msedge.exe"
+        ],
+        "mac": [
+          "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+          "/Applications/Chromium.app/Contents/MacOS/Chromium",
+          "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser",
+          "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        ],
+        "linux": ["/usr/bin/google-chrome", "/usr/bin/chromium", "/usr/bin/chromium-browser", "/snap/bin/chromium"]
+      },
       "pkg": {
         "apt": "chromium",
         "dnf": "chromium",
