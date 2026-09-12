@@ -69,9 +69,20 @@ local KNOWN_PLAYERS = {
 ---@internal
 --- Where a Windows installer puts a known player when it does not extend
 --- PATH, keyed by the same `bin` name `KNOWN_PLAYERS` tries first. Same
---- shape and the same reasoning as `preview.shot`'s `install_paths`: two
---- roots, because a machine-wide install lands in `%ProgramFiles%` and a
---- 32-bit build (still VLC's own default download) in `%ProgramFiles(x86)%`.
+--- reasoning `preview.shot` documents for Chrome (now delegated to
+--- `lib.nvim.deps.detect`'s declarative `paths`, since `chrome` is a real
+--- entry in `docs/install.json`): two roots, because a machine-wide install
+--- lands in `%ProgramFiles%` and a 32-bit build (still VLC's own default
+--- download) in `%ProgramFiles(x86)%`.
+---
+--- **Not itself moved to a declared `paths` entry, on purpose.** VLC is not
+--- a dependency this plugin needs (no `pkg`, no `why`, nothing `:Lib deps
+--- install hover.nvim` would ever offer) -- it is a narrow, feature-internal
+--- preference for a non-fullscreen player, scoped to `opts.align`. It also
+--- genuinely can't be expressed the same way: `lib.nvim.deps`'s `paths`
+--- entries are `vim.fn.expand()`-ed, whose `$VAR` syntax only matches
+--- word-shaped env-var names -- `%ProgramFiles(x86)%`'s parentheses have no
+--- literal spelling there. `os.getenv` below has no such restriction.
 ---@type table<string, string>
 local INSTALL_TAILS = {
   vlc = [[\VideoLAN\VLC\vlc.exe]],

@@ -56,72 +56,44 @@ local _pending = nil
 local _swept = false
 ---@type string|nil|false Resolved browser: a path, or `false` for "looked and found none".
 local _browser = nil
+---@type Lib.Deps.Tool|nil This plugin's own `chrome` declaration, once read -- see `chrome_tool`.
+local _chrome_tool = nil
 
 ---@internal
---- Executable names, in the order they are tried. Chrome and Chromium first:
---- the flags below are theirs, Edge merely happens to accept them.
----@type string[]
-local NAMES = {
-  "chrome",
-  "google-chrome",
-  "google-chrome-stable",
-  "chromium",
-  "chromium-browser",
-  "brave",
-  "msedge",
-  "microsoft-edge",
-}
-
----@internal
---- Where an installer puts one when it does not extend PATH.
+--- This plugin's own `chrome` tool declaration from `docs/install.json` --
+--- the names (Chrome/Chromium/Brave/Edge, in that order) and, since
+--- 2026-09-12, the install-location fallback for a Windows/macOS/Linux
+--- installer that does not extend PATH (**measured**, 2026-09-04: on the
+--- machine this was originally built on, Chrome was installed and on no
+--- PATH at all). `lib.nvim.deps.detect` resolves both the same way it
+--- already does for every other declared tool -- `:Lib deps show hover.nvim`
+--- and the declared-tools section of `:checkhealth hover` read the exact
+--- same entry, so keeping a second, hand-copied list here would only be one
+--- more place for the two to drift apart.
 ---
---- **Measured rather than assumed, 2026-09-04:** on the Windows machine this
---- was built on, Chrome is installed at the first entry below and `chrome` is
---- on no PATH -- so a PATH-only search reports "no browser" on a machine with
---- a browser plainly on it. `docs/install.json` already documents the same
---- problem for `soffice`, which is how it was expected here.
----@return string[]
-local function install_paths()
-  local out = {}
-  local function add(path)
-    if type(path) == "string" and path ~= "" then
-      out[#out + 1] = path
-    end
+--- Resolved once per session and remembered: a plugin whose own spec
+--- somehow cannot be found or parsed still gets a PATH-only search (via a
+--- bare `{ bin = "chrome" }`) rather than none at all.
+---@return Lib.Deps.Tool
+local function chrome_tool()
+  if _chrome_tool ~= nil then
+    return _chrome_tool
   end
 
-  if vim.fn.has("win32") == 1 or vim.fn.has("win64") == 1 then
-    local roots = {
-      os.getenv("PROGRAMFILES"),
-      os.getenv("ProgramFiles(x86)"),
-      os.getenv("LOCALAPPDATA"),
-    }
-    local tails = {
-      [[\Google\Chrome\Application\chrome.exe]],
-      [[\Chromium\Application\chrome.exe]],
-      [[\BraveSoftware\Brave-Browser\Application\brave.exe]],
-      [[\Microsoft\Edge\Application\msedge.exe]],
-    }
-    for _, tail in ipairs(tails) do
-      for _, root in ipairs(roots) do
-        add(root and (root .. tail) or nil)
+  local spec = require("lib.nvim.deps.spec")
+  local path = spec.find("hover.nvim")
+  local result = path and spec.load(path)
+  if result then
+    for _, tool in ipairs(result.tools) do
+      if tool.bin == "chrome" then
+        _chrome_tool = tool
+        return tool
       end
     end
-    return out
   end
 
-  if vim.fn.has("mac") == 1 then
-    add("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
-    add("/Applications/Chromium.app/Contents/MacOS/Chromium")
-    add("/Applications/Brave Browser.app/Contents/MacOS/Brave Browser")
-    add("/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge")
-    return out
-  end
-
-  add("/usr/bin/google-chrome")
-  add("/usr/bin/chromium")
-  add("/usr/bin/chromium-browser")
-  add("/snap/bin/chromium")
-  return out
+  _chrome_tool = { bin = "chrome" }
+  return _chrome_tool
 end
 
 --- The browser this would run, or nil when there is none.
@@ -129,8 +101,8 @@ end
 --- Public because `:checkhealth hover` needs the same answer, and a second
 --- search written there would be the hand-kept copy this repository keeps
 --- finding stale. Resolved once per session and remembered -- including the
---- negative answer, so a machine with no browser does not stat six paths on
---- every hover.
+--- negative answer, so a machine with no browser does not stat several paths
+--- on every hover.
 ---@param configured? string An explicit `links.shot.command`, which wins outright.
 ---@return string|nil
 function M.browser(configured)
@@ -141,21 +113,9 @@ function M.browser(configured)
     return _browser or nil
   end
 
-  for _, name in ipairs(NAMES) do
-    if vim.fn.executable(name) == 1 then
-      _browser = name
-      return name
-    end
-  end
-  for _, path in ipairs(install_paths()) do
-    if vim.fn.executable(path) == 1 then
-      _browser = path
-      return path
-    end
-  end
-
-  _browser = false
-  return nil
+  local found = require("lib.nvim.deps.detect").found_as(chrome_tool())
+  _browser = found or false
+  return found
 end
 
 --- Forget the resolved browser, so the next question searches again. For the
