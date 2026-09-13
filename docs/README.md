@@ -8,6 +8,7 @@ short version of all of it; `:help hover` is the same ground offline.
 | Page | Answers |
 | --- | --- |
 | [installation.md](installation.md) | Requirements, every plugin manager, and the two rules that decide whether the hover works at all: `enable()` rather than `setup()`, and not lazy-loading it. Ends with how to check that it worked |
+| [quickstart.md](quickstart.md) | The first thing to run after installing, and what to type when nothing hovers |
 | [NAME-COLLISION.md](NAME-COLLISION.md) | Why installing this **and** `lewis6991/hover.nvim` silently leaves one of the two not there. Neither can work around it; install one |
 | [health.md](health.md) | What `:checkhealth hover` asks, why it is five sections, and the warnings that catch a plugin which is installed correctly and doing nothing |
 
@@ -15,6 +16,8 @@ short version of all of it; `:help hover` is the same ground offline.
 
 | Page | Answers |
 | --- | --- |
+| [what-you-get.md](what-you-get.md) | The six `:Hover` routes that carry most of the daily use, out of the box |
+| [scope.md](scope.md) | What it can answer depending on the target — the reference table at a glance |
 | [WORKFLOW.md](WORKFLOW.md) | How the pieces combine day to day: the quiet ladder and which lever to reach for, scroll against resize against zoom, and what to do when no hover appears |
 | [commands.md](commands.md) | Every `:Hover` route, its arguments, and what each one does |
 | [BINDINGS.md](BINDINGS.md) | Every keymap, user command, autocmd, highlight group and global variable this plugin installs — and which keys are *borrowed* rather than owned |
