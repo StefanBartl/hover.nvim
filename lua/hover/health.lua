@@ -400,6 +400,11 @@ function M.check()
   soft("pdfport", "render_page", "a PDF shows its size, not its first page")
   soft("media", "frame", "a video shows its size, not a still from it")
   soft("gopath.resolve", "resolve_at_cursor", "truncated paths (`...nvim/init.lua`) do not resolve")
+  soft(
+    "ui.kit",
+    nil,
+    "`:Hover dashboard` falls back to a plain message; the dwell tooltip and the `?` key panel do nothing"
+  )
 
   -- markdown.nvim contributes through the registry rather than by name, so
   -- "is it installed" and "did it register" are different questions -- and

@@ -18,6 +18,9 @@
 Four optional contributors, none required, each upgrading exactly one row of what the
 float can show: markdown.nvim, images.nvim, pdfport.nvim, gopath.nvim. What each brings
 and what its absence costs is in [integrations.md](integrations.md).
+[ui.nvim](https://github.com/StefanBartl/ui.nvim) is optional too — it backs `:Hover
+dashboard`'s board, the dwell tooltip and the `?` key panel; without it `:Hover dashboard`
+falls back to the plain message it used before that module existed.
 
 ## Two rules that decide whether this works
 

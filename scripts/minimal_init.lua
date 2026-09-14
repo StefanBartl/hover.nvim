@@ -104,5 +104,10 @@ local function add_optional(env_var, deps_name, marker)
 end
 
 add_dep("LIB_NVIM_DIR", "lib.nvim", "lib.nvim.notify")
+-- ui.nvim is optional in the plugin itself (status_view.lua pcalls ui.kit
+-- and hover.nvim falls back to a plain message without it), but
+-- TESTS/status_view_spec.lua asserts the board actually opens, so the suite
+-- cannot pass without it -- same treatment as lib.nvim above.
+add_dep("UI_NVIM_DIR", "ui.nvim", "ui.kit")
 add_dep("PLENARY_DIR", "plenary.nvim", "plenary")
 add_optional("IMAGES_NVIM_DIR", "images.nvim", "images.convert")

@@ -43,11 +43,11 @@
 --- JavaScript) behind a single key. The gate note the toggle announcements
 --- used to carry is drawn instead: in the row's explanation, and in a footer.
 ---
---- **`pcall` around the UI kit, though lib.nvim is a hard dependency.** It is
---- pinned by commit, so a present-but-older lib.nvim without the kit is a
---- real state rather than a hypothetical -- the same reason `hover.health`
---- checks for partial installs. Without it `open()` returns false and the
---- caller falls back to the message.
+--- **`pcall` around the UI kit, because ui.nvim is an optional dependency,**
+--- unlike lib.nvim. A missing (or not yet installed) ui.nvim is a real state
+--- rather than a hypothetical -- the same reason `hover.health` checks for
+--- it. Without it `open()` returns false and the caller falls back to the
+--- message.
 ---
 ---@see hover.switches
 ---@see hover.bindings.usrcmds
@@ -579,7 +579,7 @@ local ACTIONS = {
 --- reader of this board needs and cannot guess from it.
 ---@return nil
 show_keys = function()
-  local ok, kit = pcall(require, "lib.nvim.ui.kit")
+  local ok, kit = pcall(require, "ui.kit")
   if not ok or type(kit) ~= "table" or type(kit.viewer) ~= "function" then
     return
   end
@@ -709,7 +709,7 @@ local DWELL_MS = 3000
 
 ---@internal
 --- The dwell tooltip's live state: one timer, one float, at most.
----@type { timer: uv.uv_timer_t|nil, surf: Lib.UI.Kit.Surface|nil, row: integer|nil }
+---@type { timer: uv.uv_timer_t|nil, surf: Ui.Kit.Surface|nil, row: integer|nil }
 local dwell = { timer = nil, surf = nil, row = nil }
 
 ---@internal
@@ -747,7 +747,7 @@ local function dwell_show(state)
   if not row or not row.desc then
     return
   end
-  local ok, kit = pcall(require, "lib.nvim.ui.kit")
+  local ok, kit = pcall(require, "ui.kit")
   if not ok or type(kit.surface) ~= "table" then
     return
   end
@@ -827,12 +827,12 @@ end
 
 --- Open the board.
 ---
---- Returns false when lib.nvim's UI kit is not there to draw one, which is
+--- Returns false when ui.nvim is not there to draw one, which is
 --- the caller's signal to fall back to the plain message -- exactly the
 --- behaviour `:Hover dashboard` had before this module existed.
 ---@return boolean shown
 function M.open()
-  local ok, kit = pcall(require, "lib.nvim.ui.kit")
+  local ok, kit = pcall(require, "ui.kit")
   if not ok or type(kit) ~= "table" or type(kit.surface) ~= "table" then
     return false
   end

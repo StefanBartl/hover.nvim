@@ -41,7 +41,7 @@ local view = require("hover.status_view")
 --- The board's buffer lines, with the board left open for the caller.
 ---@return integer bufnr, string[] lines
 local function open()
-  assert.is_true(view.open(), "the board did not open -- lib.nvim's UI kit is missing")
+  assert.is_true(view.open(), "the board did not open -- ui.nvim is missing")
   local bufnr = vim.api.nvim_get_current_buf()
   return bufnr, vim.api.nvim_buf_get_lines(bufnr, 0, -1, false)
 end

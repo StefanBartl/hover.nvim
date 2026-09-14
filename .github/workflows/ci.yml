@@ -54,14 +54,20 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v5
-      # Both are resolved by scripts/minimal_init.lua from .deps/ -- see the
-      # three lookup paths it documents. lib.nvim is a hard dependency, so a
-      # run without it is not a degraded run, it is no run at all.
+      # All three are resolved by scripts/minimal_init.lua from .deps/ -- see
+      # the three lookup paths it documents. lib.nvim is a hard dependency, so
+      # a run without it is not a degraded run, it is no run at all. ui.nvim
+      # is optional in the plugin itself, but TESTS/status_view_spec.lua
+      # asserts the dashboard board actually opens, so the suite needs it too.
       - uses: actions/checkout@v5
         with:
           repository: StefanBartl/lib.nvim
           path: .deps/lib.nvim
           ref: ci-verified
+      - uses: actions/checkout@v5
+        with:
+          repository: StefanBartl/ui.nvim
+          path: .deps/ui.nvim
       - uses: actions/checkout@v5
         with:
           repository: nvim-lua/plenary.nvim

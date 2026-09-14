@@ -6,8 +6,9 @@
 #   scripts/test.sh                    every spec under TESTS/
 #   scripts/test.sh TESTS/foo_spec.lua a single spec file
 #
-# Env vars (both optional -- see scripts/minimal_init.lua's own fallbacks):
+# Env vars (all optional -- see scripts/minimal_init.lua's own fallbacks):
 #   LIB_NVIM_DIR   path to a lib.nvim checkout
+#   UI_NVIM_DIR    path to a ui.nvim checkout
 #   PLENARY_DIR    path to a plenary.nvim checkout
 #
 # Fails loudly and with exit code 1 (NEW-40): a runner that reports success
