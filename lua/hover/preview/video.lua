@@ -25,6 +25,16 @@
 --- what a PDF calls a page, a video calls a moment. Every offset visited is a
 --- cache entry, so stepping back through a file already walked is instant.
 ---
+--- **And stepping forward is too, because the next one is already being
+--- made.** Once the still for page *n* is handed over, `media.prefetch_frame`
+--- is asked for page *n+1* — so the decode happens while the reader is looking
+--- at the picture rather than after they press the key. The step cursor stays
+--- here and only here: media.nvim renders and caches but does not know where a
+--- reader is going, and must not, because two consumers scrubbing the same
+--- file would otherwise share one cursor. The playback path has worked this
+--- way for its own windows since `preview.playback`'s rolling window landed;
+--- this is the same idea for single stills.
+---
 --- **What it costs when it is not there.** No media.nvim, no ffmpeg, no image
 --- provider, `inline_images = false` — each of those degrades to the badge with
 --- a note saying which one it was, and none of them is an error. The badge is
@@ -490,19 +500,19 @@ function M.preview(target, opts, on_result)
   end
 
   local page = math.max(1, math.floor(opts.page or 1))
-  local offset = M.offset_for(
-    page,
-    opts.video_at or "10%",
-    opts.video_step or "10%",
-    probe and probe.duration or nil
-  )
+  local duration = probe and probe.duration or nil
+  local offset = M.offset_for(page, opts.video_at or "10%", opts.video_step or "10%", duration)
+
+  -- Whether there is a page after this one. Computed once because two things
+  -- have to agree about it: the reader's "next" key, and whether the still
+  -- that key would land on is worth rendering ahead of time.
+  local has_next = more_after(offset, duration)
 
   ---@param png string
   ---@return Hover.Content
   local function content_for(png)
     local content = require("hover.preview.media").canvas_for(png, opts)
-    content.scroll =
-      { page = page, step = 1, more = more_after(offset, probe and probe.duration or nil) }
+    content.scroll = { page = page, step = 1, more = has_next }
     -- Only a marker: it binds the transport key, and pressing it is what
     -- decodes anything.
     content.transport = true
@@ -518,6 +528,33 @@ function M.preview(target, opts, on_result)
     return content
   end
 
+  --- Start the still for the *next* press while the reader looks at this one.
+  ---
+  --- **The step cursor stays here, which is the point.** media.nvim renders
+  --- and caches; it does not know where a reader is going, and must not — two
+  --- consumers scrubbing the same file would otherwise share one cursor. So
+  --- the offset arithmetic is this module's (`M.offset_for`, the same call
+  --- that produced the offset on screen), and media.nvim is only asked to have
+  --- the answer ready.
+  ---
+  --- Forward only. A reader who has just stepped forward is overwhelmingly
+  --- likely to do it again, and every offset already visited is a cache entry
+  --- — stepping *back* is already instant, so prefetching it would buy
+  --- nothing and cost a decode.
+  ---
+  --- Gated on `has_next` — literally the same value the reader's "next" key
+  --- is given, so a prefetch past the end of the file is never started rather
+  --- than started and thrown away.
+  ---@return nil
+  local function prefetch_next()
+    if not has_next or type(media.prefetch_frame) ~= "function" then
+      return
+    end
+    local next_offset =
+      M.offset_for(page + 1, opts.video_at or "10%", opts.video_step or "10%", duration)
+    media.prefetch_frame(target.path, { at = next_offset, width = opts.video_width })
+  end
+
   media.frame(target.path, {
     at = offset,
     width = opts.video_width,
@@ -527,6 +564,9 @@ function M.preview(target, opts, on_result)
       return
     end
     on_result(content_for(png))
+    -- After the picture is handed over, never before: the still the reader is
+    -- waiting for must not queue behind one nobody has asked for.
+    prefetch_next()
   end)
 
   -- Marked pending: `media.frame` calls back on the next tick even for a cache
