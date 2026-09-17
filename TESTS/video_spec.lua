@@ -207,6 +207,155 @@ describe("without media.nvim installed", function()
   end)
 end)
 
+describe("the prefetch hint for the next step", function()
+  -- The still-stepping path asks media.nvim for page n+1 as soon as page n is
+  -- on screen, so the decode happens while the reader looks at the picture
+  -- rather than after they press the key. Two things are worth asserting and
+  -- both are invisible in a rendered still: *which* offset is asked for, and
+  -- that nothing is asked for past the end of the file.
+  --
+  -- media.nvim is replaced wholesale for these, so they run identically on a
+  -- machine that has it installed and one that does not.
+
+  ---@param probe table|nil
+  ---@param opts table
+  ---@return table calls  # every prefetch_frame call, in order
+  local function prefetch_calls(probe, opts)
+    local saved_media = package.loaded["media"]
+    local saved_provider = package.loaded["lib.nvim.image_preview"]
+
+    local calls = {}
+    package.loaded["media"] = {
+      available = function()
+        return true
+      end,
+      probed = function()
+        return probe
+      end,
+      frame = function(_, _, callback)
+        -- Hand back a path that does not exist: `canvas_for` only measures it,
+        -- and what this spec is about happens after the callback returns.
+        callback("/tmp/__video_spec_prefetch.png", nil)
+      end,
+      prefetch_frame = function(path, o)
+        calls[#calls + 1] = { path = path, at = o and o.at, width = o and o.width }
+      end,
+    }
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return { name = "stub" }
+      end,
+    }
+
+    local ok, err = pcall(function()
+      video.preview({
+        type = "video",
+        raw = "clip.mp4",
+        path = "/tmp/clip.mp4",
+        ext = "mp4",
+        size = 1024,
+      }, opts, function() end)
+    end)
+
+    package.loaded["media"] = saved_media
+    package.loaded["lib.nvim.image_preview"] = saved_provider
+    assert.is_true(ok, tostring(err))
+    return calls
+  end
+
+  it("asks for the offset the next press would land on", function()
+    -- page 1 of a ten-minute file at 10%/10%: on screen is 60 s, and the next
+    -- press goes to 120 s.
+    local calls = prefetch_calls(
+      { duration = 600, width = 1920, height = 1080 },
+      { inline_images = true, page = 1, video_at = "10%", video_step = "10%" }
+    )
+    assert.equals(1, #calls, "exactly one still is rendered ahead")
+    assert.equals("/tmp/clip.mp4", calls[1].path)
+    assert.equals(120, calls[1].at, "page 2's offset, not page 1's and not page 3's")
+  end)
+
+  it("keeps stepping from wherever the reader already is", function()
+    local calls = prefetch_calls(
+      { duration = 600, width = 1920, height = 1080 },
+      { inline_images = true, page = 4, video_at = "10%", video_step = "10%" }
+    )
+    assert.equals(1, #calls)
+    assert.equals(300, calls[1].at, "page 5 follows page 4, whatever page the hover opened on")
+  end)
+
+  it("forwards the width, so the prefetched still is the one that gets used", function()
+    -- A prefetch at a different width is a different cache entry: it would
+    -- render a second PNG and the real request would still wait for its own.
+    local calls = prefetch_calls(
+      { duration = 600, width = 1920, height = 1080 },
+      { inline_images = true, page = 1, video_at = "10%", video_step = "10%", video_width = 640 }
+    )
+    assert.equals(640, calls[1].width)
+  end)
+
+  it("asks for nothing past the end of the file", function()
+    -- page 10 of a 10%-step file is the last one there is; `more` is false on
+    -- it, so the reader's next key does nothing and neither should this.
+    local calls = prefetch_calls(
+      { duration = 600, width = 1920, height = 1080 },
+      { inline_images = true, page = 10, video_at = "10%", video_step = "10%" }
+    )
+    assert.equals(0, #calls, "a decode nobody can ever reach is not started")
+  end)
+
+  it("still steps a file that reports no duration", function()
+    -- Without a duration there is no telling where the end is, so the honest
+    -- answer is to keep offering — the same rule the reader's next key
+    -- follows. The step falls back to seconds because a percentage of an
+    -- unknown duration is not a number.
+    local calls = prefetch_calls(
+      { width = 1920, height = 1080 },
+      { inline_images = true, page = 1, video_at = 0, video_step = "10%" }
+    )
+    assert.equals(1, #calls)
+    assert.equals(5, calls[1].at, "the five-second fallback step, from offset 0")
+  end)
+
+  it("does nothing when media.nvim is too old to offer it", function()
+    -- A consumer must not require a version: the still is what matters and
+    -- the hint is an optimisation. Same soft check every other call here makes.
+    local saved_media = package.loaded["media"]
+    local saved_provider = package.loaded["lib.nvim.image_preview"]
+    package.loaded["media"] = {
+      available = function()
+        return true
+      end,
+      probed = function()
+        return { duration = 600, width = 1920, height = 1080 }
+      end,
+      frame = function(_, _, callback)
+        callback("/tmp/__video_spec_prefetch.png", nil)
+      end,
+      -- No `prefetch_frame` at all.
+    }
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return { name = "stub" }
+      end,
+    }
+
+    local ok, err = pcall(function()
+      video.preview({
+        type = "video",
+        raw = "clip.mp4",
+        path = "/tmp/clip.mp4",
+        ext = "mp4",
+        size = 1024,
+      }, { inline_images = true, page = 1 }, function() end)
+    end)
+
+    package.loaded["media"] = saved_media
+    package.loaded["lib.nvim.image_preview"] = saved_provider
+    assert.is_true(ok, "a media.nvim without the function is not an error: " .. tostring(err))
+  end)
+end)
+
 describe("where a played run starts", function()
   local DEFAULTS = require("hover.config.DEFAULTS")
 

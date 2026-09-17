@@ -99,6 +99,18 @@ evenly, so one setting is right for both. Seconds work too — `at = 0`,
 falls back to a five-second step, because refusing to move would be the wrong
 answer to a file that is otherwise fine.
 
+**Every step is instant, in both directions.** Backwards, because every offset
+already visited is a cache entry on disk. Forwards, because the moment page *n*
+appears, hover.nvim asks media.nvim to render page *n+1* — `media.prefetch_frame`,
+a decode with nobody waiting on it — so the still is usually already there when
+the key is pressed. Nothing is prefetched past the end of the file: the gate is
+the same value the "next" key itself is given.
+
+The step cursor stays here and only here. media.nvim renders and caches but
+does not know where any reader is in a file, and must not: two things scrubbing
+the same video would otherwise share one position. What crosses the seam is a
+single offset and the request to have it ready.
+
 Every offset visited is a cache entry in media.nvim, keyed by the source file's
 mtime. Stepping back through a file already walked is a `stat` and a draw.
 
