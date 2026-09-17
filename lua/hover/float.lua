@@ -437,7 +437,11 @@ function M.open(lines, opts)
   vim.wo[win].wrap = true
   vim.wo[win].linebreak = true
   vim.wo[win].conceallevel = 2
-  vim.wo[win].winhighlight = "Normal:NormalFloat,FloatBorder:FloatBorder"
+  -- Not `vim.wo[win].winhighlight = ...`: that behaves like `:set`, not
+  -- `:setlocal`, and writes the GLOBAL value along with the window's. A
+  -- float styling itself would then leak its own appearance into the
+  -- default every later window inherits. `apply` is window-local.
+  require("lib.nvim.ui.winhighlight").apply(win, "Normal:NormalFloat,FloatBorder:FloatBorder")
 
   _win, _buf = win, buf
 
