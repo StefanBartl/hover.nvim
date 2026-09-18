@@ -44,11 +44,11 @@ jobs:
     name: plenary specs (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
-      # One platform failing must not cancel the other: which of the two broke
-      # is the whole information content of this job.
+      # One platform failing must not cancel the others: which of the three
+      # broke is the whole information content of this job.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     defaults:
       run:
         shell: bash
