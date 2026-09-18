@@ -23,8 +23,14 @@ without it the zoom crop specs report `pending` rather than failing, and
 build while still printing every pending spec by name.
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs `stylua
---check`, `luacheck lua plugin` and the full suite on both Ubuntu and
-Windows on every push and PR to `main`.
+--check`, `luacheck lua plugin` and the full suite on Ubuntu, Windows and
+macOS on every push and PR to `main`.
+
+`scripts/minimal_init.lua` sets `vim.g.lib_nvim_deps_disable_first_run`, so
+no spec run opens lib.nvim's declared-tools popup — see the comment there.
+A spec must not depend on which float happens to be on screen anyway, but
+that popup in particular arrives on a later tick, only where a declared tool
+is missing, and only in the first spec file of a run.
 
 ## Coverage map
 
