@@ -267,44 +267,60 @@ end)
 describe("the dwell tooltip", function()
   local sv = require("hover.status_view")
 
-  --- Every floating window on screen right now.
-  local function floats()
-    local n = 0
+  --- The filetype `dwell_show` opens the tooltip with, in `hover.status_view`.
+  --- Named here so the specs below identify the window they are about instead
+  --- of counting windows.
+  local TOOLTIP_FT = "hover-status-help"
+
+  --- The buffer of every floating window that *is* the dwell tooltip.
+  ---
+  --- **Not "every float on screen", and that distinction is the bug this
+  --- helper replaces.** Counting floats made any other float in the editor
+  --- read as a tooltip, and `require("hover").setup({})` below opens exactly
+  --- such a float: it reaches `lib.nvim.deps.show_once`, whose declared-tools
+  --- popup is `vim.schedule`d and therefore arrives during the first
+  --- `vim.wait` here -- which this spec reported as the tooltip firing 1.8
+  --- seconds early. It only ever showed up on macOS, because that popup is
+  --- marked seen on disk once per cache directory and so lands in whichever
+  --- spec file plenary happens to schedule first. `scripts/minimal_init.lua`
+  --- now switches it off for the whole suite; asking for the tooltip by
+  --- filetype is the half that keeps the next unrelated float from standing
+  --- in for it.
+  ---@return integer[] bufnrs
+  local function tooltips()
+    local found = {}
     for _, w in ipairs(vim.api.nvim_list_wins()) do
-      if vim.api.nvim_win_get_config(w).relative ~= "" then
-        n = n + 1
+      local b = vim.api.nvim_win_get_buf(w)
+      if vim.api.nvim_win_get_config(w).relative ~= "" and vim.bo[b].filetype == TOOLTIP_FT then
+        found[#found + 1] = b
       end
     end
-    return n
+    return found
   end
 
   it("says nothing until the cursor has actually stopped", function()
     require("hover").setup({})
     assert.is_true(sv.open())
     local board = vim.api.nvim_get_current_buf()
-    assert.are.equal(1, floats())
+    assert.are_not.equal("", vim.api.nvim_win_get_config(0).relative, "the board is not a float")
+    assert.are.equal(0, #tooltips())
 
     -- Well short of the three seconds: a tooltip here would fire while the
     -- reader is still moving through the board, which is a flicker, not help.
     vim.wait(1200, function()
       return false
     end, 50)
-    assert.are.equal(1, floats())
+    assert.are.equal(0, #tooltips())
 
     vim.wait(2400, function()
       return false
     end, 50)
-    assert.are.equal(2, floats())
+    local shown = tooltips()
+    assert.are.equal(1, #shown)
+    assert.are_not.equal(board, shown[1], "the tooltip is the board's own buffer")
 
     -- And it says what the row does, not what it is called.
-    local text
-    for _, w in ipairs(vim.api.nvim_list_wins()) do
-      local b = vim.api.nvim_win_get_buf(w)
-      if b ~= board and vim.api.nvim_win_get_config(w).relative ~= "" then
-        text = table.concat(vim.api.nvim_buf_get_lines(b, 0, -1, false), " ")
-      end
-    end
-    assert.is_truthy(text)
+    local text = table.concat(vim.api.nvim_buf_get_lines(shown[1], 0, -1, false), " ")
     assert.is_true(#text > 10)
 
     -- Moving on takes it away again.
@@ -313,7 +329,7 @@ describe("the dwell tooltip", function()
     vim.wait(200, function()
       return false
     end, 50)
-    assert.are.equal(1, floats())
+    assert.are.equal(0, #tooltips())
 
     vim.cmd("close")
   end)

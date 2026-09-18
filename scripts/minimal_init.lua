@@ -111,3 +111,32 @@ add_dep("LIB_NVIM_DIR", "lib.nvim", "lib.nvim.notify")
 add_dep("UI_NVIM_DIR", "ui.nvim", "ui.kit")
 add_dep("PLENARY_DIR", "plenary.nvim", "plenary")
 add_optional("IMAGES_NVIM_DIR", "images.nvim", "images.convert")
+
+--- No first-run popup during a test run, and the reason is a red macOS leg
+--- rather than tidiness.
+---
+--- `hover.setup()` calls `lib.nvim.deps.show_once("hover.nvim")`, which opens
+--- a floating window listing the declared external tools that are missing --
+--- deliberately through `vim.schedule`, so it lands on the *next* event-loop
+--- tick rather than inline. A spec that calls `setup()` and then waits gets
+--- that float inside its own wait, out of nowhere, and
+--- `TESTS/status_view_spec.lua` read it as the dwell tooltip firing 1.8
+--- seconds early.
+---
+--- Two things made it look like a macOS bug. It shows only where a declared
+--- tool is actually missing, which is a property of the runner, not of the
+--- code; and it is marked seen on disk
+--- (`stdpath("cache")/lib.nvim/cache/lib.nvim.deps.first_run.json`), once per
+--- cache directory, so only the *first* spec child in a whole run can see it
+--- at all. Two spec files call `setup()` -- `registry_spec` and
+--- `status_view_spec` -- and which one plenary schedules first differs per
+--- platform: `registry_spec` went first on Linux and Windows and quietly
+--- absorbed the popup, `status_view_spec` went first on macOS and asserted
+--- against it.
+---
+--- `vim.g.lib_nvim_deps_disable_first_run` is that popup's own documented
+--- opt-out, and it is the right one here for a second reason: it declines
+--- *without* marking anything seen. Running the suite therefore no longer
+--- consumes the contributor's real first-run popup for hover.nvim in their
+--- own Neovim, which it had been doing every time.
+vim.g.lib_nvim_deps_disable_first_run = true
