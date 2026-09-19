@@ -821,6 +821,25 @@ function M.show(opts)
     end
   end
 
+  -- **A re-trigger for the link already open must not orphan its own render.**
+  -- `CursorHold` fires again after any keystroke followed by 'updatetime' of
+  -- quiet, cursor movement or not (see `M.dismiss`'s header) -- so a reader
+  -- who stays on one office/PDF/video link while it converts gets `show()`
+  -- called several times over before the conversion is done. Bumping the
+  -- generation on every one of those, as this used to, invalidates whatever
+  -- `on_result` callback the still-running convert/render holds: its answer
+  -- lands against a generation that has since moved on and `guarded` drops it
+  -- silently. The result was cached correctly the whole time -- `cache.put`
+  -- does not check the generation -- so the fix looked like "it only updates
+  -- after you leave the link and come back", which is exactly what a fresh
+  -- `show()` for the same target does: a plain cache hit. Skipping the bump
+  -- here for an unchanged, still-pending target leaves the original
+  -- generation intact for the callback that is actually going to answer it.
+  -- Found 2026-09-19.
+  if not opts.force and _open and _open.pending and identity(target) == identity(_open.target) then
+    return true
+  end
+
   _generation = _generation + 1
   local generation = _generation
 
@@ -836,6 +855,7 @@ function M.show(opts)
     page = 1,
     requested = opts.force == true or nil,
   }
+  local open_ref = _open
 
   -- Deliberately not widened by `force`. Volume gates open for an explicit
   -- request; the fetch does not, because a keypress asking "what is this"
@@ -868,9 +888,15 @@ function M.show(opts)
     return true
   end
 
+  -- Marks this open target as having a render in flight, so a same-target
+  -- re-trigger above leaves its generation alone instead of orphaning it.
+  -- Set on `open_ref`, not `_open`, so a later call that replaces `_open`
+  -- with a different target is never affected by this one settling late.
+  open_ref.pending = true
   build(target, bufnr, preview_opts, function(content)
     if content and not content.pending then
       cache.put(key, content)
+      open_ref.pending = false
     end
     guarded(content)
   end)
