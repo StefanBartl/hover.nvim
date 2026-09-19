@@ -33,12 +33,15 @@ local M = {}
 ---@return string[] lines
 ---@return boolean truncated more lines follow
 ---@return integer available how many lines were skippable, capped at `skip`
+---@return boolean ok whether the file could be opened at all -- an unreadable
+---file (permissions, a FIFO, another process holding it exclusively) must
+---not look like an empty one (`ERR-11`)
 local function head(path, limit, skip)
   skip = math.max(0, skip or 0)
   local out = {}
   local f = io.open(path, "r")
   if not f then
-    return out, false, 0
+    return out, false, 0, false
   end
 
   local seen = 0
@@ -55,7 +58,7 @@ local function head(path, limit, skip)
     end
   end
   f:close()
-  return out, truncated, math.min(skip, seen)
+  return out, truncated, math.min(skip, seen), true
 end
 
 ---@internal
@@ -108,13 +111,27 @@ function M.file(target, opts)
     end
   end
 
-  local lines, truncated, skipped = head(target.path, limit, offset)
+  local lines, truncated, skipped, ok = head(target.path, limit, offset)
 
   -- Scrolled past the end (the file shrank, or the offset overshot): fall
   -- back to the last readable window rather than showing an empty float.
-  if #lines == 0 and offset > 0 then
+  if #lines == 0 and ok and offset > 0 then
     offset = math.max(0, skipped - limit)
-    lines, truncated = head(target.path, limit, offset)
+    local retry_lines, retry_truncated, _, retry_ok = head(target.path, limit, offset)
+    lines, truncated, ok = retry_lines, retry_truncated, retry_ok
+  end
+
+  -- "No lines" is ambiguous on its own -- a genuinely empty file and one
+  -- `io.open` could not open (no permission, a FIFO, another process holding
+  -- it exclusively on Windows) both hand back an empty list. `ok` is what
+  -- tells them apart (`ERR-11`): `target.size` already came from the same
+  -- `stat` that routed this here, so reporting it as "empty" would be a
+  -- confident, wrong answer instead of the truth -- hover could not read it.
+  if #lines == 0 and not ok then
+    return {
+      lines = { "(cannot read file)" },
+      title = vim.fs.basename(target.path),
+    }
   end
 
   if #lines == 0 then
