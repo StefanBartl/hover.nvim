@@ -820,20 +820,38 @@ function M.pdf(target, opts, on_result)
   ---@param rect { w: integer, h: integer, x: integer, y: integer }|nil
   ---@param on_png fun(png: string|nil, err: string|nil): nil
   local function render(dpi, rect, on_png)
-    pdfport.render_page(target.path, page, { dpi = dpi, crop = rect }, function(png, err)
-      -- pdftoppm's exit lands in a fast event context, where neither
-      -- `nvim_create_autocmd` nor the ImageMagick fallback's `vim.system():wait()`
-      -- may be called. Everything downstream of here runs on the main loop.
-      vim.schedule(function()
-        if png then
-          local key = view_key(target.path, page, dpi, rect)
-          if key then
-            remember_page(key, png)
+    -- `pcall`: a call into pdfport is a system boundary (`ERR-01`). This is
+    -- the busiest one in the module -- every local PDF, page turn and zoom
+    -- step -- and a raise here would otherwise escape `build_async` bare, all
+    -- the way out to the `CursorHold` autocmd.
+    local ok, err_call = pcall(
+      pdfport.render_page,
+      target.path,
+      page,
+      { dpi = dpi, crop = rect },
+      function(png, err)
+        -- pdftoppm's exit lands in a fast event context, where neither
+        -- `nvim_create_autocmd` nor the ImageMagick fallback's `vim.system():wait()`
+        -- may be called. Everything downstream of here runs on the main loop.
+        vim.schedule(function()
+          if png then
+            local key = view_key(target.path, page, dpi, rect)
+            if key then
+              remember_page(key, png)
+            end
           end
-        end
-        on_png(png, err)
+          on_png(png, err)
+        end)
+      end
+    )
+    if not ok then
+      -- Scheduled rather than called straight away, so `on_png` always lands
+      -- after `M.pdf` has returned its provisional content -- the same
+      -- contract the real callback keeps, whether this call raised or not.
+      vim.schedule(function()
+        on_png(nil, tostring(err_call))
       end)
-    end)
+    end
   end
 
   --- A render that did not happen, reported as what it most likely means.
