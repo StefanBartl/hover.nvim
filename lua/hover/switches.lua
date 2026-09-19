@@ -322,6 +322,10 @@ function M.set(name, on, opts)
   local before = vim.inspect(config.preview_opts())
 
   write(spec.path, on)
+  -- This is the one write site `hover.persist` watches for: a switch flipped
+  -- through here is a reader's own act, and stays explicit across sessions
+  -- until flipped again -- see the note at `hover.persist.touch` (`LUA-87`).
+  require("hover.persist").touch(name)
   -- Upward only: switching a level on switches on everything it needs to
   -- mean anything. Switching off touches nothing else, so turning the parent
   -- back on restores the child's configured state instead of demoting it.

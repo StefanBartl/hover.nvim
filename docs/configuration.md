@@ -346,12 +346,21 @@ to ask. Two consequences worth knowing before you keep the default:
 
 ## Persisting runtime changes
 
-`mode`, `auto_hover` and every switch — exactly what [`:Hover dashboard`](commands.md)
-reports — are written to disk on `VimLeavePre` and read back over this configuration the
-next time `enable()` runs, **after** the installation spec's own options are merged. So
-the order is DEFAULTS → installation spec → the last session's own switches, and
-`:Hover links web on` outlives the session it was toggled in rather than ending the
-moment Neovim does.
+`mode`, `auto_hover` and every switch — the same three axes
+[`:Hover dashboard`](commands.md) reports — are written to disk on `VimLeavePre` and read
+back over this configuration the next time `enable()` runs, **after** the installation
+spec's own options are merged. So the order is DEFAULTS → installation spec → the last
+session's own switches, and `:Hover links web on` outlives the session it was toggled in
+rather than ending the moment Neovim does.
+
+**Only a field you actually toggled — through `:Hover ...`, a keymap, or the
+dashboard — is ever written back.** A field your installation spec sets and you never
+touch at runtime is never captured, so editing that spec later always takes effect on the
+next `enable()`. What makes a field "touched" is going through one of the three runtime
+paths (`hover.switches.set`, `hover.set_mode`, `hover.set_auto`) at least once, this
+session or an earlier one — a plain `setup()` call, however many times you make it, never
+counts. Once touched, a field keeps outliving every quiet session after it, not just the
+next one, until you toggle it back to match the spec (or turn `persist` off).
 
 `persist = false` is for the opposite: a session-only override — chasing one broken link
 — that a config edit would be the wrong tool for.
@@ -363,7 +372,8 @@ require("hover").enable({ persist = false })
 **What is not carried.** `border`, `max_lines`, every `_keys` table and any other layout
 or keybinding option stay exactly where they are: read once, from the installation spec.
 A reader who cannot see a state file should not have it override what their own config
-says — only the three axes a *report* already shows them are eligible.
+says — only the three axes a *report* already shows them are eligible, and only where
+that report would show a value the reader themselves set.
 
 Stored through `lib.nvim.cache.disk`, one JSON file under `stdpath("cache")`;
 `:checkhealth hover` warns if `persist` is on and that module is not reachable (an older

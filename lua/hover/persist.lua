@@ -1,26 +1,48 @@
 ---@module 'hover.persist'
----@brief Carry a session's `:Hover dashboard` toward the next one.
+---@brief Carry a session's *runtime toggles* toward the next one.
 ---@description
---- Every switch, `mode` and `auto_hover` are written back over the
---- installation spec's own `opts` on the next `enable()`, by default:
---- `:Hover links web on` outlives the session it was toggled in, rather than
---- ending the moment Neovim does. `persist = false` is the reader saying the
---- opposite -- "this is for right now only" -- for a session-only override
---- (`:Hover links web on` while chasing one broken link) that a config edit
---- would be the wrong tool for.
+--- A switch the reader actually flipped -- `:Hover links web on`, `:Hover
+--- mode manual`, `:Hover auto file` -- outlives the session it was toggled
+--- in, rather than ending the moment Neovim does. `persist = false` is the
+--- reader saying the opposite -- "this is for right now only" -- for a
+--- session-only override (`:Hover links web on` while chasing one broken
+--- link) that a config edit would be the wrong tool for.
+---
+--- **Only what was explicitly toggled, never what the spec merely set**
+--- (`LUA-87`). `mode = "manual"` in an installation spec and `:Hover mode
+--- manual` typed at the prompt used to look identical by the time either
+--- reached `M.snapshot`: both are `config.raw().mode == "manual"`, so the
+--- old snapshot wrote every field unconditionally and could not tell "the
+--- reader chose this" from "this was the spec's value when Neovim closed".
+--- The effect was a spec a reader could no longer edit: change `office =
+--- false` in the installation spec, and the *next* `enable()` loaded last
+--- session's snapshot -- which had faithfully copied the *old* spec value --
+--- straight back over the new one, because nothing recorded that `office`
+--- was never actually touched.
+---
+--- The fix is an explicit set (`M.touch`), written to alongside the value by
+--- every runtime toggle path -- `hover.switches.set`, `hover.set_mode`,
+--- `hover.set_auto` -- and by nothing else. `config.setup` (the spec, or a
+--- host calling `setup()` again) never calls `M.touch`, so a value that only
+--- ever came from `opts` never enters the snapshot, however long the session
+--- ran. `M.load` re-marks whatever it reads back as touched for the running
+--- session too, which is what lets a genuinely toggled value keep surviving
+--- session after session rather than only the next one -- see `M.load`.
 ---
 --- **What is carried, and what is not.** Exactly what `hover.switches`
 --- already declares a `path` for, plus `mode` and `auto_hover` -- the same
 --- three axes `:Hover dashboard` reports, and nothing more: `border`,
 --- `max_lines`, the `_keys` tables and every layout or keybinding option
---- stay in the installation spec, where a reader can see them.
+--- stay in the installation spec, where a reader can see them. Of those
+--- three axes, only the ones the reader actually touched are ever written.
 ---
 --- **Loaded at `enable()`, after the installation spec's own `opts` are
---- merged in.** `M.load` is `config.setup(snapshot)` under another name, so
---- it is subject to the same merge `config.setup` always does -- the order
---- ends up DEFAULTS -> installation spec -> the last session's switches, and
---- a runtime toggle really does win over a static default until it is
---- toggled back, which is the entire feature.
+--- merged in.** `M.load` is `config.setup(sanitize(snapshot))` under another
+--- name, so it is subject to the same merge `config.setup` always does --
+--- the order ends up DEFAULTS -> installation spec -> the last session's
+--- *touched* switches, and a runtime toggle really does win over a static
+--- default until it is toggled back, which is the entire feature -- and a
+--- spec value the reader never touched at all is never shadowed by it.
 ---
 --- **Written once, on `VimLeavePre`, rather than on every `switches.set`.**
 --- One writer for the reason `hover.cache`'s drop lives in one place rather
@@ -46,6 +68,33 @@ local M = {}
 ---@type string Namespace `lib.nvim.cache.disk` stores this under -- one JSON
 --- file at `stdpath("cache")/lib.nvim/cache/hover/status.json`.
 local NAMESPACE = "hover/status"
+
+---@type table<string, true> Fields the reader has explicitly set this
+--- session -- `"mode"`, `"auto_hover"`, or a name from
+--- `hover.switches.names()` -- through a runtime toggle path, or inherited
+--- from a snapshot `M.load` read back (see `M.touch`). `M.snapshot` writes
+--- only what is in here; nothing else ever adds to it.
+local _touched = {}
+
+--- Mark `field` as explicitly set for the rest of this session, so
+--- `M.snapshot` writes it back. Called only from the three runtime toggle
+--- paths (`hover.switches.set`, `hover.set_mode`, `hover.set_auto`) and from
+--- `M.load` itself -- never from `config.setup`, whose values came from an
+--- installation spec, not from the reader (`LUA-87`).
+---@param field string
+---@return nil
+function M.touch(field)
+  _touched[field] = true
+end
+
+--- Forget every field marked touched. Exists for the test suite, which
+--- would otherwise carry one spec's toggles into the next -- `_touched` is
+--- module state and outlives `config.reset()`, which only clears the merged
+--- options.
+---@return nil
+function M.reset()
+  _touched = {}
+end
 
 ---@internal
 --- Write `value` at `path` inside `node`, creating intermediate tables as it
@@ -84,29 +133,42 @@ local function get_at(node, path)
   return node
 end
 
---- The current `mode`, `auto_hover` and every switch's own flag, shaped
---- exactly like the `Hover.Config` an installation spec's `opts` would pass
---- -- so loading it back is `config.setup(snapshot)` and nothing else.
+--- `mode`, `auto_hover` and every switch's own flag that the reader has
+--- actually touched this session (`_touched`), shaped like the subset of a
+--- `Hover.Config` an installation spec's `opts` would pass for those fields
+--- -- so loading it back is `config.setup(sanitize(snapshot))` and nothing
+--- else. A field never in `_touched` is simply absent, which is what lets a
+--- spec edit for it take effect: there is nothing here to overwrite it with.
 ---@return Hover.Config
 function M.snapshot()
   local raw = require("hover.config").raw()
   local switches = require("hover.switches")
 
-  -- `auto_hover` is `table<string,boolean>|boolean|string[]` -- a `true`/
-  -- `false` override is a valid value, not just the table forms, and
-  -- `vim.deepcopy` only takes a table. Only the table shapes need copying to
-  -- begin with, since a boolean has no shared identity to protect.
-  local auto_hover = raw.auto_hover
-  if type(auto_hover) == "table" then
-    auto_hover = vim.deepcopy(auto_hover)
+  ---@type Hover.Config
+  local out = {}
+
+  if _touched.mode then
+    out.mode = raw.mode
   end
 
-  ---@type Hover.Config
-  local out = { mode = raw.mode, auto_hover = auto_hover }
+  if _touched.auto_hover then
+    -- `auto_hover` is `table<string,boolean>|boolean|string[]` -- a `true`/
+    -- `false` override is a valid value, not just the table forms, and
+    -- `vim.deepcopy` only takes a table. Only the table shapes need copying
+    -- to begin with, since a boolean has no shared identity to protect.
+    local auto_hover = raw.auto_hover
+    if type(auto_hover) == "table" then
+      auto_hover = vim.deepcopy(auto_hover)
+    end
+    out.auto_hover = auto_hover
+  end
+
   for _, name in ipairs(switches.names()) do
-    local spec = switches.spec(name)
-    if spec then
-      set_at(out, spec.path, get_at(raw, spec.path) == true)
+    if _touched[name] then
+      local spec = switches.spec(name)
+      if spec then
+        set_at(out, spec.path, get_at(raw, spec.path) == true)
+      end
     end
   end
   return out
@@ -196,6 +258,13 @@ end
 --- `persist` is on. Called once, from `enable()`, after the installation
 --- spec's own `opts` -- see the module description for why the order is
 --- what makes this the reader's last word rather than the spec's.
+---
+--- **Re-touches every field it applies.** A field on disk got there because
+--- some earlier session's `M.touch` put it there -- this session inherits
+--- that explicitness, which is what lets a toggle survive *every* session
+--- from then on rather than only the next one: without this, a session in
+--- which the reader touches nothing would snapshot an empty `_touched` at
+--- exit and silently drop everything a previous session had persisted.
 ---@param opts? { dir?: string, ttl_seconds?: integer } # `dir` override, for the test suite.
 ---@return nil
 function M.load(opts)
@@ -207,8 +276,25 @@ function M.load(opts)
     return
   end
   local saved = d.load(NAMESPACE, opts)
-  if type(saved) == "table" then
-    require("hover.config").setup(sanitize(saved))
+  if type(saved) ~= "table" then
+    return
+  end
+
+  local sanitized = sanitize(saved)
+  require("hover.config").setup(sanitized)
+
+  if sanitized.mode ~= nil then
+    M.touch("mode")
+  end
+  if sanitized.auto_hover ~= nil then
+    M.touch("auto_hover")
+  end
+  local switches = require("hover.switches")
+  for _, name in ipairs(switches.names()) do
+    local spec = switches.spec(name)
+    if spec and get_at(sanitized, spec.path) ~= nil then
+      M.touch(name)
+    end
   end
 end
 
