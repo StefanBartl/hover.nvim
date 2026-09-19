@@ -241,7 +241,11 @@ function M.preview(target, opts, on_result)
   local output = output_path(target.path, key)
   _running[key] = true
 
-  pdfport.create({
+  -- `pcall`: a call into pdfport is a system boundary (`ERR-01`), and this
+  -- one mutates `_running` before it runs -- a raise here must not leave
+  -- that entry stuck, which is what every later hover of this document would
+  -- read as "still converting" forever.
+  local ok_create, err_create = pcall(pdfport.create, {
     inputs = { target.path },
     output = output,
     -- Explicit rather than guessed from the extension: pdfport's own guesser
@@ -273,6 +277,10 @@ function M.preview(target, opts, on_result)
       end)
     end,
   })
+  if not ok_create then
+    _running[key] = nil
+    return badge(target, "(conversion failed: " .. tostring(err_create) .. ")")
+  end
 
   return vim.tbl_extend("force", badge(target, "converting to PDF…"), { pending = true })
 end

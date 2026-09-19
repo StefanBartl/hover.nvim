@@ -307,6 +307,47 @@ describe("hover.preview.office.preview", function()
   end)
 
   it(
+    "reports a raise from pdfport.create as a badge, instead of letting it escape (ERR-01)",
+    function()
+      -- `pdfport.create` is a foreign plugin's API, and a system boundary
+      -- (`ERR-01`) -- a raise here used to propagate straight out of
+      -- `M.preview`, and leave `_running[key]` stuck `true` for the rest of
+      -- the session (`office.lua`'s own `_running` note).
+      local path = write_doc(root, "report.docx")
+      local target = { type = "office", raw = path, path = path, ext = "docx", size = 1 }
+      package.loaded["pdfport"] = {
+        can_create = function()
+          return true
+        end,
+        create = function()
+          error("boom: pdfport.create raised")
+        end,
+      }
+
+      local content
+      assert.has_no.errors(function()
+        content = office.preview(target, { office_convert = true }, function() end)
+      end)
+
+      assert.is_truthy(table.concat(content.lines, "\n"):find("conversion failed", 1, true))
+      assert.is_nil(content.pending, "a raised create() still marked the badge pending")
+
+      -- `_running[key]` must not be left stuck: a second hover of the same
+      -- document has to try again, not answer "converting…" forever.
+      package.loaded["pdfport"] = {
+        can_create = function()
+          return true
+        end,
+        create = function(spec)
+          spec.__callback({ status = "ok", path = expected_output_path(path) })
+        end,
+      }
+      local retry = office.preview(target, { office_convert = true }, function() end)
+      assert.is_true(retry.pending, "a stuck _running[key] refused to try converting again")
+    end
+  )
+
+  it(
     "reports a conversion failure through on_result rather than leaving the badge pending forever",
     function()
       local path = write_doc(root, "report.docx")
