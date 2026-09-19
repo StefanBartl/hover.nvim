@@ -48,10 +48,14 @@ local function store()
 end
 
 --- Identity of a target for caching. Includes mtime, so an edited file is
---- re-read rather than served stale.
+--- re-read rather than served stale. Also includes the line (and end line)
+--- the source named, when it named one -- `init.lua:42` and `init.lua:100`
+--- are the same `target.raw` (the source's own `:line` suffix is stripped
+--- before this is ever reached), but not the same preview.
 ---@param target Hover.Target
+---@param opts Hover.PreviewOpts|nil
 ---@return string
-function M.key(target)
+function M.key(target, opts)
   local mtime = ""
   if target.path then
     local uv = vim.uv or vim.loop
@@ -60,8 +64,10 @@ function M.key(target)
       mtime = tostring(stat.mtime.sec)
     end
   end
+  local line = (opts and type(opts.line) == "number") and tostring(opts.line) or ""
+  local line_end = (opts and type(opts.line_end) == "number") and tostring(opts.line_end) or ""
   return table.concat(
-    { target.type, target.raw, target.path or "", target.anchor or "", mtime },
+    { target.type, target.raw, target.path or "", target.anchor or "", mtime, line, line_end },
     "|"
   )
 end

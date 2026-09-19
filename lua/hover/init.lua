@@ -852,7 +852,7 @@ function M.show(opts)
   -- for a request and waits to be told it may for a trigger.
   preview_opts.requested = opts.force == true
 
-  local key = cache.key(target)
+  local key = cache.key(target, preview_opts)
   local cached = cache.get(key)
 
   ---@param content Hover.Content|nil
