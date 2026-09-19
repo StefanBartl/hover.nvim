@@ -830,17 +830,34 @@ function M.show(opts)
   -- `on_result` callback the still-running convert/render holds: its answer
   -- lands against a generation that has since moved on and `guarded` drops it
   -- silently. The result was cached correctly the whole time -- `cache.put`
-  -- does not check the generation -- so the fix looked like "it only updates
+  -- does not check the generation -- so the bug looked like "it only updates
   -- after you leave the link and come back", which is exactly what a fresh
-  -- `show()` for the same target does: a plain cache hit. Skipping the bump
-  -- here for an unchanged, still-pending target leaves the original
-  -- generation intact for the callback that is actually going to answer it.
-  -- Found 2026-09-19.
-  if not opts.force and _open and _open.pending and identity(target) == identity(_open.target) then
-    return true
+  -- `show()` for the same target does: a plain cache hit.
+  --
+  -- The fix is only this: a plain re-trigger for the *same* target does not
+  -- get a new generation. Everything else below still runs exactly as it
+  -- always did -- `cache.get` is still checked fresh, `build()` is still
+  -- called if there is no hit yet -- so this never *skips* work, it only
+  -- keeps the number steady that the original render's callback is holding.
+  --
+  -- An earlier version of this fix (still 2026-09-19) instead set a `pending`
+  -- flag on `_open` and returned early while it was set, skipping `build()`
+  -- entirely for a same-target re-trigger. That flag turned out to have no
+  -- reliable place to clear: `office.lua`/`webpdf.lua`/`shot.lua` each dedup
+  -- their own in-flight request on a single boolean, not a waiter list, so a
+  -- second call made while the first is still running gets back a synchronous
+  -- placeholder and its `on_result` is simply never invoked -- orphaned, same
+  -- as the bug this was fixing, just one level down. The same is true for
+  -- `opts.force` (which deliberately bypassed the flag) and for a target
+  -- whose build legitimately/terminally resolves to `nil` (an anchor no
+  -- plugin claimed, a failed crop). Every one of those left the flag stuck
+  -- `true` forever, which then made *every later* trigger on that target a
+  -- silent no-op -- worse than the original bug, and permanent rather than
+  -- "until you leave and come back". A generation number has no such stuck
+  -- state: it either matches or it does not, there is nothing to leak.
+  if opts.force or not _open or identity(target) ~= identity(_open.target) then
+    _generation = _generation + 1
   end
-
-  _generation = _generation + 1
   local generation = _generation
 
   keys.release()
@@ -855,7 +872,6 @@ function M.show(opts)
     page = 1,
     requested = opts.force == true or nil,
   }
-  local open_ref = _open
 
   -- Deliberately not widened by `force`. Volume gates open for an explicit
   -- request; the fetch does not, because a keypress asking "what is this"
@@ -888,15 +904,9 @@ function M.show(opts)
     return true
   end
 
-  -- Marks this open target as having a render in flight, so a same-target
-  -- re-trigger above leaves its generation alone instead of orphaning it.
-  -- Set on `open_ref`, not `_open`, so a later call that replaces `_open`
-  -- with a different target is never affected by this one settling late.
-  open_ref.pending = true
   build(target, bufnr, preview_opts, function(content)
     if content and not content.pending then
       cache.put(key, content)
-      open_ref.pending = false
     end
     guarded(content)
   end)
