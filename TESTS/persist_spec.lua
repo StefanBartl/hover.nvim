@@ -93,6 +93,22 @@ describe("hover.persist", function()
       local snap = persist.snapshot()
       assert.is_nil(snap.border)
     end)
+
+    it("writes back only the auto_hover type actually toggled, not every type", function()
+      -- `auto_hover` is itself multi-key -- `:Hover auto file` must not be
+      -- read as "the whole field was touched", or the snapshot would carry
+      -- every type `DEFAULTS.auto_hover` expands to, including ones the
+      -- installation spec alone ever set.
+      config.setup({ persist = true, auto_hover = { image = true, file = false } })
+      hover.set_auto("file")
+
+      local snap = persist.snapshot()
+      assert.is_boolean(snap.auto_hover.file)
+      assert.is_nil(
+        snap.auto_hover.image,
+        "an untouched type was captured alongside the toggled one"
+      )
+    end)
   end)
 
   describe("save and load", function()
@@ -151,6 +167,34 @@ describe("hover.persist", function()
       -- value, exactly as the previous test already establishes.
       assert.is_true(config.web_enabled())
     end)
+
+    it(
+      "lets a spec edit for one untouched auto_hover type survive touching a different type",
+      function()
+        -- The exact scenario the field-level LUA-87 fix left open one level
+        -- down: session one's spec sets both `image` and `file`, and the
+        -- reader only ever toggles `file` at runtime. Session two's spec edit
+        -- for `image` -- a type nothing touched in either session -- must
+        -- still take effect after `load()`.
+        config.setup({ persist = true, auto_hover = { image = true, file = false } })
+        hover.set_auto("file")
+        assert.is_true(config.auto_hover_for("file"))
+        persist.save({ dir = dir })
+
+        config.reset()
+        persist.reset()
+        config.setup({ persist = true, auto_hover = { image = false, file = false } })
+        persist.load({ dir = dir })
+
+        assert.is_false(
+          config.auto_hover_for("image"),
+          "the untouched type's old snapshot value overrode the reader's spec edit"
+        )
+        -- The type the reader did touch still wins over its own new spec
+        -- value, same as a switch or mode does.
+        assert.is_true(config.auto_hover_for("file"))
+      end
+    )
 
     it("carries mode, including off", function()
       config.setup({ persist = true })

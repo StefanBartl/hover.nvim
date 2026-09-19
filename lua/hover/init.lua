@@ -2019,7 +2019,10 @@ function M.set_auto(which)
 
   local now = not config.auto_hover_for(which)
   raw.auto_hover[which] = now
-  require("hover.persist").touch("auto_hover")
+  -- Only `which` was touched, not every type -- see `hover.persist.touch`'s
+  -- `subkey` parameter, and the module doc's account of the bug this once
+  -- was (a single `:Hover auto <type>` persisting the whole table).
+  require("hover.persist").touch("auto_hover", which)
   return ("%s %s by itself"):format(which, now and "opens" or "does not open")
 end
 

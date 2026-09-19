@@ -34,7 +34,10 @@
 --- three axes `:Hover dashboard` reports, and nothing more: `border`,
 --- `max_lines`, the `_keys` tables and every layout or keybinding option
 --- stay in the installation spec, where a reader can see them. Of those
---- three axes, only the ones the reader actually touched are ever written.
+--- three axes, only the ones the reader actually touched are ever written --
+--- and `auto_hover`, itself one boolean per target type, is tracked at that
+--- same per-type grain: `:Hover auto file` persists `file` alone, not every
+--- type `DEFAULTS.auto_hover` happens to expand to.
 ---
 --- **Loaded at `enable()`, after the installation spec's own `opts` are
 --- merged in.** `M.load` is `config.setup(sanitize(snapshot))` under another
@@ -69,22 +72,48 @@ local M = {}
 --- file at `stdpath("cache")/lib.nvim/cache/hover/status.json`.
 local NAMESPACE = "hover/status"
 
----@type table<string, true> Fields the reader has explicitly set this
---- session -- `"mode"`, `"auto_hover"`, or a name from
+---@type table<string, true|table<string,true>> Fields the reader has
+--- explicitly set this session -- `"mode"`, `"auto_hover"`, or a name from
 --- `hover.switches.names()` -- through a runtime toggle path, or inherited
 --- from a snapshot `M.load` read back (see `M.touch`). `M.snapshot` writes
 --- only what is in here; nothing else ever adds to it.
+---
+--- `auto_hover` is the one field that is itself multi-key (one boolean per
+--- target type), so its entry can be either shape: `true` means "the whole
+--- table was touched at once" (`:Hover auto all|none`, or a boolean
+--- override), and a sub-table `{ [type] = true }` means only those
+--- particular types were touched (`:Hover auto file`) -- so `M.snapshot`
+--- can write back exactly those types and leave every other type, however
+--- many the installation spec expanded `DEFAULTS.auto_hover` into, alone.
 local _touched = {}
 
---- Mark `field` as explicitly set for the rest of this session, so
+--- Mark `field` -- or, for the multi-key `auto_hover` field, just `subkey`
+--- within it -- as explicitly set for the rest of this session, so
 --- `M.snapshot` writes it back. Called only from the three runtime toggle
 --- paths (`hover.switches.set`, `hover.set_mode`, `hover.set_auto`) and from
 --- `M.load` itself -- never from `config.setup`, whose values came from an
 --- installation spec, not from the reader (`LUA-87`).
+---
+--- Once a field is touched as a whole (`subkey` omitted), a later per-`subkey`
+--- touch is a no-op: the whole-field mark already covers every subkey, and
+--- narrowing it back to a sub-table here would forget that.
 ---@param field string
+---@param subkey? string only meaningful for `field == "auto_hover"`
 ---@return nil
-function M.touch(field)
-  _touched[field] = true
+function M.touch(field, subkey)
+  if subkey == nil then
+    _touched[field] = true
+    return
+  end
+  if _touched[field] == true then
+    return
+  end
+  local entry = _touched[field]
+  if type(entry) ~= "table" then
+    entry = {}
+    _touched[field] = entry
+  end
+  entry[subkey] = true
 end
 
 --- Forget every field marked touched. Exists for the test suite, which
@@ -157,10 +186,26 @@ function M.snapshot()
     -- `vim.deepcopy` only takes a table. Only the table shapes need copying
     -- to begin with, since a boolean has no shared identity to protect.
     local auto_hover = raw.auto_hover
-    if type(auto_hover) == "table" then
-      auto_hover = vim.deepcopy(auto_hover)
+    if type(_touched.auto_hover) == "table" and type(auto_hover) == "table" then
+      -- Only specific types were touched this session (`:Hover auto file`)
+      -- -- write back exactly those, not the whole table. `raw.auto_hover`
+      -- is always fully expanded to every known type by this point (spec ->
+      -- DEFAULTS merge), so copying it whole here would silently persist
+      -- every type the installation spec ever set, one level below the
+      -- field-level fix `LUA-87` already made.
+      local partial = {}
+      for name in pairs(_touched.auto_hover) do
+        if auto_hover[name] ~= nil then
+          partial[name] = auto_hover[name]
+        end
+      end
+      out.auto_hover = partial
+    else
+      if type(auto_hover) == "table" then
+        auto_hover = vim.deepcopy(auto_hover)
+      end
+      out.auto_hover = auto_hover
     end
-    out.auto_hover = auto_hover
   end
 
   for _, name in ipairs(switches.names()) do
@@ -265,6 +310,11 @@ end
 --- from then on rather than only the next one: without this, a session in
 --- which the reader touches nothing would snapshot an empty `_touched` at
 --- exit and silently drop everything a previous session had persisted.
+--- `auto_hover`'s table form re-touches per key rather than as a whole,
+--- mirroring `M.snapshot`'s write side: only the types the snapshot actually
+--- carried (because some earlier session touched exactly those) come back
+--- touched, so a type the disk snapshot never had a say in stays open to a
+--- spec edit even after a `load()`.
 ---@param opts? { dir?: string, ttl_seconds?: integer } # `dir` override, for the test suite.
 ---@return nil
 function M.load(opts)
@@ -286,8 +336,12 @@ function M.load(opts)
   if sanitized.mode ~= nil then
     M.touch("mode")
   end
-  if sanitized.auto_hover ~= nil then
+  if type(sanitized.auto_hover) == "boolean" then
     M.touch("auto_hover")
+  elseif type(sanitized.auto_hover) == "table" then
+    for name in pairs(sanitized.auto_hover) do
+      M.touch("auto_hover", name)
+    end
   end
   local switches = require("hover.switches")
   for _, name in ipairs(switches.names()) do
