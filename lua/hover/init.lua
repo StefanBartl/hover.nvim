@@ -1249,9 +1249,17 @@ function M.open()
     local ok_player, argv = pcall(function()
       return require("media.core.play").player()
     end)
-    if ok_player and argv and pcall(media.play, what) then
-      M.hide()
-      return true
+    if ok_player and argv then
+      -- Two different questions: did the call raise, and did `media.play`
+      -- itself say the hand-off worked. `pcall`'s own success flag is not
+      -- that second answer -- `pcall(f)` reports `true` for any `f` that
+      -- returns without erroring, including one that returns `false` on
+      -- purpose (`LLS-31`; see the identical note in preview/external.lua).
+      local ok_play, played = pcall(media.play, what)
+      if ok_play and played == true then
+        M.hide()
+        return true
+      end
     end
   end
 
@@ -1295,8 +1303,12 @@ function M.open()
   end
 
   if type(vim.ui.open) == "function" then
-    local ok_ui = pcall(vim.ui.open, what)
-    if ok_ui then
+    -- `vim.ui.open` reports failure by *returning* `nil, errmsg` rather than
+    -- raising, so `pcall`'s own success flag says nothing about whether it
+    -- opened anything (`LLS-31`). Its first return is the job object on
+    -- success, `nil` on failure -- that is the actual answer to check.
+    local ok_ui, handle = pcall(vim.ui.open, what)
+    if ok_ui and handle then
       M.hide()
       return true
     end

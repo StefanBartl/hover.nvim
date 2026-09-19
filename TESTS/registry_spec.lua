@@ -824,6 +824,12 @@ describe("opening what the hover shows", function()
     ---@diagnostic disable-next-line: duplicate-set-field
     vim.ui.open = function(what)
       seen = what
+      -- The real `vim.ui.open` answers `(SystemObj|nil, string|nil)`: a
+      -- truthy job object on success, `nil` plus a message on failure. A
+      -- stub that returns nothing would look like a failure to the
+      -- `LLS-31` fix below, which reads this return rather than only
+      -- `pcall`'s own success flag.
+      return { fake_job = true }
     end
 
     hover_on("see ./real.md ok", "./real")
@@ -834,6 +840,30 @@ describe("opening what the hover shows", function()
 
     assert.is_true(opened)
     assert.is_truthy(seen and seen:find("real.md", 1, true))
+  end)
+
+  it("does not report success when vim.ui.open declines without raising (LLS-31)", function()
+    -- `vim.ui.open` reports "nothing could open this" by *returning*
+    -- `nil, errmsg`, not by raising -- so `pcall`'s own success flag says
+    -- nothing about whether anything actually opened.
+    package.loaded["open"] = nil
+    local preload = package.preload["open"]
+    package.preload["open"] = function()
+      error("module 'open' not found")
+    end
+    local real_ui = vim.ui.open
+    ---@diagnostic disable-next-line: duplicate-set-field
+    vim.ui.open = function()
+      return nil, "no handler for this file type"
+    end
+
+    hover_on("see ./real.md ok", "./real")
+    local opened = hover.open()
+
+    vim.ui.open = real_ui
+    package.preload["open"] = preload
+
+    assert.is_false(opened, "a declined vim.ui.open was reported as having opened something")
   end)
 end)
 
