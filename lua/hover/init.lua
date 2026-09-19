@@ -1937,6 +1937,9 @@ function M.set_mode(mode, opts)
 
   _suppressed = nil
   config.raw().mode = mode
+  -- A reader's own act, not the installation spec's -- stays explicit across
+  -- sessions until set again. See `hover.persist.touch` (`LUA-87`).
+  require("hover.persist").touch("mode")
   -- `vim.g` is where a user says this from a plugin spec, before anything
   -- loads. Keeping the two in step means one setting rather than two that
   -- can disagree.
@@ -2002,6 +2005,9 @@ function M.set_auto(which)
     for _, name in ipairs(names) do
       raw.auto_hover[name] = value
     end
+    -- A reader's own act, not the installation spec's -- stays explicit
+    -- across sessions until set again. See `hover.persist.touch` (`LUA-87`).
+    require("hover.persist").touch("auto_hover")
     return value and "every type opens by itself"
       or "nothing opens by itself (`:Hover show` still answers)"
   end
@@ -2013,6 +2019,7 @@ function M.set_auto(which)
 
   local now = not config.auto_hover_for(which)
   raw.auto_hover[which] = now
+  require("hover.persist").touch("auto_hover")
   return ("%s %s by itself"):format(which, now and "opens" or "does not open")
 end
 

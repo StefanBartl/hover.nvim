@@ -2,27 +2,32 @@
 -- The test body is the guard; see the note in TESTS/bare_path_spec.lua
 -- (`LLS-42`).
 
--- TESTS/persist_spec.lua -- `persist`, on by default, and the two properties
--- that make that safe: `false` genuinely turns it off again, and a snapshot
--- shaped exactly like the `opts` an installation spec would pass, so a round
--- trip through disk changes nothing this plugin does not already merge on
--- every `setup()` call.
+-- TESTS/persist_spec.lua -- `persist`, on by default, and the three
+-- properties that make that safe: `false` genuinely turns it off again, a
+-- snapshot shaped like the subset of `opts` an installation spec would pass
+-- (so a round trip through disk changes nothing this plugin does not already
+-- merge on every `setup()` call), and -- the property `LUA-87` was missing --
+-- only a field the reader actually toggled at runtime is ever in it, so a
+-- spec-only value stays editable forever.
 
 local config = require("hover.config")
 local switches = require("hover.switches")
 local persist = require("hover.persist")
+local hover = require("hover")
 
 describe("hover.persist", function()
   local dir
 
   before_each(function()
     config.reset()
+    persist.reset()
     vim.g.hover_disable = nil
     dir = vim.fn.tempname()
   end)
 
   after_each(function()
     config.reset()
+    persist.reset()
     vim.g.hover_disable = nil
     vim.fn.delete(dir, "rf")
   end)
@@ -56,20 +61,35 @@ describe("hover.persist", function()
   end)
 
   describe("snapshot", function()
-    it("carries mode, auto_hover and every switch's own flag", function()
-      config.setup({ persist = true, mode = "manual" })
+    it("carries mode, auto_hover and a switch once each is toggled at runtime", function()
+      config.setup({ persist = true })
+      hover.set_mode("manual", { silent = true })
       switches.set("web", true, { silent = true })
+      hover.set_auto("file")
 
       local snap = persist.snapshot()
       assert.equals("manual", snap.mode)
       assert.is_true(snap.links.web)
       assert.is_true(snap.links.enabled, "an implied switch is not in the snapshot")
-      assert.is_true(snap.paths.enabled)
-      assert.is_boolean(snap.auto_hover.image)
+      assert.is_boolean(snap.auto_hover.file)
+    end)
+
+    it("leaves out a field the spec set but the reader never touched (LUA-87)", function()
+      -- `office` here comes entirely from the installation spec's own
+      -- `opts`, never from a runtime toggle -- so it must not appear at all,
+      -- or the next `enable()` would write it straight back over whatever
+      -- the reader edits the spec to say next.
+      config.setup({ persist = true, mode = "manual", office = { convert = true } })
+
+      local snap = persist.snapshot()
+      assert.is_nil(snap.mode, "a spec-set mode was captured as if it had been toggled")
+      assert.is_nil(snap.office, "a spec-set switch was captured as if it had been toggled")
+      assert.is_nil(snap.auto_hover)
     end)
 
     it("does not carry layout options such as border", function()
       config.setup({ persist = true, border = "double" })
+      switches.set("web", true, { silent = true })
       local snap = persist.snapshot()
       assert.is_nil(snap.border)
     end)
@@ -106,11 +126,39 @@ describe("hover.persist", function()
       assert.is_true(config.office_enabled())
     end)
 
+    it("lets a spec edit for an untouched field take effect after a restart (LUA-87)", function()
+      -- Session one: `office` comes entirely from the installation spec, and
+      -- the reader never runs `:Hover office ...` -- only an unrelated
+      -- switch is toggled at runtime, to prove that one field's explicitness
+      -- does not leak onto another.
+      config.setup({ persist = true, office = { convert = false } })
+      switches.set("web", true, { silent = true })
+      persist.save({ dir = dir })
+
+      -- Session two, "a restart": both modules reset the way a fresh Neovim
+      -- process would start them, and the reader has since edited the
+      -- installation spec to ask for `office = true`.
+      config.reset()
+      persist.reset()
+      config.setup({ persist = true, office = { convert = true } })
+      persist.load({ dir = dir })
+
+      assert.is_true(
+        config.office_enabled(),
+        "an untouched field's snapshot of the OLD spec value overrode the reader's spec edit"
+      )
+      -- The field the reader did touch still wins over its own new spec
+      -- value, exactly as the previous test already establishes.
+      assert.is_true(config.web_enabled())
+    end)
+
     it("carries mode, including off", function()
-      config.setup({ persist = true, mode = "manual" })
+      config.setup({ persist = true })
+      hover.set_mode("manual", { silent = true })
       persist.save({ dir = dir })
 
       config.reset()
+      persist.reset()
       config.setup({ persist = true })
       persist.load({ dir = dir })
       assert.equals("manual", config.mode())
