@@ -362,6 +362,12 @@ session or an earlier one — a plain `setup()` call, however many times you mak
 counts. Once touched, a field keeps outliving every quiet session after it, not just the
 next one, until you toggle it back to match the spec (or turn `persist` off).
 
+`auto_hover` is one boolean per target type, and this is tracked at that same grain: `:Hover
+auto file` writes back `file` alone, not every type your spec happens to set. Editing the
+spec's `image` entry still takes effect next session even after you have toggled `file` at
+runtime — only `:Hover auto all`/`:Hover auto none` (or a boolean `auto_hover` override)
+touches every type at once.
+
 `persist = false` is for the opposite: a session-only override — chasing one broken link
 — that a config edit would be the wrong tool for.
 
