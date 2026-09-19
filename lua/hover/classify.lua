@@ -13,6 +13,7 @@
 local M = {}
 
 local uv = vim.uv or vim.loop
+local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 --- Extensions that get a picture-shaped preview. Kept in sync with
 --- `markdown.handler.image`'s own notion of "this is an image" by intent;
@@ -49,7 +50,9 @@ end
 ---@param source_path string|nil
 ---@return string
 local function resolve_path(target, source_path)
-  local expanded = vim.fn.expand(target)
+  -- expand_path, not vim.fn.expand (SEC-34): `target` is a markdown link
+  -- target parsed out of the document, not a Vim cmdline special.
+  local expanded = expand_path(target)
   if expanded:match("^/") or expanded:match("^%a:[\\/]") or expanded:match("^[\\/][\\/]") then
     return vim.fs.normalize(expanded)
   end
