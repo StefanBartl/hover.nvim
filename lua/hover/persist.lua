@@ -144,6 +144,54 @@ function M.save(opts)
   d.save(NAMESPACE, M.snapshot(), opts)
 end
 
+---@internal
+--- Re-derive a safe `Hover.Config` shape from an untrusted snapshot.
+---
+--- The file on disk is a snapshot `M.snapshot()` wrote, but it is read back
+--- as untrusted (`SEC-33`): hand-edited, half-written by a crash, or written
+--- by an older version of this plugin with a different shape. Only the keys
+--- `M.snapshot()` itself ever produces are copied over, and each is checked
+--- for the one type it could only ever have been written as -- a `mode` that
+--- is not a string, a switch that is not a boolean, or any key this function
+--- does not know about is dropped rather than merged in. `mode`'s *value*
+--- (as opposed to its type) is re-checked downstream by `config.setup`
+--- (`ERR-22`); everything else has no such second gate, which is what made
+--- the unfiltered merge reachable in the first place.
+---@param saved table
+---@return Hover.Config
+local function sanitize(saved)
+  ---@type Hover.Config
+  local out = {}
+
+  if type(saved.mode) == "string" then
+    out.mode = saved.mode
+  end
+
+  local auto_hover = saved.auto_hover
+  if type(auto_hover) == "boolean" then
+    out.auto_hover = auto_hover
+  elseif type(auto_hover) == "table" then
+    local clean = {}
+    for name, value in pairs(auto_hover) do
+      if type(name) == "string" and type(value) == "boolean" then
+        clean[name] = value
+      end
+    end
+    out.auto_hover = clean
+  end
+
+  local switches = require("hover.switches")
+  for _, name in ipairs(switches.names()) do
+    local spec = switches.spec(name)
+    local value = spec and get_at(saved, spec.path)
+    if spec and type(value) == "boolean" then
+      set_at(out, spec.path, value)
+    end
+  end
+
+  return out
+end
+
 --- Load the last session's snapshot over the merged configuration, when
 --- `persist` is on. Called once, from `enable()`, after the installation
 --- spec's own `opts` -- see the module description for why the order is
@@ -160,7 +208,7 @@ function M.load(opts)
   end
   local saved = d.load(NAMESPACE, opts)
   if type(saved) == "table" then
-    require("hover.config").setup(saved)
+    require("hover.config").setup(sanitize(saved))
   end
 end
 
