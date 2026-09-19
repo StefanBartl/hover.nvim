@@ -202,6 +202,51 @@ describe("hover.preview.shot", function()
       assert.same(1, vim.fn.executable(found), ("%q is not executable"):format(found))
     end
   end)
+
+  it("stops and closes a pending render's timer when another page cancels it (PERF-62)", function()
+    -- `cancel()` is reached from inside `M.preview` the moment a second,
+    -- different page is asked for while the first is still waiting out its
+    -- `shot_delay_ms` window -- stopping the timer without also closing it
+    -- leaves the libuv handle registered on the loop for the rest of the
+    -- process. Both calls are faked here rather than waited for, so this
+    -- proves what is called and not merely that nothing crashes.
+    local real_defer = vim.defer_fn
+    local real_provider = package.loaded["lib.nvim.image_preview"]
+    package.loaded["lib.nvim.image_preview"] = {
+      detect = function()
+        return "fake-provider"
+      end,
+    }
+    local stopped, closed = false, false
+    vim.defer_fn = function()
+      return {
+        stop = function()
+          stopped = true
+        end,
+        close = function()
+          closed = true
+        end,
+      }
+    end
+
+    local o = opts({ shot_command = "/fake/browser", requested = false })
+    shot.preview(
+      { type = "url", raw = "https://example.com/a", url = "https://example.com/a" },
+      o,
+      function() end
+    )
+    shot.preview(
+      { type = "url", raw = "https://example.com/b", url = "https://example.com/b" },
+      o,
+      function() end
+    )
+
+    vim.defer_fn = real_defer
+    package.loaded["lib.nvim.image_preview"] = real_provider
+
+    assert.is_true(stopped, "cancel() did not stop the superseded timer")
+    assert.is_true(closed, "cancel() stopped the timer but never closed it")
+  end)
 end)
 
 describe("what opens a browser, and what does not", function()

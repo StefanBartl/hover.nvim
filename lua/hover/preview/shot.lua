@@ -283,6 +283,7 @@ local function cancel()
   if _pending then
     pcall(function()
       _pending.timer:stop()
+      _pending.timer:close()
     end)
     _pending = nil
   end
