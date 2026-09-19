@@ -35,6 +35,7 @@
 local M = {}
 
 local api = vim.api
+local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 ---@internal
 --- The `/`- and `\`-separated components of `str`, empties dropped.
@@ -311,7 +312,9 @@ local function via_cfile(bufnr)
   end
 
   local uv = vim.uv or vim.loop
-  local expanded = vim.fn.expand(path)
+  -- expand_path, not vim.fn.expand (SEC-34): `path` is text under the
+  -- cursor / from the buffer, not a Vim cmdline special.
+  local expanded = expand_path(path)
 
   -- Absolute already: hand it back untouched.
   if expanded:match("^/") or expanded:match("^%a:[\\/]") or expanded:match("^[\\/][\\/]") then
