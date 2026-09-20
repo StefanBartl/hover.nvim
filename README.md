@@ -61,19 +61,19 @@ written as plain text — and a small float shows what it points at.
 Start at [docs/README.md](docs/README.md) — what's where, and which question
 each page answers.
 
-**The Basics**
+### The Basics
 
 - [Requirements](docs/installation.md#requirements) — Neovim version, required plugins and CLI tools.
 - [Installation](docs/installation.md) — plugin managers and load-trigger variants.
 - [Quickstart](docs/quickstart.md) — the first thing to run after installing.
 
-**Configuration**
+### Configuration
 
 - [What you get with the defaults](docs/what-you-get.md) — the six routes that carry most of the daily use.
 - [All options](docs/configuration.md) — every `setup()` option and its default.
 - [Commands](docs/commands.md) / [Bindings cheatsheet](docs/BINDINGS.md)
 
-**The Rest**
+### The Rest
 
 - [What it does and what not](docs/scope.md) — the reference table, at a glance.
 - [Why it does it that way](docs/FEATURES/README.md) — one page per decision, with the measurement behind each.

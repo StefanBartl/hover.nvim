@@ -94,7 +94,7 @@ rather than from taste. Two details make the coupling behave:
 - **Leaving zen releases only a pin zen itself took.** A float pinned by hand
   before going full screen stays pinned after coming back, and `:Hover pin`
   pressed while in zen hands ownership of the pin back to the reader.
-- **The pin marker survives a re-render.** `📌` is a prefix on the border
+- **The pin marker survives a re-render.** It is a prefix on the border
   title, which lives on the window — and `float.open` closes and reopens the
   window on every re-render. A pinned float being resized has silently lost its
   marker since pinning existed; it was survivable while pinning was a rare
