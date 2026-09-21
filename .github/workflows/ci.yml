@@ -91,12 +91,13 @@ jobs:
           bash scripts/test.sh
         env:
           HOVER_ALLOW_PENDING: "1"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: test-output-tests-${{ matrix.os }}
           path: ${{ runner.temp }}/test-output.log
           if-no-files-found: ignore
+          retention-days: 14
 
   # See lib.nvim's own templates/README.md ("Pinning lib.nvim in CI") for why:
   # ci-verified only moves once stylua+luacheck+tests are green here, so this
