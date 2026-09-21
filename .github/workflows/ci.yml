@@ -71,6 +71,7 @@ jobs:
         with:
           repository: StefanBartl/ui.nvim
           path: .deps/ui.nvim
+          ref: ci-verified
       - uses: actions/checkout@v5
         with:
           repository: nvim-lua/plenary.nvim
