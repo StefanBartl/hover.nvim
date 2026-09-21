@@ -27,6 +27,35 @@ local M = {}
 local api = vim.api
 local autocmd = require("lib.nvim.bindings.autocmd")
 
+--- What `attach` installed for each buffer: its augroup, and the id of every
+--- autocmd made through the wrapper -- what `forget` needs to take it all back.
+---@type table<integer, { group: integer, ids: integer[] }>
+local installed = {}
+
+---@internal
+--- Take back what `attach` installed for `bufnr`: every autocmd AND its record
+--- (`autocmd.delete`), then the group, which is empty by then.
+---
+--- A wiped buffer takes its buffer-local autocmds with it, but not their
+--- records in `lib.nvim.bindings.autocmd`, and not the group. Those are only
+--- dropped by `delete(id)` or by asking for the same group again -- and the name
+--- carries the buffer number, which is never asked for twice. Left alone, every
+--- buffer that was ever attached leaves two records and an empty augroup behind
+--- for the rest of the session.
+---@param bufnr integer
+---@return nil
+local function forget(bufnr)
+  local state = installed[bufnr]
+  installed[bufnr] = nil
+  if not state then
+    return
+  end
+  for _, id in ipairs(state.ids) do
+    pcall(autocmd.delete, id)
+  end
+  pcall(api.nvim_del_augroup_by_id, state.group)
+end
+
 ---@internal
 --- Deferred back-reference; see the note in `hover.bindings.keymaps`.
 ---@return table
@@ -99,6 +128,10 @@ function M.attach(bufnr)
   end
 
   local group = autocmd.group("HoverBuf" .. bufnr, true)
+  -- Asking for the group cleared it, records included, so a re-attach starts
+  -- from nothing here too.
+  local ids = {}
+  installed[bufnr] = { group = group, ids = ids }
 
   -- `mode = "manual"` gets the hide autocmds below and no trigger: an
   -- explicit `show({ force = true })` still answers in full, and nothing
@@ -107,7 +140,7 @@ function M.attach(bufnr)
     local triggers = config.get().trigger or { "CursorHold" }
 
     if vim.tbl_contains(triggers, "CursorHold") then
-      autocmd.create("CursorHold", function()
+      ids[#ids + 1] = autocmd.create("CursorHold", function()
         hover().trigger()
       end, {
         group = group,
@@ -117,7 +150,7 @@ function M.attach(bufnr)
     end
 
     if vim.tbl_contains(triggers, "cursor") then
-      autocmd.create("CursorMoved", function()
+      ids[#ids + 1] = autocmd.create("CursorMoved", function()
         hover().trigger()
       end, {
         group = group,
@@ -130,7 +163,7 @@ function M.attach(bufnr)
       -- Mouse hovering needs 'mousemoveevent'; it is a global user setting
       -- and is deliberately NOT set here (see the README) -- without it this
       -- autocmd simply never fires.
-      autocmd.create("CursorMoved", function()
+      ids[#ids + 1] = autocmd.create("CursorMoved", function()
         hover().trigger()
       end, {
         group = group,
@@ -140,7 +173,7 @@ function M.attach(bufnr)
     end
   end
 
-  autocmd.create({ "BufLeave", "InsertEnter" }, function()
+  ids[#ids + 1] = autocmd.create({ "BufLeave", "InsertEnter" }, function()
     -- Not `hide()`: leaving the buffer and entering insert are exactly the
     -- moments someone pinned a float *for*.
     hover().hide_unless_pinned()
@@ -148,6 +181,17 @@ function M.attach(bufnr)
     group = group,
     buffer = bufnr,
     desc = "[hover.nvim] hide when leaving the buffer or entering insert",
+  })
+
+  -- The buffer going away is the moment to take everything back (see `forget`).
+  -- Buffer-local, so it dies with the buffer like the others; its own record is
+  -- among the ids it deletes.
+  ids[#ids + 1] = autocmd.create("BufWipeout", function()
+    forget(bufnr)
+  end, {
+    group = group,
+    buffer = bufnr,
+    desc = "[hover.nvim] forget this buffer's autocmds and their records when it is wiped",
   })
 end
 
@@ -183,7 +227,8 @@ function M.enable()
   end
 end
 
---- Remove every autocmd this module installed, in every buffer.
+--- Remove every autocmd this module installed, in every buffer -- with their
+--- records and groups, not just the autocmds.
 ---
 --- Needed by the mode switch: going from "auto" to "manual" has to take the
 --- triggers away from buffers that already have them, and re-`enable()`
@@ -192,8 +237,20 @@ end
 ---@return nil
 function M.detach_all()
   pcall(autocmd.group, "HoverEnable", true)
+  local tracked = vim.tbl_keys(installed)
+  for _, buf in ipairs(tracked) do
+    forget(buf)
+  end
+  -- A group this module instance did not install (a reloaded module lost its
+  -- state, the autocmds stayed): clear it the old way, then drop it. Only where
+  -- one exists -- asking for a name creates the group.
   for _, buf in ipairs(api.nvim_list_bufs()) do
-    pcall(autocmd.group, "HoverBuf" .. buf, true)
+    if pcall(api.nvim_get_autocmds, { group = "HoverBuf" .. buf }) then
+      local ok, group = pcall(autocmd.group, "HoverBuf" .. buf, true)
+      if ok then
+        pcall(api.nvim_del_augroup_by_id, group)
+      end
+    end
   end
 end
 
