@@ -140,3 +140,8 @@ add_optional("IMAGES_NVIM_DIR", "images.nvim", "images.convert")
 --- consumes the contributor's real first-run popup for hover.nvim in their
 --- own Neovim, which it had been doing every time.
 vim.g.lib_nvim_deps_disable_first_run = true
+
+-- Swap and shada stay off for the whole suite, including plenary's child
+-- processes that reuse this file: stale swap files fail suites with E326.
+vim.o.swapfile = false
+vim.o.shadafile = "NONE"

@@ -77,7 +77,7 @@ fi
 log="$(mktemp)"
 trap 'rm -f "$log"' EXIT
 
-nvim --clean --headless -u scripts/minimal_init.lua -c "$cmd" 2>&1 | tee "$log"
+nvim -n --clean --headless -u scripts/minimal_init.lua -c "$cmd" 2>&1 | tee "$log"
 status=${PIPESTATUS[0]}
 
 # Strip the colour codes before counting: plenary writes "Pending" in yellow.

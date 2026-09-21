@@ -9,6 +9,7 @@ jobs:
   stylua:
     name: stylua (format check)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: JohnnyMorganz/stylua-action@v4
@@ -20,6 +21,7 @@ jobs:
   luacheck:
     name: luacheck (lint)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
       - uses: leafo/gh-actions-lua@v10
@@ -43,6 +45,7 @@ jobs:
   tests:
     name: plenary specs (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       # One platform failing must not cancel the others: which of the three
       # broke is the whole information content of this job.
@@ -72,6 +75,8 @@ jobs:
         with:
           repository: nvim-lua/plenary.nvim
           path: .deps/plenary.nvim
+          # Pinned to the 2026-09-20 HEAD; bump deliberately, not by drifting.
+          ref: 74b06c6c75e4eeb3108ec01852001636d85a932b
       - uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
@@ -80,9 +85,17 @@ jobs:
       # which a runner has, so it reports pending here by design. The runner
       # still prints and names every pending spec -- this only stops it from
       # failing the build over the one that is expected.
-      - run: bash scripts/test.sh
+      - run: |
+          exec > >(tee -a "$RUNNER_TEMP/test-output.log") 2>&1
+          bash scripts/test.sh
         env:
           HOVER_ALLOW_PENDING: "1"
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-output-tests-${{ matrix.os }}
+          path: ${{ runner.temp }}/test-output.log
+          if-no-files-found: ignore
 
   # See lib.nvim's own templates/README.md ("Pinning lib.nvim in CI") for why:
   # ci-verified only moves once stylua+luacheck+tests are green here, so this
@@ -93,6 +106,7 @@ jobs:
     needs: [stylua, luacheck, tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
