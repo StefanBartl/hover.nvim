@@ -262,6 +262,7 @@ first time they are needed.
 | `HoverBuf<n>` | `CursorHold` | one buffer | trigger, under the default trigger |
 | `HoverBuf<n>` | `CursorMoved` | one buffer | trigger, under `trigger = { "cursor" }` or `{ "mouse" }` |
 | `HoverBuf<n>` | `BufLeave`, `InsertEnter` | one buffer | `hide_unless_pinned()` — leaving the buffer and entering insert are exactly the moments something was pinned *for* |
+| `HoverBuf<n>` | `BufWipeout` | one buffer | take back everything this buffer's group installed: the autocmds, their records in `lib.nvim`'s autocmd registry, and the group itself. A wiped buffer drops its buffer-local autocmds, but the group name carries the buffer number, which is never asked for twice, so nothing else would ever drop the records or the empty group. `detach_all()` does the same for every attached buffer |
 | `HoverDismiss` | `CursorMoved`, `CursorMovedI`, `InsertEnter`, `BufLeave`, `WinScrolled` | global, `once` | close the float that is open. `CursorMoved` alone would not do: leaving insert or switching windows must clear it too, or a stale float outlives what it described |
 | `HoverMedia` | `VimLeavePre` | global, once per session | delete the PNGs rasterized from PDF pages |
 | `HoverPersist` | `VimLeavePre` | global, once per session | write `mode`, `auto_hover` and every switch to disk, when `persist` is on |

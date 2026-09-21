@@ -44,7 +44,7 @@ is about that module specifically, as opposed to the module merely being
 | `bare_git.lua` | `bare_git_spec.lua` | |
 | `bare_path.lua` | `bare_path_spec.lua` | |
 | `bare_url.lua` | `bare_url_spec.lua` | added by the 2026-09-18 audit (see below) |
-| `bindings/autocmds.lua` | `registry_spec.lua` | `attach`/`anything_to_show`/`detach_all` all directly exercised |
+| `bindings/autocmds.lua` | `registry_spec.lua` | `attach`/`anything_to_show`/`detach_all` all directly exercised, including that a wiped buffer and `detach_all` take back the records and the group (`taking it back`) |
 | `bindings/init.lua` | — | three-line aggregator, no branching of its own; each of the three `setup()`s it calls is covered where it is used directly |
 | `bindings/keymaps.lua` | `playback_spec.lua`, `resize_spec.lua`, `zen_spec.lua`, `zoom_spec.lua`, `office`/`shot` via others | borrow/release behaviour asserted directly in each |
 | `bindings/usrcmds.lua` | `docs_spec.lua`, `resize_spec.lua`, `switches_spec.lua`, `zen_spec.lua`, `zoom_spec.lua` | route table cross-checked against `docs/commands.md` in `docs_spec.lua` |

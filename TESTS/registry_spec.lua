@@ -216,6 +216,77 @@ describe("attaching", function()
     end
     assert.is_true(moved > 0)
   end)
+
+  describe("taking it back", function()
+    local lib_autocmd = require("lib.nvim.bindings.autocmd")
+
+    ---@param b integer
+    ---@return integer
+    local function records(b)
+      return #lib_autocmd.registered({ group = "HoverBuf" .. b })
+    end
+
+    ---@param b integer
+    ---@return boolean
+    local function group_exists(b)
+      return (pcall(vim.api.nvim_get_autocmds, { group = "HoverBuf" .. b }))
+    end
+
+    it("attaches with records and a group of its own", function()
+      config.setup({ paths = { enabled = true } })
+      autocmds.attach(buf)
+      assert.is_true(records(buf) > 0)
+      assert.is_true(group_exists(buf))
+    end)
+
+    it("forgets the records and the group when the buffer is wiped", function()
+      -- The buffer-local autocmds die with the buffer, but their records in
+      -- lib.nvim's registry and the (now empty) augroup used to stay for good:
+      -- the group name carries the buffer number, which is never asked for
+      -- twice, so nothing ever dropped them. Two records and a group per
+      -- buffer ever attached.
+      config.setup({ paths = { enabled = true } })
+      autocmds.attach(buf)
+      local name = "HoverBuf" .. buf
+      vim.api.nvim_buf_delete(buf, { force = true })
+      assert.equals(0, #lib_autocmd.registered({ group = name }))
+      assert.is_false(pcall(vim.api.nvim_get_autocmds, { group = name }))
+    end)
+
+    it("does not accumulate over many buffers", function()
+      config.setup({ paths = { enabled = true } })
+      local before = #lib_autocmd.registered()
+      for _ = 1, 20 do
+        local b = vim.api.nvim_create_buf(true, false)
+        autocmds.attach(b)
+        vim.api.nvim_buf_delete(b, { force = true })
+      end
+      assert.equals(before, #lib_autocmd.registered())
+    end)
+
+    it("a second attach of the same buffer does not stack records", function()
+      config.setup({ paths = { enabled = true } })
+      autocmds.attach(buf)
+      local once = records(buf)
+      autocmds.attach(buf)
+      assert.equals(once, records(buf))
+    end)
+
+    it("detach_all takes back records and groups, not only the autocmds", function()
+      config.setup({ paths = { enabled = true } })
+      autocmds.attach(buf)
+      assert.is_true(records(buf) > 0)
+      autocmds.detach_all()
+      assert.equals(0, records(buf))
+      assert.is_false(group_exists(buf))
+      assert.equals(0, hover_autocmds(buf))
+    end)
+
+    it("detach_all creates no group for a buffer that never had one", function()
+      autocmds.detach_all()
+      assert.is_false(group_exists(scratch))
+    end)
+  end)
 end)
 
 describe("the framework with no providers at all", function()
