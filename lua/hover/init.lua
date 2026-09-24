@@ -1753,7 +1753,7 @@ local function activate_selected()
   -- time -- and that one may since have closed, which the validity check is
   -- for. See `Hover.Open.win`.
   local win = _open.win
-  local ok = pcall(function()
+  local ok, err = pcall(function()
     if win and api.nvim_win_is_valid(win) then
       api.nvim_win_call(win, function()
         vim.cmd.edit(vim.fn.fnameescape(entry.path))
@@ -1764,6 +1764,12 @@ local function activate_selected()
   end)
   if ok then
     M.hide()
+  else
+    -- Rare with `hidden` on (Neovim's own default): `nohidden` plus unsaved
+    -- changes in the target window turns this into a real Ex error (E37),
+    -- and a silent `pcall` swallow would leave a reader pressing the same
+    -- key again with no idea why nothing happened.
+    require("hover.notify").warn(("could not open %s: %s"):format(entry.path, tostring(err)))
   end
   return ok
 end

@@ -37,7 +37,20 @@ function M.scan(dir)
     if not name then
       break
     end
-    local entry = { name = name, path = vim.fs.joinpath(dir, name), is_dir = kind == "directory" }
+    local path = vim.fs.joinpath(dir, name)
+    -- A symlink is reported as `kind == "link"`, whatever it points at --
+    -- `is_dir` is now what decides an *action* (enter it vs. open it as a
+    -- file), not only how a line is drawn, so a symlinked directory answering
+    -- `false` here would try to `:edit` a directory instead of listing it.
+    -- `fs_stat` follows the link; a broken one answers nil and falls back to
+    -- "not a directory", which is the least-wrong guess for a target that
+    -- cannot be resolved at all.
+    local is_dir = kind == "directory"
+    if kind == "link" then
+      local stat = uv.fs_stat(path)
+      is_dir = stat ~= nil and stat.type == "directory"
+    end
+    local entry = { name = name, path = path, is_dir = is_dir }
     if entry.is_dir then
       dirs[#dirs + 1] = entry
     else
