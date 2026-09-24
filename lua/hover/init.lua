@@ -857,26 +857,47 @@ function M.show(opts)
     target = classify.classify(found.target, source ~= "" and source or nil)
   end
 
-  -- **A directory hover mid-browse must not be reset by its own trigger.**
-  -- The float is `focusable = false`, so the real cursor never leaves the
-  -- literal directory path it started on -- `dir_nav`/`dir_click` only ever
-  -- rewrite `_open.target`, never move it. Under `CursorHold`, though, every
-  -- keystroke re-arms the trigger, "cursor movement or not" (see the note
-  -- further down): pressing `j` to move the selection, then pausing, fires
-  -- `show()` again with the cursor still reading the *original* path and
-  -- `opts.force` unset.
+  -- **An explicitly requested hover must not be reset by its own trigger.**
+  -- `directory` -- and `file`, `office`, `markdown`, `url`, `git`, every type
+  -- but `image`/`pdf` -- is off by default in `auto_hover`, which only gates
+  -- the *automatic* trigger; `:Hover show` / `keymaps.show` bypass it with
+  -- `force = true` and open regardless. Once open, though, pressing any key
+  -- that hover itself borrows (a scroll, a resize, a directory's `nav_keys`)
+  -- is still a keystroke, and `CursorHold` re-arms on any keystroke,
+  -- "cursor movement or not" (see the note further down) -- so a reader who
+  -- scrolls a forced-open `file` hover and then pauses gets `show()` called
+  -- again, unforced, with the cursor still reading the exact text that
+  -- opened it. Without this guard that reaches the "this type does not open
+  -- by itself" gate a few lines down and calls `M.hide()` outright -- not a
+  -- re-render, a close, in the middle of reading it. Confirmed empirically
+  -- for a plain forced-open `file` hover before this guard existed: `M.show({
+  -- force = true })` then `M.show({})` with the cursor untouched closed the
+  -- float outright.
   --
-  -- Placed ahead of the gates below rather than only ahead of the generation
-  -- bump: `directory` is not in `auto_hover` by default, so that unforced
-  -- re-trigger would otherwise reach the "this type does not open by itself"
-  -- gate a few lines down and call `M.hide()` outright -- not merely reset
-  -- the browse, but close the float entirely, mid-navigation, the moment a
-  -- reader paused after a keypress. `opts.force` still resets to the origin
-  -- on purpose: an explicit ask is "look again from scratch", the one case
-  -- this guard must not swallow.
+  -- **`_open.requested` is the right condition, not "any open hover".** An
+  -- *automatically* opened hover (an image, a PDF) never reaches the gate
+  -- this guards against -- `auto_hover_for` already answers true for it --
+  -- so leaving those on the normal re-render path is deliberate: a reread
+  -- that picks up a changed file, or a picture that started rendering and
+  -- has since finished, still happens for anything the trigger opened on its
+  -- own. Only a hover nobody but an explicit ask would have shown gets
+  -- frozen in place by a re-trigger it did not ask for either.
+  --
+  -- **`_open.dir_entries` stays as a second, standing condition.** A reader
+  -- who has opted `:Hover auto directory on` gets an *auto*-opened directory
+  -- hover -- `_open.requested` is unset for it, and the gate below would not
+  -- have closed it anyway (`auto_hover_for("directory")` already answers
+  -- true in that configuration). But it would still fall through to an
+  -- ordinary rebuild, which resets `dir_selected` back to the top the same
+  -- way a genuinely new directory does (see `present`'s note on `dir_dir`) --
+  -- jarring mid-navigation regardless of *how* the hover was opened. Either
+  -- condition alone would regress the other's case, so both are kept.
+  --
+  -- `opts.force` still resets to the origin on purpose: an explicit ask is
+  -- "look again from scratch", the one case this guard must not swallow.
   if
     _open
-    and _open.dir_entries
+    and (_open.requested or _open.dir_entries)
     and not opts.force
     and float.win()
     and _open.origin == identity(target)
