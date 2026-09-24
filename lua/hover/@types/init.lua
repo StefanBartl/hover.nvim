@@ -49,6 +49,7 @@
 ---@field scroll_keys? Hover.ScrollKeys
 ---@field resize_keys? Hover.ResizeKeys
 ---@field nav_keys? Hover.NavKeys
+---@field dir_keys? Hover.DirKeys
 ---@field position_keys? Hover.PositionKeys
 ---@field zoom_keys? Hover.ZoomKeys
 ---@field zen_keys? Hover.ZenKeys
@@ -200,6 +201,10 @@
 ---@field up? string|string[] # Default `{ "k" }`.
 ---@field down? string|string[] # Default `{ "j" }`.
 
+--- Left-click, borrowed while a directory hover shows its mini filetree.
+---@class Hover.DirKeys
+---@field click? string|string[] # Default `{ "<LeftMouse>" }`. A click that misses the float is replayed as an ordinary left-button press rather than swallowed.
+
 --- Keys borrowed while the hover on screen *can* be zoomed -- a picture with
 --- a cropping provider present, or a PDF page with a rasterizer that can
 --- render a window of one. Plain characters rather than Alt chords since
@@ -241,6 +246,7 @@
 --- content was produced once, by the plugin that answered.
 ---@class Hover.Open
 ---@field target? Hover.Target # Absent for a position preview.
+---@field origin? string # `identity(target)` as first resolved, before any directory navigation rewrote `target`. What the trigger's own re-fire compares against, so pressing a directory hover's nav keys and then pausing does not reset it back to the root -- see `M.show()`.
 ---@field position? string # Dismissal identity of a position preview. Absent for a target.
 ---@field bufnr integer
 ---@field row? integer # Cursor row a position preview answered for.
@@ -261,6 +267,10 @@
 ---@field zen_pinned? boolean # `zen` was what pinned this float, so leaving zen may unpin it again. Absent when the reader pinned it themselves, which zen must not undo.
 ---@field keys? Hover.BoundKey[] # Keys borrowed for as long as this float is up.
 ---@field play? boolean # The transport key has been pressed on this video hover: the next render builds the playing view (an inline run, or a handoff to an mpv window) rather than the still. Cleared when the window player is stopped.
+---@field win? integer # The window `show()` was triggered from. A directory hover's "open" opens a file here rather than wherever the cursor happens to be by the time a key is pressed -- the float itself is never a candidate, being `focusable = false`.
+---@field dir_dir? string # The directory currently browsed, once a target has resolved to one. Distinct from `target.path`, which only ever names where the hover *started*: descending into a subdirectory rewrites this without reclassifying anything.
+---@field dir_entries? Hover.DirEntry[] # This directory's rendered entries, copied from the content that built it -- see `Hover.Content.dir_entries`.
+---@field dir_selected? integer # 1-based index into `dir_entries` -- the row `nav_keys`/`dir_keys.click` act on. Reset to 1 whenever `dir_dir` changes.
 
 -- #####################################################################
 -- classify.lua
@@ -393,7 +403,15 @@
 ---@field playback? Hover.Playback # A decoded run to paint into the float once it is open. Present only on the inline playing view.
 ---@field play_window? Hover.PlayWindow # Open a real mpv window for this file once the float is open, and tie its lifetime to the float. Present only on the windowed playing view.
 ---@field play_external? string # Path already handed to the system's own player (no mpv window available); this only wires the float's `on_close` to `preview.external.reset`, since `preview.video` already made the call and checked it worked.
+---@field dir_entries? Hover.DirEntry[] # A directory preview's entries, in the same order as the lines that render them -- line `i` of `lines` is entry `i` here. Absent for every other content, and shorter than the directory's real size once truncated: only what is actually shown can be selected or clicked.
 ---@field pending? boolean # Provisional; an async result replaces it (and it is not cached).
+
+--- One child of a browsed directory. Deliberately the only shape
+--- `hover.preview.dirbrowse` deals in -- see that module's header for why.
+---@class Hover.DirEntry
+---@field name string # Bare filename, no path.
+---@field path string # `dir .. "/" .. name`, absolute.
+---@field is_dir boolean
 
 --- What `hover.init` needs to open a windowed player: the file, and where in it
 --- to start. `hover.preview.window` holds the handle that stops it again.

@@ -145,7 +145,7 @@ end
 --- argument stops being readable -- `borrow(c, f, g, h, true)` says nothing
 --- about which of them pans. A fourth condition is one key here.
 ---@param content Hover.Content|nil
----@param handlers { next_answer?: fun(), has_answers?: boolean, scroll?: fun(delta: integer), resize?: fun(delta: integer), nav?: fun(dx: integer, dy: integer), zoom?: fun(delta: integer), zoomed?: boolean, zoomable?: boolean, zen?: fun(), transport?: fun(), transport_step?: fun(delta: integer) }
+---@param handlers { next_answer?: fun(), has_answers?: boolean, scroll?: fun(delta: integer), resize?: fun(delta: integer), nav?: fun(dx: integer, dy: integer), zoom?: fun(delta: integer), zoomed?: boolean, zoomable?: boolean, zen?: fun(), transport?: fun(), transport_step?: fun(delta: integer), dir_browse?: boolean, dir_click?: fun(line0: integer) }
 ---@return nil
 function M.borrow(content, handlers)
   handlers = handlers or {}
@@ -328,11 +328,19 @@ function M.borrow(content, handlers)
     end
   end
 
-  -- Last, and on the narrowest condition there is: only while the hover is
-  -- actually magnified. Nothing to move towards otherwise, and unlike the
-  -- chords above these are motions -- the one kind of key worth handing back
-  -- the instant it stops earning its place.
-  if nav and handlers.zoomed then
+  -- On the narrowest conditions there are: only while the hover is actually
+  -- magnified, or is a directory's mini filetree. Nothing to move towards
+  -- otherwise, and unlike the chords above these are motions -- the one kind
+  -- of key worth handing back the instant it stops earning its place.
+  --
+  -- **Two callers, one key list, and that is deliberate rather than an
+  -- overload.** A directory hover is never zoomed and a zoomed hover is never
+  -- a directory, so the conditions never both hold -- `hover.init` hands over
+  -- `M.dir_nav` in the one case and `M.nav` in the other, and this module
+  -- never has to know which. `h`/`l` read as "up a level" / "into the
+  -- selected entry" there, the same left-right-is-a-level convention a
+  -- ranger-style file manager already uses, rather than as panning.
+  if nav and (handlers.zoomed or handlers.dir_browse) then
     local nk = type(cfg.nav_keys) == "table" and cfg.nav_keys or {}
     for _, spec in ipairs({
       { nk.left, -1, 0, "left" },
@@ -344,8 +352,40 @@ function M.borrow(content, handlers)
       for _, lhs in ipairs(M.keylist(spec[1])) do
         take(seen, lhs, function()
           nav(dx, dy)
-        end, "hover: move the magnified view " .. spec[4])
+        end, "hover: move the magnified view, or the directory selection, " .. spec[4])
       end
+    end
+  end
+
+  -- The directory hover's click-to-open, on the same pointer-aimed rule the
+  -- resize wheel uses -- except a click has a default meaning everywhere else
+  -- in the editor (position the cursor, switch windows), and the wheel's Alt
+  -- chord never did. Swallowing `<LeftMouse>` outright would freeze ordinary
+  -- clicking anywhere on screen for as long as a directory hover is up, so a
+  -- click that does not land on the float is replayed as a real left-button
+  -- press through `nvim_input_mouse` -- the low-level event, not a fed key --
+  -- so it drives Neovim's own click handling directly rather than re-entering
+  -- this same mapping and recursing on it.
+  --
+  -- **Assumes the left button specifically**, whatever `dir_keys.click` is
+  -- reconfigured to: there is exactly one "the click this key would otherwise
+  -- perform" to fall back to, and the default -- the only button this is
+  -- documented for -- is it.
+  if handlers.dir_click and handlers.dir_browse then
+    local dk = type(cfg.dir_keys) == "table" and cfg.dir_keys or {}
+    for _, lhs in ipairs(M.keylist(dk.click)) do
+      take(seen, lhs, function()
+        local ok, pos = pcall(vim.fn.getmousepos)
+        local line = ok
+          and type(pos) == "table"
+          and require("hover.float").contains(pos.screenrow, pos.screencol)
+          and require("hover.float").line_at(pos.screenrow)
+        if line then
+          handlers.dir_click(line)
+        elseif ok and type(pos) == "table" then
+          vim.api.nvim_input_mouse("left", "press", "", 0, pos.screenrow - 1, pos.screencol - 1)
+        end
+      end, "hover: open the directory entry under the pointer")
     end
   end
 end

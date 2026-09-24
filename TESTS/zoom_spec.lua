@@ -239,7 +239,10 @@ describe("the keys a zoomed hover borrows", function()
     -- the picture away. That is never what it means over a magnified picture.
     vim.keymap.set("n", "h", "<Nop>", { desc = "the user's own h" })
     borrow({ lines = {}, canvas = { cols = 40, rows = 10 } }, true)
-    assert.equals("hover: move the magnified view left", vim.fn.maparg("h", "n", false, true).desc)
+    assert.equals(
+      "hover: move the magnified view, or the directory selection, left",
+      vim.fn.maparg("h", "n", false, true).desc
+    )
     keys.release()
     assert.equals("the user's own h", vim.fn.maparg("h", "n", false, true).desc)
   end)

@@ -46,7 +46,26 @@ local HL_DEFAULTS = {
   HoverMissing = "DiagnosticError",
   HoverError = "DiagnosticError",
   HoverInfo = "DiagnosticHint",
+  -- The selected line in a directory hover's mini filetree. `Visual` rather
+  -- than a diagnostic group: nothing here is a verdict about the entry, only
+  -- "this is the one a keypress or a click acts on next".
+  HoverDirSelected = "Visual",
 }
+
+--- Define `name`'s default link, if `name` is one this module knows and the
+--- colorscheme (or the reader) has not already defined it. Public so a
+--- previewer that highlights something other than the first line -- the
+--- directory hover's selected entry, say -- can ask for the same
+--- once-per-name treatment `opts.highlight` gets below, without a second copy
+--- of `HL_DEFAULTS` anywhere else.
+---@param name string
+---@return nil
+function M.ensure_highlight(name)
+  local link = HL_DEFAULTS[name]
+  if link then
+    pcall(api.nvim_set_hl, 0, name, { link = link, default = true })
+  end
+end
 
 --- Border styles this plugin adds to the ones `nvim_open_win` already knows.
 ---
@@ -343,10 +362,7 @@ function M.open(lines, opts)
   -- colorscheme loaded after us must be able to override it, and a user who
   -- defined the group themselves must not have it overwritten.
   if opts.highlight and opts.highlight ~= "" then
-    local link = HL_DEFAULTS[opts.highlight]
-    if link then
-      pcall(api.nvim_set_hl, 0, opts.highlight, { link = link, default = true })
-    end
+    M.ensure_highlight(opts.highlight)
     pcall(api.nvim_buf_set_extmark, buf, api.nvim_create_namespace("hover"), 0, 0, {
       end_row = 1,
       hl_group = opts.highlight,
@@ -468,6 +484,60 @@ end
 ---@return integer|nil
 function M.win()
   return M.is_open() and _win or nil
+end
+
+--- The buffer handle of the open hover, or nil.
+---
+--- Public for the same reason `win()` is: a previewer that draws into the
+--- float after it opens needs the window, one that highlights a line other
+--- than the first -- the directory hover's selection -- needs the buffer, and
+--- neither should have to reach for the module-local it lives in.
+---@return integer|nil
+function M.buf()
+  return safe_api.is_valid_buffer(_buf) and _buf or nil
+end
+
+--- Which buffer line, 0-based, sits under screen row `screenrow` -- or nil
+--- when there is no open hover, the row is outside its text area, or it names
+--- a line the buffer does not have.
+---
+--- **Assumes one screen row per buffer line.** True for everything this is
+--- asked about today -- a directory listing's entries are filenames, not
+--- prose -- and false only for a line long enough to wrap, which `wrap` is
+--- set for a picture caption or a long path might still do. A click on a
+--- wrapped line's second row would then answer with the line above it rather
+--- than declining, which is the wrong side of "close enough" to leave
+--- silent: fixing it means walking `nvim_win_text_height` per line rather
+--- than subtracting two numbers, and no reader has hit it yet to spend that
+--- on.
+---@param screenrow integer 1-based, as `getmousepos()` reports it
+---@return integer|nil
+function M.line_at(screenrow)
+  local win = M.win()
+  local buf = M.buf()
+  if not (win and buf) or type(screenrow) ~= "number" then
+    return nil
+  end
+
+  local ok, pos = pcall(api.nvim_win_get_position, win)
+  if not ok then
+    return nil
+  end
+
+  -- `pos[1]` is the 0-based top of the *text* area (see `contains`'s note on
+  -- why this float is `relative = "editor"`), so the text's first row is one
+  -- past it in 1-based screen coordinates.
+  local text_top = pos[1] + 1
+  local line0 = screenrow - text_top
+  if line0 < 0 then
+    return nil
+  end
+
+  local count = api.nvim_buf_line_count(buf)
+  if line0 >= count then
+    return nil
+  end
+  return line0
 end
 
 --- Whether a screen cell is inside the open float, its border counted in.

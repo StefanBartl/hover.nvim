@@ -173,52 +173,47 @@ function M.file(target, opts)
   }
 end
 
---- Preview a directory: its entries, directories first.
+--- Preview a directory: its entries, directories first -- and, since this is
+--- also what a directory *hover* shows, a mini filetree rather than a static
+--- list. `hover.init` reads `dir_entries` back off the returned content to
+--- know what each rendered line is, and drives a selection over it with
+--- `nav_keys` and a left click; this function only ever answers "what is in
+--- this directory", the same question it always has.
 ---@param target Hover.Target
 ---@param opts Hover.PreviewOpts
 ---@return Hover.Content
 function M.directory(target, opts)
+  local dirbrowse = require("hover.preview.dirbrowse")
   local limit = opts.max_lines or 20
-  local uv = vim.uv or vim.loop
 
-  local handle = uv.fs_scandir(target.path)
-  if not handle then
+  local entries = dirbrowse.scan(target.path)
+  if not entries then
     return { lines = { "(cannot read directory)" }, title = vim.fs.basename(target.path) }
   end
 
-  local dirs, files = {}, {}
-  while true do
-    local name, kind = uv.fs_scandir_next(handle)
-    if not name then
-      break
-    end
-    if kind == "directory" then
-      dirs[#dirs + 1] = name .. "/"
-    else
-      files[#files + 1] = name
-    end
-  end
-  table.sort(dirs)
-  table.sort(files)
-
-  local out = {}
-  for _, entry in ipairs(dirs) do
-    out[#out + 1] = entry
-  end
-  for _, entry in ipairs(files) do
-    out[#out + 1] = entry
-  end
-
-  local total = #out
+  local total = #entries
+  local shown = entries
+  local out
   if total == 0 then
     out = { "(empty directory)" }
-  end
-  if #out > limit then
-    out = vim.list_slice(out, 1, limit)
-    out[#out + 1] = ("… (%d entries)"):format(total)
+    shown = {}
+  else
+    if total > limit then
+      shown = vim.list_slice(entries, 1, limit)
+    end
+    out = dirbrowse.render(shown)
+    if total > limit then
+      out[#out + 1] = ("… (%d entries)"):format(total)
+    end
   end
 
-  return { lines = out, title = vim.fs.basename(target.path) .. "/" }
+  return {
+    lines = out,
+    title = vim.fs.basename(target.path) .. "/",
+    -- Only the entries a rendered line actually stands for -- the truncation
+    -- summary line above has no entry of its own, and is never selectable.
+    dir_entries = shown,
+  }
 end
 
 --- Preview for a target that does not exist.

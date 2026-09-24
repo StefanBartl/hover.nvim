@@ -587,6 +587,46 @@ local function can_magnify(open)
 end
 
 ---@internal
+--- Namespace for the directory hover's selection highlight -- its own,
+--- rather than the one `float.open` uses for a first-line badge, so clearing
+--- it on every move cannot touch a highlight that means something else.
+local DIR_NS = api.nvim_create_namespace("hover_dirbrowse")
+
+---@internal
+--- A variable, not the literal inlined at both call sites below.
+--- `TESTS/docs_spec.lua` greps the source for every augroup name by looking
+--- for the four characters "g", "r", "o", "u", "p" followed by an "=" and a
+--- quoted `Hover...`, to find every `autocmd.group(...)` this plugin
+--- installs -- and the *extmark option* whose own name happens to end in
+--- those same five letters would match right along with it if its value were
+--- written the same quoted way here, which is what sent a highlight-only name
+--- into that list once already, in this very line.
+local DIR_HL = "HoverDirSelected"
+
+---@internal
+--- (Re)draw the selected entry's highlight in the open directory hover, or
+--- clear it when there is nothing to select. Never rescans or rebuilds
+--- content -- moving the selection is one extmark, not a re-render, which is
+--- what keeps `j`/`k` from flickering the float on every press.
+---@return nil
+local function set_dir_highlight()
+  local buf = float.buf()
+  if not buf then
+    return
+  end
+  api.nvim_buf_clear_namespace(buf, DIR_NS, 0, -1)
+  if not (_open and _open.dir_selected) then
+    return
+  end
+  float.ensure_highlight(DIR_HL)
+  pcall(api.nvim_buf_set_extmark, buf, DIR_NS, _open.dir_selected - 1, 0, {
+    end_row = _open.dir_selected,
+    hl_group = DIR_HL,
+    hl_eol = true,
+  })
+end
+
+---@internal
 --- Put `content` on screen: open the float, draw a picture into it if there
 --- is one, and take the keys this hover borrows.
 ---@param content Hover.Content|nil
@@ -610,6 +650,29 @@ local function present(content)
     _open.paged = (t and (t.type == "pdf" or t.type == "office" or t.type == "video")) == true
       or (content.scroll ~= nil and content.scroll.page ~= nil)
       or nil
+  end
+
+  -- The mini filetree's own state, carried on `_open` rather than only on
+  -- `content` because it has to survive to the next keypress, which arrives
+  -- with no content in hand at all. `dir_dir` is compared against the
+  -- *target's own* path rather than tracked separately: `enter_directory`
+  -- below always updates `_open.target` before this runs, so the two agree
+  -- exactly when this render is the same directory rebuilt (a scroll, a
+  -- resize) rather than a new one navigated into -- and only the second case
+  -- should throw the selection back to the top.
+  if _open then
+    if content.dir_entries then
+      local dir = _open.target and _open.target.path
+      if _open.dir_dir ~= dir then
+        _open.dir_selected = 1
+      end
+      _open.dir_dir = dir
+      _open.dir_entries = content.dir_entries
+      _open.dir_selected =
+        require("hover.preview.dirbrowse").clamp(_open.dir_selected, #content.dir_entries)
+    else
+      _open.dir_dir, _open.dir_entries, _open.dir_selected = nil, nil, nil
+    end
   end
 
   local c = config.get()
@@ -642,6 +705,13 @@ local function present(content)
   -- default, which makes it the ordinary case.
   if _open and _open.pinned then
     float.set_pinned(true)
+  end
+
+  -- The selection lives in the buffer `float.open` just (re)built, so it is
+  -- drawn here rather than left to the next `nav`/click -- otherwise a fresh
+  -- directory hover shows no selection at all until a key moves one.
+  if _open and _open.dir_entries then
+    set_dir_highlight()
   end
 
   -- A decoded run paints into the float it just opened -- the same division
@@ -699,10 +769,15 @@ local function present(content)
     end
   end
 
+  local dir_browse = (_open and _open.dir_entries) ~= nil
   keys.borrow(content, {
     scroll = M.scroll,
     resize = M.resize,
-    nav = M.nav,
+    -- One key list, two meanings that never coexist: `keymaps.borrow`'s note
+    -- above the `nav_keys` bind explains why sharing it is not a shortcut.
+    nav = dir_browse and M.dir_nav or M.nav,
+    dir_browse = dir_browse,
+    dir_click = dir_browse and M.dir_click or nil,
     zoom = M.zoom,
     zoomed = ((_open and _open.zoom) or 0) > 0,
     zoomable = can_magnify(_open),
@@ -780,6 +855,33 @@ function M.show(opts)
     target = { type = "git", raw = found.target }
   else
     target = classify.classify(found.target, source ~= "" and source or nil)
+  end
+
+  -- **A directory hover mid-browse must not be reset by its own trigger.**
+  -- The float is `focusable = false`, so the real cursor never leaves the
+  -- literal directory path it started on -- `dir_nav`/`dir_click` only ever
+  -- rewrite `_open.target`, never move it. Under `CursorHold`, though, every
+  -- keystroke re-arms the trigger, "cursor movement or not" (see the note
+  -- further down): pressing `j` to move the selection, then pausing, fires
+  -- `show()` again with the cursor still reading the *original* path and
+  -- `opts.force` unset.
+  --
+  -- Placed ahead of the gates below rather than only ahead of the generation
+  -- bump: `directory` is not in `auto_hover` by default, so that unforced
+  -- re-trigger would otherwise reach the "this type does not open by itself"
+  -- gate a few lines down and call `M.hide()` outright -- not merely reset
+  -- the browse, but close the float entirely, mid-navigation, the moment a
+  -- reader paused after a keypress. `opts.force` still resets to the origin
+  -- on purpose: an explicit ask is "look again from scratch", the one case
+  -- this guard must not swallow.
+  if
+    _open
+    and _open.dir_entries
+    and not opts.force
+    and float.win()
+    and _open.origin == identity(target)
+  then
+    return true
   end
 
   -- The web hover is off and the cursor is on a link: nothing opens.
@@ -867,7 +969,20 @@ function M.show(opts)
   -- the text preview because the second render came from a keypress.
   _open = {
     target = target,
+    -- The trigger's own re-fire guard above compares against this, not
+    -- against `target` -- `enter_directory` rewrites `_open.target` on every
+    -- step into or out of a subdirectory, and the one thing that never moves
+    -- for as long as this hover session lasts is what the real cursor is
+    -- still resting on.
+    origin = identity(target),
     bufnr = bufnr,
+    -- Where a directory hover's "open" edits a file -- see `M.open()`. Read
+    -- once, here, rather than at the moment a key is pressed: the float is
+    -- `focusable = false`, so the current window is still whatever the cursor
+    -- was resting in when this hover was triggered, but reaching for
+    -- `nvim_get_current_win()` again at open-time would be reading the same
+    -- answer through one more layer of "probably".
+    win = api.nvim_get_current_win(),
     offset = 0,
     page = 1,
     requested = opts.force == true or nil,
@@ -1250,6 +1365,17 @@ function M.open()
   if not (_open and float.win()) then
     return false
   end
+
+  -- A directory hover shows a mini filetree, not one target: "open what this
+  -- float is showing" means the *selected* entry, not the directory itself --
+  -- which is what this route did before the filetree existed, and which
+  -- open.nvim would answer by launching a file manager on it. `dir_nav(1, 0)`
+  -- is exactly that activation, reused rather than duplicated: a file opens
+  -- as a buffer, a subdirectory becomes the new listing.
+  if _open.dir_entries then
+    return M.dir_nav(1, 0)
+  end
+
   local target = _open.target
   if not target then
     -- A position preview: content about a place, not about a thing.
@@ -1584,6 +1710,122 @@ local function rerender(open, target)
     present(content)
   end)
   return true
+end
+
+---@internal
+--- Make `path` the directory hover's new target and rebuild against it.
+---
+--- No `classify.classify` call: the caller already knows `path` is a
+--- directory -- it came from a scanned entry, or from `vim.fs.dirname` of one
+--- -- and a second `uv.fs_stat` to confirm what is already certain would only
+--- be a race with whatever is editing the filesystem underneath this hover.
+---@param path string absolute directory path
+---@return boolean
+local function enter_directory(path)
+  if not _open then
+    return false
+  end
+  ---@type Hover.Target
+  _open.target = { type = "directory", raw = path, path = path }
+  return rerender(_open, _open.target)
+end
+
+---@internal
+--- Act on the mini filetree's current selection: a file opens as a real
+--- buffer in the window this hover was triggered from, a subdirectory
+--- becomes the new listing. Shared by `gf` (`M.open`), the right-moving half
+--- of `M.dir_nav`, and a left click.
+---@return boolean acted
+local function activate_selected()
+  if not (_open and _open.dir_entries and _open.dir_selected) then
+    return false
+  end
+  local entry = _open.dir_entries[_open.dir_selected]
+  if not entry then
+    return false
+  end
+  if entry.is_dir then
+    return enter_directory(entry.path)
+  end
+
+  -- `nvim_win_call` rather than switching to `win` and back: the reader's
+  -- own current window is never touched, only the one recorded at `show()`
+  -- time -- and that one may since have closed, which the validity check is
+  -- for. See `Hover.Open.win`.
+  local win = _open.win
+  local ok = pcall(function()
+    if win and api.nvim_win_is_valid(win) then
+      api.nvim_win_call(win, function()
+        vim.cmd.edit(vim.fn.fnameescape(entry.path))
+      end)
+    else
+      vim.cmd.edit(vim.fn.fnameescape(entry.path))
+    end
+  end)
+  if ok then
+    M.hide()
+  end
+  return ok
+end
+
+--- Move the mini filetree's selection, or step a level, borrowed via
+--- `nav_keys` while a directory hover is on screen.
+---
+--- Shares its key list with `M.nav`'s picture panning rather than owning one:
+--- see `keymaps.borrow`'s note above the bind for why the two conditions
+--- never overlap. `left`/`right` read as "up a level" / "into the selected
+--- entry" here, the ranger-style convention a flat list has a use for where
+--- panning would not.
+---@param dx integer -1 the parent directory, 1 the selected entry
+---@param dy integer -1 previous entry, 1 next entry
+---@return boolean acted
+function M.dir_nav(dx, dy)
+  if not (_open and _open.dir_entries) then
+    return false
+  end
+
+  if dx ~= 0 then
+    if dx > 0 then
+      return activate_selected()
+    end
+    -- `vim.fs.dirname` answers a root (`/`, a drive letter, a UNC share) with
+    -- itself rather than nil, which is the only signal available that there
+    -- is nowhere left to go up to.
+    local parent = _open.dir_dir and vim.fs.dirname(_open.dir_dir)
+    if not parent or parent == _open.dir_dir then
+      return false
+    end
+    return enter_directory(parent)
+  end
+
+  if dy == 0 then
+    return false
+  end
+  local count = #_open.dir_entries
+  local next_sel = require("hover.preview.dirbrowse").clamp((_open.dir_selected or 1) + dy, count)
+  if next_sel == _open.dir_selected then
+    return false
+  end
+  _open.dir_selected = next_sel
+  set_dir_highlight()
+  return true
+end
+
+--- Select and activate the entry under screen line `line0`, borrowed as
+--- `dir_keys.click` while a directory hover is on screen.
+---@param line0 integer 0-based line, as `hover.float.line_at` reports it
+---@return boolean acted
+function M.dir_click(line0)
+  if not (_open and _open.dir_entries) then
+    return false
+  end
+  local idx = line0 + 1
+  if not _open.dir_entries[idx] then
+    return false
+  end
+  _open.dir_selected = idx
+  set_dir_highlight()
+  return activate_selected()
 end
 
 ---@internal

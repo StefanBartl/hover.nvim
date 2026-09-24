@@ -23,7 +23,7 @@ What it can answer depends on the target:
 | --- | --- |
 | A text file | Its first lines, syntax-highlighted |
 | A markdown file with `#heading` | That section (needs markdown.nvim) |
-| A directory | Its entries |
+| A directory | Its entries, as a mini filetree — navigable with `nav_keys` and a left click |
 | An image | The picture (needs a drawing provider), else format, dimensions, size |
 | A PDF | Page 1, rendered (needs pdfport.nvim), else size and why not |
 | An office document | A badge, or its first page once `:Hover office on` |

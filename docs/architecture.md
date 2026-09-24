@@ -30,6 +30,7 @@ generated and gitignored, so it is not in the checkout — run it when you want 
 | `hover.health` | `:checkhealth hover` — see [health.md](health.md) |
 | `hover.bindings.*` | Keymaps (borrowed and owned), the `:Hover` verb, the trigger autocmds |
 | `hover.preview.text` | File heads, directory listings, the missing marker |
+| `hover.preview.dirbrowse` | A directory's entries as data: scan, sort, render — no window, no keymap, no selection, so it can be lifted out later (into filetree.nvim, say) without carrying `hover.init`'s float state with it |
 | `hover.preview.binary` | Is this text at all, and what to say when it is not |
 | `hover.preview.office` | Office documents: the badge, or the converted PDF's page |
 | `hover.preview.url` | URL details, optional fetch |
