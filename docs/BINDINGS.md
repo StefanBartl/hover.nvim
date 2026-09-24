@@ -55,10 +55,11 @@ require("hover").setup({ keymaps = { show = false } })
 | `zoom_keys.out` | `\|` | as above | step back out |
 | `zoom_keys.reset` | `=` | as above | back to the whole picture or page |
 | `position_keys.next` | `<M-n>` | **position hovers only**, and only where more than one contribution is registered | the next plugin with something to say about this place; wraps |
-| `nav_keys.left` | `h` | **only while zoomed in** | move the magnified view left |
-| `nav_keys.right` | `l` | as above | right |
-| `nav_keys.up` | `k` | as above | up |
-| `nav_keys.down` | `j` | as above | down |
+| `nav_keys.left` | `h` | **only while zoomed in, or a directory's mini filetree is shown** | move the magnified view left, or up a directory level |
+| `nav_keys.right` | `l` | as above | right, or into the selected entry |
+| `nav_keys.up` | `k` | as above | up, or the previous entry |
+| `nav_keys.down` | `j` | as above | down, or the next entry |
+| `dir_keys.click` | `<LeftMouse>` | **only while a directory's mini filetree is shown** | select and open the entry under the pointer; a click elsewhere is replayed as an ordinary left click |
 
 What follows from "borrowed" is below, and each of these has been a bug at some
 point. No count in that sentence on purpose: the list has grown with every new
@@ -94,11 +95,22 @@ fall behind.
   not. Hanging them off the existing condition would have bound them for
   every case except the one they were built for.
 - **Navigating has the narrowest condition of all, and the strongest case.**
-  `nav_keys` are bound only while the hover is *zoomed in* — not merely drawn.
-  They are motions, like `+` and `-`, but with one difference that settles it:
-  what `h` would otherwise do over a float is move the cursor, and the
-  dismissal hangs on `CursorMoved`, so the unbound key takes the picture away.
-  Nobody presses `h` at a magnified picture meaning that.
+  `nav_keys` are bound only while the hover is *zoomed in*, or shows a
+  directory's mini filetree — not merely drawn. They are motions, like `+` and
+  `-`, but with one difference that settles it: what `h` would otherwise do
+  over a float is move the cursor, and the dismissal hangs on `CursorMoved`,
+  so the unbound key takes the picture (or the listing) away. Nobody presses
+  `h` at a magnified picture, or a directory listing, meaning that.
+- **One key list, two features, because the two conditions never overlap.** A
+  directory hover is never zoomed and a zoomed hover never shows a directory,
+  so `left`/`right` read as "up a level" / "into the selected entry" in the
+  second case, the same convention a ranger-style file manager already uses —
+  never as panning, which a flat list has no use for. `dir_keys.click` is the
+  mouse half of the same feature, and needs its own fallback: a click has a
+  default meaning everywhere else in the editor (position the cursor, switch
+  windows), which the resize wheel's Alt chord never did, so a click that
+  misses the float is replayed as an ordinary left-button press rather than
+  swallowed.
 - **The zoom keys were Alt chords until 2026-09-03, and a measurement took
   that away.** There were deliberately no zoom keys at first: a step costs a
   quarter of a second or so — ~258 ms to crop a picture, 120–600 ms to
@@ -298,6 +310,7 @@ Defined on demand with `default = true`, so a colorscheme still wins.
 | `HoverMissing` | `DiagnosticError` | the "this target does not exist" marker |
 | `HoverError` | `DiagnosticError` | an HTTP 4xx/5xx, or an unreachable host |
 | `HoverInfo` | `DiagnosticHint` | the "no text in this file" badge |
+| `HoverDirSelected` | `Visual` | the selected entry in a directory hover's mini filetree |
 | `HoverStatusHeader` | `Title` | a section heading on the `:Hover dashboard` board |
 | `HoverStatusOn` | `DiagnosticOk` | a row that is on, glyph and state |
 | `HoverStatusOff` | `Comment` | a row that is off |

@@ -112,10 +112,11 @@ borrow condition is in [BINDINGS.md](BINDINGS.md).
 | `zoom_keys.into` | `{ ">" }` | whenever the hover on screen **can** be zoomed. Plain characters since 2026-09-03: the Alt chords they replaced displace nothing, which is worth nothing in a terminal that never sends them |
 | `zoom_keys.out` | `{ "\|" }` | as above |
 | `zoom_keys.reset` | `{ "=" }` | as above |
-| `nav_keys.left` | `{ "h" }` | **only while a hover is zoomed in** — the narrowest borrow here, and the strongest case: unbound, `h` moves the cursor and the dismissal takes the picture away |
-| `nav_keys.right` | `{ "l" }` | as above |
-| `nav_keys.up` | `{ "k" }` | as above |
-| `nav_keys.down` | `{ "j" }` | as above |
+| `nav_keys.left` | `{ "h" }` | **only while a hover is zoomed in, or shows a directory's mini filetree** — the narrowest borrow here, and the strongest case: unbound, `h` moves the cursor and the dismissal takes the picture (or the listing) away. For a directory this reads as "up a level" rather than panning — see [What it does and what not](scope.md) |
+| `nav_keys.right` | `{ "l" }` | as above; "into the selected entry" for a directory |
+| `nav_keys.up` | `{ "k" }` | as above; the previous entry for a directory |
+| `nav_keys.down` | `{ "j" }` | as above; the next entry for a directory |
+| `dir_keys.click` | `{ "<LeftMouse>" }` | **only while a directory's mini filetree is shown** — select and open the entry under the pointer. A click has a default meaning everywhere else in the editor, unlike the resize wheel's Alt chord, so a click that misses the float is replayed as an ordinary left-button press rather than swallowed |
 | `position_keys.next` | `{ "<M-n>" }` | **position hovers only**, and only where more than one contribution is registered — see [When two plugins answer](#when-two-plugins-answer) |
 | `transport_keys.toggle` | `{ "<CR>" }` | hovers that **can play** — a video. First press decodes a run and starts it, every press after starts and stops it. `<CR>` moves down a line unbound: not a prefix, and not `mapleader` — see [Playing a video](#playing-a-video) for the two keys this replaced |
 | `transport_keys.forward` | `{ "." }` | as above, once a run is loaded: one frame on, and pause. mpv's own frame-step key |

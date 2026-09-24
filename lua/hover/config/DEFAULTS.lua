@@ -801,14 +801,26 @@ return {
   ---@type string|string[]
   open_keys = { "gf" },
 
-  --- Move the magnified view, borrowed ONLY while a hover is zoomed in.
+  --- Move the magnified view, borrowed while a hover is zoomed in -- and,
+  --- since 2026-09-24, the mini filetree's selection, borrowed while a
+  --- directory hover shows one.
   ---
   --- The narrowest borrow condition in this plugin, and the one with the
   --- strongest case. These are motions, like `+` and `-` -- but unlike those,
   --- the thing they would otherwise do is *destroy the float*: the dismissal
   --- hangs on `CursorMoved`, so pressing `h` over a magnified picture without
   --- this binding moves the cursor and takes the picture away. Nobody means
-  --- that. The moment the hover is not zoomed they are handed straight back.
+  --- that. The moment the hover is not zoomed, and shows no directory, they
+  --- are handed straight back.
+  ---
+  --- **One key list serves both, and that is not a shortcut -- the two
+  --- conditions never overlap.** A directory hover is never zoomed and a
+  --- zoomed hover is never a directory, so a reader who remaps this once has
+  --- remapped it for both, which is what a reader configuring "how do I move
+  --- around inside a hover" actually wants. `left`/`right` read as "up a
+  --- level" / "into the selected entry" for a directory, the same convention
+  --- a ranger-style file manager already uses -- not as panning, which a flat
+  --- list has no use for.
   ---
   --- Called `nav` rather than `pan` since `9fba190`'s successor: the route it
   --- belongs to reads `:Hover nav left`, and one word for one operation is
@@ -825,6 +837,25 @@ return {
     up = { "k" },
     ---@type string|string[]
     down = { "j" },
+  },
+
+  --- Left-click an entry in a directory hover's mini filetree: a file opens
+  --- as a normal buffer, a subdirectory becomes the new listing.
+  ---
+  --- **Borrowed only while a directory hover is up, on the same pointer rule
+  --- `resize_keys.wheel_*` uses -- but with a fallback those never needed.**
+  --- A wheel chord is Alt-modified and displaces nothing when the pointer
+  --- points elsewhere; a plain click is the one thing every window in the
+  --- editor already answers to, so a click that misses the float is replayed
+  --- as an ordinary left-button press rather than swallowed, and behaves as
+  --- if no hover were open at all. Needs `'mouse'` to include the mode, same
+  --- as the wheel.
+  ---
+  --- `{}` binds nothing, for a reader who wants the keyboard-only route
+  --- (`nav_keys.right`, or `open_keys`) and no click at all.
+  dir_keys = {
+    ---@type string|string[]
+    click = { "<LeftMouse>" },
   },
 
   --- Step to the next plugin with something to say about this place.

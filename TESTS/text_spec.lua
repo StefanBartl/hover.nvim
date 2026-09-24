@@ -106,3 +106,60 @@ describe("hover.preview.text.file", function()
     assert.is_falsy(content.lines[1]:find("12345", 1, true))
   end)
 end)
+
+describe("hover.preview.text.directory", function()
+  local root
+
+  before_each(function()
+    root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+  end)
+
+  after_each(function()
+    vim.fn.delete(root, "rf")
+  end)
+
+  it("carries dir_entries alongside the rendered lines, index for index", function()
+    vim.fn.mkdir(root .. "/child", "p")
+    vim.fn.writefile({}, root .. "/leaf.txt")
+
+    local content = text.directory({ type = "directory", path = root }, { max_lines = 20 })
+
+    assert.same({ "child/", "leaf.txt" }, content.lines)
+    assert.equals(2, #content.dir_entries)
+    assert.equals("child", content.dir_entries[1].name)
+    assert.is_true(content.dir_entries[1].is_dir)
+    assert.equals("leaf.txt", content.dir_entries[2].name)
+    assert.is_false(content.dir_entries[2].is_dir)
+  end)
+
+  it(
+    "truncates dir_entries along with the lines, so a rendered line and its entry never drift apart",
+    function()
+      for i = 1, 5 do
+        vim.fn.writefile({}, root .. ("/f%d.txt"):format(i))
+      end
+
+      local content = text.directory({ type = "directory", path = root }, { max_lines = 3 })
+
+      assert.equals(3, #content.lines - 1) -- the summary line is not an entry
+      assert.equals("… (5 entries)", content.lines[#content.lines])
+      assert.equals(3, #content.dir_entries)
+    end
+  )
+
+  it("carries no dir_entries for an empty directory", function()
+    local content = text.directory({ type = "directory", path = root }, { max_lines = 20 })
+    assert.same({ "(empty directory)" }, content.lines)
+    assert.same({}, content.dir_entries)
+  end)
+
+  it("carries no dir_entries when the directory cannot be read at all", function()
+    local content = text.directory(
+      { type = "directory", path = root .. "/gone" },
+      { max_lines = 20 }
+    )
+    assert.same({ "(cannot read directory)" }, content.lines)
+    assert.is_nil(content.dir_entries)
+  end)
+end)
