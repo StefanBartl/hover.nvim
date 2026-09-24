@@ -57,6 +57,52 @@ describe("hover.preview.dirbrowse.scan", function()
     assert.equals(vim.fs.joinpath(root, "leaf.txt"), entries[1].path)
   end)
 
+  it("resolves a symlinked directory to is_dir = true, not the link's own kind", function()
+    -- `uv.fs_scandir_next` reports a symlink as `kind == "link"` whatever it
+    -- points at -- `is_dir` now drives an *action* (enter it vs. open it as
+    -- a file, see `hover.init`'s `activate_selected`), so getting this wrong
+    -- would try to `:edit` a directory instead of listing it.
+    --
+    -- Guarded rather than assumed: creating a symlink needs a privilege this
+    -- session may not have (notably Windows without Developer Mode or an
+    -- elevated shell), and a CI runner is not guaranteed to have it either.
+    -- `uv.fs_symlink` reports that the libuv way, not by throwing -- it
+    -- returns `nil, err` like every other synchronous `uv.fs_*` call, so the
+    -- guard has to read its actual return value rather than `pcall`'s own
+    -- ok flag, which stays `true` either way.
+    local uv = vim.uv or vim.loop
+    vim.fn.mkdir(root .. "/real", "p")
+    local created = uv.fs_symlink(root .. "/real", root .. "/linked", { dir = true })
+    if not created then
+      pending("could not create a symlink in this environment -- no privilege to prove this with")
+      return
+    end
+
+    local entries = dirbrowse.scan(root)
+    local by_name = {}
+    for _, e in ipairs(entries) do
+      by_name[e.name] = e
+    end
+    assert.is_true(by_name["linked"] ~= nil, "the symlink itself was not scanned")
+    assert.is_true(by_name["linked"].is_dir, "a symlinked directory was not recognised as one")
+  end)
+
+  it("treats a broken symlink as not-a-directory rather than erroring", function()
+    local uv = vim.uv or vim.loop
+    local created = uv.fs_symlink(root .. "/does-not-exist", root .. "/broken", { dir = true })
+    if not created then
+      pending("could not create a symlink in this environment -- no privilege to prove this with")
+      return
+    end
+
+    local entries
+    assert.has_no.errors(function()
+      entries = dirbrowse.scan(root)
+    end)
+    assert.equals(1, #entries)
+    assert.is_false(entries[1].is_dir)
+  end)
+
   it("answers nil for a directory it cannot read", function()
     assert.is_nil(dirbrowse.scan(root .. "/does-not-exist"))
   end)
