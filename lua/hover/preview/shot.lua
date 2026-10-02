@@ -56,44 +56,29 @@ local _pending = nil
 local _swept = false
 ---@type string|nil|false Resolved browser: a path, or `false` for "looked and found none".
 local _browser = nil
----@type Lib.Deps.Tool|nil This plugin's own `chrome` declaration, once read -- see `chrome_tool`.
-local _chrome_tool = nil
 
 ---@internal
---- This plugin's own `chrome` tool declaration from `docs/install.json` --
---- the names (Chrome/Chromium/Brave/Edge, in that order) and, since
---- 2026-09-12, the install-location fallback for a Windows/macOS/Linux
---- installer that does not extend PATH (**measured**, 2026-09-04: on the
---- machine this was originally built on, Chrome was installed and on no
---- PATH at all). `lib.nvim.deps.detect` resolves both the same way it
---- already does for every other declared tool -- `:Lib deps show hover.nvim`
---- and the declared-tools section of `:checkhealth hover` read the exact
---- same entry, so keeping a second, hand-copied list here would only be one
---- more place for the two to drift apart.
+--- The browser this plugin renders pages with, found through `lib.nvim.deps`:
+--- this plugin's own `chrome` declaration in `docs/install.json` (the names
+--- Chrome/Chromium/Brave/Edge, in that order, and the install-location fallback
+--- for an installer that does not extend PATH -- **measured**, 2026-09-04: on
+--- the machine this was originally built on, Chrome was installed and on no
+--- PATH at all) is read, memoized and falling back to a bare PATH search by
+--- `deps.require_tool` itself. `:Lib deps show hover.nvim` and the
+--- declared-tools section of `:checkhealth hover` read the same entry, so a
+--- second, hand-copied list here would only be one more place for the two to
+--- drift apart. (Until 2026-10-02 this carried its own copy of the read-and-
+--- memoize step, as did casedesk.nvim and pdfport.nvim.)
 ---
---- Resolved once per session and remembered: a plugin whose own spec
---- somehow cannot be found or parsed still gets a PATH-only search (via a
---- bare `{ bin = "chrome" }`) rather than none at all.
----@return Lib.Deps.Tool
-local function chrome_tool()
-  if _chrome_tool ~= nil then
-    return _chrome_tool
+--- `silent`: a miss is reported by the callers (`:checkhealth hover`, the
+--- hover itself) and must not also notify from here on every hover.
+---@return string|nil
+local function find_browser()
+  local ok, deps = pcall(require, "lib.nvim.deps")
+  if not ok then
+    return nil
   end
-
-  local spec = require("lib.nvim.deps.spec")
-  local path = spec.find("hover.nvim")
-  local result = path and spec.load(path)
-  if result then
-    for _, tool in ipairs(result.tools) do
-      if tool.bin == "chrome" then
-        _chrome_tool = tool
-        return tool
-      end
-    end
-  end
-
-  _chrome_tool = { bin = "chrome" }
-  return _chrome_tool
+  return deps.require_tool("hover.nvim", "chrome", { silent = true })
 end
 
 --- The browser this would run, or nil when there is none.
@@ -113,7 +98,7 @@ function M.browser(configured)
     return _browser or nil
   end
 
-  local found = require("lib.nvim.deps.detect").found_as(chrome_tool())
+  local found = find_browser()
   _browser = found or false
   return found
 end
