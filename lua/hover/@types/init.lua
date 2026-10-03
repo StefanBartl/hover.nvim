@@ -141,7 +141,7 @@
 ---@field experimental? Hover.VideoExperimentalConfig # System-player window positioning. Both settings only do anything when there is no mpv window.
 ---@field sound? boolean # Start audio alongside an inline played run. Default true. (A window always has its player's own sound.)
 ---@field play_at? number|string # Where playing starts, as opposed to where the still is taken. Default 0 -- the beginning of the file.
----@field play_scale? number # How much larger the playing canvas is than the still's budget, capped to the editor. Default 1.75; 1 is the still's own size.
+---@field play_scale? number # How much larger the playing canvas is than the still's budget, capped to the editor. Default 2.5; 1 is the still's own size.
 ---@field fps? number # Stills per second in a played run. Default 12.
 ---@field run? integer # Stills one decoded window holds. Default 24 -- two seconds at 12 fps.
 ---@field run_width? integer # Pixel width of a run's stills before sampling. Default nil (sized from the canvas).
