@@ -430,6 +430,6 @@ one `QUIET.md` makes in general.
 ```lua
 require("hover").setup({
   auto_hover = { video = true },
-  video = { at = "10%", step = "10%", width = 800, sound = true, play_at = 0, play_scale = 1.75 },
+  video = { at = "10%", step = "10%", width = 800, sound = true, play_at = 0, play_scale = 2.5 },
 })
 ```
