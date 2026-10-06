@@ -372,11 +372,51 @@ local function check_config()
     )
   end
 
+  -- `links.auth`: which hosts get a credential. The variable's *value* is
+  -- never printed -- only whether it is set.
+  local links = config.get().links
+  local auth = require("hover.auth")
+  local rules = auth.list()
+  local written_auth = type(links) == "table" and type(links.auth) == "table" and #links.auth or 0
+  if written_auth > 0 then
+    if #rules < written_auth then
+      health.warn(
+        ("links.auth: %d of %d rules unusable and skipped"):format(
+          written_auth - #rules,
+          written_auth
+        ),
+        {
+          "Each rule needs `match` (host part without a wildcard) and `token_env` (a variable name).",
+          "`*.example.com` is refused on purpose: it would send the token to every tenant.",
+        }
+      )
+    else
+      health.ok(("links.auth: %d rule(s)"):format(#rules))
+    end
+    for _, rule in ipairs(rules) do
+      if not auth.token_set(rule.token_env) then
+        health.warn(
+          ("links.auth: $%s is not set -- nothing is sent to %s"):format(
+            rule.token_env,
+            table.concat(rule.match, ", ")
+          ),
+          {
+            "Set it for the user (`setx`), then restart Neovim: a running session keeps its environment.",
+          }
+        )
+      end
+    end
+    if not config.fetch_enabled() then
+      health.info(
+        "links.auth: does nothing while `links.fetch` is off (`:Hover links web fetch on`)."
+      )
+    end
+  end
+
   -- `links.pins`: what a link is shown as, decided by the reader. A pin whose
   -- file has moved shows "pinned file not found" in the float, which is right
   -- and still better learned here than by hovering every link in turn.
   local pins = require("hover.pins")
-  local links = config.get().links
   local written = type(links) == "table" and type(links.pins) == "table" and #links.pins or 0
   local usable = pins.list()
   if written > 0 then

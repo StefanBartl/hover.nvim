@@ -1,0 +1,171 @@
+---@module 'hover.auth'
+---@brief Credentials for the requests a hover makes to a host the reader named.
+---@description
+--- `links.auth` says which host a hover may authenticate to, and with what:
+---
+---     { match = "acme.atlassian.net", user = "me@acme.com", token_env = "CONFLUENCE_TOKEN" }
+---
+--- is HTTP Basic (what Confluence Cloud takes: account email and an API
+--- token), and the same without `user` is `Authorization: Bearer` (what a
+--- Data Center personal access token takes).
+---
+--- **Four rules, each of which is a way to leak the token if it were
+--- otherwise.**
+---
+---  * **The token is never in the configuration.** `token_env` names an
+---    environment variable. A configuration is read aloud, committed and
+---    pasted into issues; a variable name is not a secret.
+---  * **The host part of a glob has no wildcard.** `*.atlassian.net` would
+---    hand the token to every Atlassian Cloud tenant -- including the one an
+---    attacker writes a link to. The path part may use `*` freely; a rule that
+---    breaks this is skipped, and `:checkhealth hover` says so.
+---  * **HTTPS only.** Never sent over `http://`, and a redirect may only go to
+---    `https://` (`--proto-redir =https`). curl itself does not forward the
+---    credential to a *different* host after a redirect -- that needs
+---    `--location-trusted`, which is not passed.
+---  * **Never in argv.** A process's command line is readable by every other
+---    process on the machine. The credential goes through curl's `-K -`
+---    config on stdin, the way `lib.nvim.net.curl` already sends one.
+---
+--- It covers what is a `curl` request: the fetch behind `links.fetch`, and
+--- the document download behind `links.pdf`. It does **not** cover
+--- `links.shot`, and that is deliberate: a browser running a page's own
+--- scripts is exactly where a credential must not go. See
+--- `docs/FEATURES/AUTH.md`.
+---
+---@see hover.preview.url
+---@see hover.preview.webpdf
+
+local M = {}
+
+---@internal
+--- Whether the host part of `glob` is a literal. The scheme is ignored, as it
+--- is by `hover.pins.matches`, which decides what a glob matches.
+---@param glob string
+---@return boolean
+local function literal_host(glob)
+  local rest = glob:lower():gsub("^%a[%w+.-]*://", "")
+  local host = rest:match("^([^/?#]*)")
+  return host ~= nil and host ~= "" and not host:find("*", 1, true)
+end
+
+--- The configured rules, minus the entries that cannot be used safely.
+---
+--- A rule needs `match` (a glob or a list of them, every one with a literal
+--- host) and `token_env` (a variable *name*). `user` is optional: with it the
+--- credential is Basic, without it Bearer. A malformed rule is skipped rather
+--- than raised -- this is read on the cursor-hold path -- and
+--- `:checkhealth hover` names what was skipped.
+---@return { match: string[], user: string|nil, token_env: string }[]
+function M.list()
+  local links = require("hover.config").get().links
+  local raw = type(links) == "table" and links.auth or nil
+  local out = {}
+  if type(raw) ~= "table" then
+    return out
+  end
+  for _, rule in ipairs(raw) do
+    local match = type(rule) == "table" and rule.match or nil
+    if type(match) == "string" then
+      match = { match }
+    end
+    local env = type(rule) == "table" and rule.token_env or nil
+    local user = type(rule) == "table" and rule.user or nil
+    if
+      type(match) == "table"
+      and type(env) == "string"
+      and env:match("^[%a_][%w_]*$")
+      and (user == nil or (type(user) == "string" and user ~= ""))
+    then
+      local globs = {}
+      for _, glob in ipairs(match) do
+        if type(glob) == "string" and literal_host(glob) then
+          globs[#globs + 1] = glob
+        end
+      end
+      -- All or nothing: a rule with one bad glob among good ones is a rule the
+      -- reader wrote carelessly, and a half-applied credential rule is the
+      -- worse way to find out.
+      if #globs == #match and #globs > 0 then
+        out[#out + 1] = { match = globs, user = user, token_env = env }
+      end
+    end
+  end
+  return out
+end
+
+--- The credential for `url`, or nil.
+---
+--- The first rule that matches decides, even when its variable is unset: a
+--- missing token means "no credential for this host", not "try the next
+--- rule's".
+---@param url string
+---@return { user: string|nil, token: string }|nil
+function M.for_url(url)
+  if type(url) ~= "string" or not url:lower():match("^https://") then
+    return nil
+  end
+  local pins = require("hover.pins")
+  for _, rule in ipairs(M.list()) do
+    for _, glob in ipairs(rule.match) do
+      if pins.matches(url, glob) then
+        local token = (vim.uv or vim.loop).os_getenv(rule.token_env)
+        if token == nil or token == "" then
+          return nil
+        end
+        return { user = rule.user, token = token }
+      end
+    end
+  end
+  return nil
+end
+
+--- Add the credential for `url`, when there is one, to the options of a
+--- `lib.nvim.net.curl` request.
+---
+--- `lib.nvim.net.curl` sends `auth` and `bearer_token` through `-K -` on
+--- stdin and never through argv. Redirects are limited to https.
+---@param url string
+---@param request table `fetch_raw` options, mutated
+---@return boolean applied
+function M.apply(url, request)
+  local credential = M.for_url(url)
+  if not credential then
+    return false
+  end
+  if credential.user then
+    request.auth = { user = credential.user, pass = credential.token }
+  else
+    request.bearer_token = credential.token
+  end
+  request.raw_args = request.raw_args or {}
+  vim.list_extend(request.raw_args, { "--proto-redir", "=https" })
+  return true
+end
+
+--- The credential for `url` as a curl config, for a caller that builds its own
+--- `curl` command line: `-K -` and this on stdin.
+---@param url string
+---@return string|nil config
+function M.stdin(url)
+  local credential = M.for_url(url)
+  if not credential then
+    return nil
+  end
+  local quote = require("lib.nvim.net.curl").config_quote
+  if credential.user then
+    return "user = " .. quote(credential.user .. ":" .. credential.token) .. "\n"
+  end
+  return "header = " .. quote("Authorization: Bearer " .. credential.token) .. "\n"
+end
+
+--- Whether the variable a rule names is set. For the health report, which
+--- must say so without ever printing the value.
+---@param env string
+---@return boolean
+function M.token_set(env)
+  local value = (vim.uv or vim.loop).os_getenv(env)
+  return value ~= nil and value ~= ""
+end
+
+return M

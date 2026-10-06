@@ -330,7 +330,11 @@ function M.preview(target, response, opts, on_result)
   -- **`-o`, and no `text = true` anywhere near it.** The bytes go from curl to
   -- the file without passing through Lua, which is the entire reason this is a
   -- second request -- see the module header.
-  local ok_spawn = pcall(vim.system, {
+  --
+  -- **A credential for this host goes in on stdin (`-K -`), never in argv**,
+  -- where any process on the machine could read it, and redirects are held to
+  -- https. See `hover.auth`.
+  local argv = {
     "curl",
     "-sSL",
     "--max-filesize",
@@ -341,8 +345,13 @@ function M.preview(target, response, opts, on_result)
     "Accept: application/pdf",
     "-o",
     out,
-    url,
-  }, { text = false }, function()
+  }
+  local credential = require("hover.auth").stdin(url)
+  if credential then
+    vim.list_extend(argv, { "--proto-redir", "=https", "-K", "-" })
+  end
+  argv[#argv + 1] = url
+  local ok_spawn = pcall(vim.system, argv, { text = false, stdin = credential }, function()
     -- curl's exit lands in a fast event context, where reading a file and
     -- opening a window are both out of bounds.
     vim.schedule(function()

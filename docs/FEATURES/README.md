@@ -44,6 +44,11 @@ the alternatives that were rejected, and the bugs that changed the design.
   wildcard, why it is the one link feature with no switch and still works with
   `links.web` off, and why a pin whose file has gone says so instead of falling
   back to the page it was written to replace.
+- **[AUTH.md](AUTH.md)** — a credential for the hosts you named: why every
+  rule is shaped so a mistake sends *nothing* (no wildcard in the host, no
+  literal token, no http, no argv), what an authenticated request can and
+  cannot show of a Confluence page, and why the browser render is the one
+  request that never gets one.
 - **[ZEN.md](ZEN.md)** — the third way to make a hover bigger, and the one that
   is not a bigger window: why the previewer's *budget* becomes the screen
   rather than the float merely opening larger, the measurement that made it a

@@ -353,6 +353,32 @@ cannot carry both numbers. `links.pdf.max_bytes` (25 MB) is the second one, and
 a document over it is refused with both numbers named rather than truncated:
 half a PDF is not a smaller PDF, it is a file that will not open.
 
+                                                                  *hover-auth*
+A HOVER CAN AUTHENTICATE TO A HOST YOU NAMED. `links.auth` is a list of rules
+`{ match, user?, token_env }`; it reaches the two requests that are a curl --
+the fetch and the PDF download -- and does nothing until `links.fetch` is on.
+With `user` the credential is HTTP Basic (Confluence Cloud: account email and
+an API token), without it `Authorization: Bearer` (a Data Center personal
+access token).
+>lua
+    links = { fetch = true, auth = {
+      { match = "acme.atlassian.net", user = "me@acme.com",
+        token_env = "CONFLUENCE_TOKEN" },
+    } }
+<
+THE TOKEN IS NEVER IN THE CONFIGURATION: `token_env` names an environment
+variable, and an unset one sends nothing. THE HOST PART OF `match` HAS NO
+WILDCARD -- `*.atlassian.net` would hand the token to every tenant, an
+attacker's included -- and a rule that breaks this is skipped. HTTPS only;
+redirects may only go to https; the credential reaches curl on stdin, never on
+a command line. It is not used by `shot`: a browser running a page's own
+scripts is where a credential must not go.
+
+It does not make a Confluence page appear: the page is a JavaScript
+application whoever asks. What it retrieves is a document -- a link answering
+`application/pdf` is downloaded with the credential and shown by `links.pdf`.
+For a page as it looks, see |hover-pins|.
+
                                                                   *hover-pins*
 A LINK CAN BE SHOWN AS A FILE OF YOUR OWN. `links.pins` maps a URL glob to a
 file, and a hovered link that matches is previewed as that file -- a PDF is
@@ -623,6 +649,9 @@ worth asserting.
       },
       -- Links shown as a file of your own; see |hover-pins|.
       pins = {},
+      -- Credentials for named hosts, from environment variables; see
+      -- |hover-auth|.
+      auth = {},
       shot = {
         enabled = false, eager = false, timeout_ms = 20000,
         width = 1280, height = 900, cache_days = 7, delay_ms = 1000,

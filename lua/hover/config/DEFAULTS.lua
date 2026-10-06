@@ -206,6 +206,29 @@ return {
     ---@type integer
     timeout_ms = 2000,
 
+    --- Hosts a hover may authenticate to, for the fetch and the PDF download.
+    ---
+    ---     auth = {
+    ---       -- Confluence Cloud: account email + an API token.
+    ---       { match = "acme.atlassian.net", user = "me@acme.com", token_env = "CONFLUENCE_TOKEN" },
+    ---       -- Data Center: a personal access token, as a Bearer.
+    ---       { match = "wiki.acme.com", token_env = "WIKI_PAT" },
+    ---     }
+    ---
+    --- **The token is never in this table.** `token_env` is the *name* of an
+    --- environment variable. **The host part of `match` has no wildcard**:
+    --- `*.atlassian.net` would send the token to every tenant, including one an
+    --- attacker links to. The path part may use `*`. A rule that breaks this is
+    --- skipped, and `:checkhealth hover` says so.
+    ---
+    --- HTTPS only; redirects may only go to https, and curl does not forward a
+    --- credential to a different host. The credential reaches curl on stdin,
+    --- never on a command line. It is **not** used by `shot` -- a browser
+    --- running the page's own scripts is where it must not go. Empty by default;
+    --- it does nothing until `links.fetch` is on. See `hover.auth`.
+    ---@type Hover.AuthRule[]
+    auth = {},
+
     --- Links the reader has decided to show as a file of their own.
     ---
     --- **For the page nothing can render.** Behind a single sign-on the hover
