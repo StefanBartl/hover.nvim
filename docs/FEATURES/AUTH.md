@@ -53,11 +53,37 @@ breaks it is skipped, and `:checkhealth hover` says so. The path part may use
 `*` freely (`acme.atlassian.net/wiki/*`). The match is `hover.pins.matches`,
 the same glob [pins](PINS.md) use, whole-host and case-insensitive:
 `acme.atlassian.net.evil.com` and `acme.atlassian.net@evil.com` match nothing.
+**A port is part of the host here**: a rule for `wiki.acme.com` does not cover
+`wiki.acme.com:8090`, because a credential for a host is not a credential for
+every service listening on it. Name the port to cover it
+(`wiki.acme.com:8090`). (A [pin](PINS.md), which sends nothing anywhere,
+ignores a port its glob does not name.)
+
+**A path-scoped rule is not crossed by `..`.** curl resolves `.` and `..` — and
+`%2e` — in a path *before* it sends, so `/wiki/../other/x` matches a rule for
+`acme.atlassian.net/wiki/*` as written and is requested as `/other/x`
+(measured against a local server). For a glob with a path part, such a URL is
+not covered; a later host-only rule still may be. A host-only rule means the
+whole host and is not affected.
 
 **HTTPS only.** A credential is never sent over `http://`, and a redirect may
 only go to `https://` (`--proto-redir =https`). curl does not forward a
 credential to a *different* host after a redirect on its own — that takes
-`--location-trusted`, which is not passed.
+`--location-trusted`. That can be switched on from outside (a
+`location-trusted` line in your own `~/.curlrc`, which curl reads before the
+command line — measured: the credential followed the redirect), so
+`--no-location-trusted` is passed explicitly, ahead of `-L`.
+
+**The link is not a pattern.** curl expands `[1-100]` and `{a,b}` in a URL into
+one request each, and the link is text out of a document: `p[1-100000]` was
+~3000 authenticated requests inside the 2 s fetch timeout. `--globoff` is
+passed on both requests, whether or not a credential applies.
+
+**A token is a single line.** Surrounding whitespace — the newline a file read
+leaves — is trimmed. A control character left *inside* means it is not a token,
+and nothing is sent: a CR or LF in a header value splits the request (measured:
+the part after it arrives as a header of its own). `:checkhealth hover` reports
+such a variable as unset.
 
 **Never on a command line.** Any process on the machine can read another's
 argv (`ps`, Process Explorer, WMI). The credential reaches curl through its own
@@ -77,7 +103,10 @@ of an authenticated page stays what it was: the login form.
 
 A downloaded PDF is cached under `stdpath("cache")/hover.nvim/webpdf` for
 `links.pdf.cache_days`, like any other. A document you needed a token for is
-therefore on disk, readable by your account, for that long. Lower
-`links.pdf.cache_days` (`1` is the shortest sweep) if that is not acceptable.
+therefore on disk for that long. On Linux and macOS the directory is mode
+`0700` — `curl -o` creates the file `0644`, so the directory is what keeps other
+local accounts out, and one an older version made `0755` is tightened. Windows
+has no such bits. Lower `links.pdf.cache_days` (`1` is the shortest sweep) if
+that is not acceptable.
 `0` is not "keep nothing": the sweep treats a non-positive value as "do not
 sweep", so the files stay until deleted by hand.

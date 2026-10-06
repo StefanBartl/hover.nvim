@@ -102,6 +102,29 @@ local function key_for(url, response)
 end
 
 ---@internal
+--- The cache directory, readable by this account only.
+---
+--- A document fetched with a credential is private content, and `curl -o`
+--- creates its file with the default mode (644 under umask 022) inside a
+--- directory `mkdir` made 755: readable by every other local account. The
+--- directory is what keeps them out. `mkdir` leaves an existing directory
+--- alone and this one predates `links.auth`, so it is tightened too -- only
+--- when a group or other bit is set, so the common call costs one stat.
+--- Windows has no such bits to set.
+---@param dir string
+---@return nil
+local function private_dir(dir)
+  vim.fn.mkdir(dir, "p", "0700")
+  if vim.fn.has("win32") == 1 then
+    return
+  end
+  local st = uv.fs_stat(dir)
+  if st and bit.band(st.mode, 63) ~= 0 then
+    pcall(uv.fs_chmod, dir, 448)
+  end
+end
+
+---@internal
 --- Where the document goes. Named after the host so a stray file in the cache
 --- directory is identifiable, plus a digest of the key so two documents on one
 --- host, and two versions of one document, do not collide.
@@ -110,7 +133,7 @@ end
 ---@return string
 local function output_path(url, key)
   local dir = cache_dir()
-  vim.fn.mkdir(dir, "p")
+  private_dir(dir)
   local host = (url:match("^https?://([^/]+)") or "page"):gsub("[^%w%-_.]", "_")
   return ("%s/%s-%s.pdf"):format(dir, host, vim.fn.sha256(key):sub(1, 16))
 end
@@ -334,9 +357,13 @@ function M.preview(target, response, opts, on_result)
   -- **A credential for this host goes in on stdin (`-K -`), never in argv**,
   -- where any process on the machine could read it, and redirects are held to
   -- https. See `hover.auth`.
+  --
+  -- `--globoff`, for the same reason `preview.url` has it: a `[1-100000]` in
+  -- the link would otherwise be that many downloads.
   local argv = {
     "curl",
     "-sSL",
+    "--globoff",
     "--max-filesize",
     tostring(cap),
     "--max-time",
@@ -348,6 +375,10 @@ function M.preview(target, response, opts, on_result)
   }
   local credential = require("hover.auth").stdin(url)
   if credential then
+    -- Ahead of `-sSL`, which carries `-L`: `--no-location-trusted` clears
+    -- follow-location, and a `location-trusted` in `~/.curlrc` would forward
+    -- the credential across hosts.
+    table.insert(argv, 2, "--no-location-trusted")
     vim.list_extend(argv, { "--proto-redir", "=https", "-K", "-" })
   end
   argv[#argv + 1] = url

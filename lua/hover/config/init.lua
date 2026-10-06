@@ -220,18 +220,6 @@ local function replace_key_lists(opts)
     end
   end
 
-  -- The pin list is a list of rules, ordered, where the first match wins:
-  -- merged by index, a shorter list given to a second `setup()` would leave
-  -- the earlier call's remaining pins in force.
-  local links = opts.links
-  if type(links) == "table" and type(_options.links) == "table" then
-    for _, name in ipairs({ "pins", "auth" }) do
-      if links[name] ~= nil then
-        _options.links[name] = vim.deepcopy(links[name])
-      end
-    end
-  end
-
   -- Flat key lists: the whole list is the setting.
   for _, name in ipairs({ "dismiss_keys", "open_keys" }) do
     if opts[name] ~= nil then
@@ -256,6 +244,11 @@ function M.setup(opts)
   local incoming = vim.deepcopy(opts)
   normalize(incoming)
 
+  -- `tbl_deep_extend` replaces a list-like table as a whole rather than merging
+  -- it by index, so `links.pins` and `links.auth` (ordered lists of rules, the
+  -- first match wins) are replaced by a second `setup()`, never mixed with the
+  -- first call's. `TESTS/pins_spec.lua` and `TESTS/auth_spec.lua` hold that
+  -- contract, in case a Neovim release ever changes it.
   _options = vim.tbl_deep_extend("force", _options, incoming)
   replace_key_lists(incoming)
 

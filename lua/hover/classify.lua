@@ -119,24 +119,18 @@ function M.classify(target, source_path)
     path_part = raw
   end
 
-  local abs = resolve_path(path_part, source_path)
-  local stat = uv.fs_stat(abs)
+  return M.file(resolve_path(path_part, source_path), raw, anchor)
+end
 
-  if not stat then
-    return {
-      type = "missing",
-      raw = raw,
-      path = abs,
-      anchor = anchor,
-      reason = "no such file",
-    }
-  end
-
-  if stat.type == "directory" then
-    return { type = "directory", raw = raw, path = abs, size = stat.size }
-  end
-
-  local ext = extension(abs)
+--- What a file with this extension is, as a target type: `image`, `pdf`,
+--- `markdown`, `office`, `video`, or plain `file`.
+---
+--- Public because "what *would* this have been" is a question with a second
+--- asker: `hover.pins` asks it of a pinned file that has gone missing, to
+--- decide whether the hover should say so on its own.
+---@param ext string|nil Lowercased, without the dot.
+---@return "image"|"pdf"|"markdown"|"office"|"video"|"file"
+function M.kind_for_ext(ext)
   local kind = "file"
   if ext and IMAGE_EXT[ext] then
     kind = "image"
@@ -158,6 +152,41 @@ function M.classify(target, source_path)
     -- to draw.
     kind = "video"
   end
+
+  return kind
+end
+
+--- Classify an absolute filesystem path: what is there, by one stat call and
+--- the extension.
+---
+--- The tail of `classify`, public because a caller that already *has* a path
+--- must not send it back through the front: `classify` reads `//server/share`
+--- as a protocol-relative URL, `www.x` as a host, and everything after a `#`
+--- as an anchor -- all of which are wrong for a path the caller knows is one.
+--- `hover.pins` is that caller.
+---@param abs string An absolute, normalized path.
+---@param raw string The target as written, kept in `raw`.
+---@param anchor? string
+---@return Hover.Target
+function M.file(abs, raw, anchor)
+  local stat = uv.fs_stat(abs)
+
+  if not stat then
+    return {
+      type = "missing",
+      raw = raw,
+      path = abs,
+      anchor = anchor,
+      reason = "no such file",
+    }
+  end
+
+  if stat.type == "directory" then
+    return { type = "directory", raw = raw, path = abs, size = stat.size }
+  end
+
+  local ext = extension(abs)
+  local kind = M.kind_for_ext(ext)
 
   return {
     type = kind,

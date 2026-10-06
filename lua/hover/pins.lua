@@ -12,13 +12,13 @@
 --- PNG once, and pin it.
 ---
 --- **A pin is a decision about what a link *is*, so it is made where the
---- link becomes a target.** `resolve` runs inside the classification, which is
---- why nothing downstream knows: the preview, the cache, the paging keys and
---- the zoom all see an ordinary `pdf` or `image` target. It is also why a pin
---- needs no switch of its own -- nothing leaves the machine, so there is no
---- disclosure to announce and no cost to gate -- and why it answers with
---- `links.web` off: a pinned link is read from disk, and the web switch is
---- about requests.
+--- link becomes a target.** `apply` runs inside the classification step of
+--- `hover`, which is why nothing downstream knows: the preview, the cache,
+--- the paging keys and the zoom all see an ordinary `pdf` or `image` target.
+--- It is also why a pin needs no switch of its own -- nothing leaves the
+--- machine, so there is no disclosure to announce and no cost to gate -- and
+--- why it answers with `links.web` off: a pinned link is read from disk, and
+--- the web switch is about requests.
 ---
 --- **The match is a glob, not a Lua pattern.** One wildcard, `*`, which
 --- matches any run of characters *including* `/` -- a URL has no path
@@ -33,8 +33,18 @@
 ---     `example.com` is that host and nothing that merely starts with it.
 ---   * A glob **with a `/`** is matched against host, path and query:
 ---     `example.com/wiki/*`, or `example.com/view?id=42` for one page.
+---   * **A pin ignores a port its glob does not name**: `example.com` covers
+---     `example.com:8090`, which is where an intranet Confluence lives.
+---     `matches` itself is strict about it, because `hover.auth` uses the
+---     same function and a credential rule for a host is not a rule for
+---     every service on that host.
 ---
 --- The first pin that matches wins, in the order they are listed.
+---
+--- **The matcher does not backtrack.** The literals between the stars are
+--- found left to right with a plain `find`, so the cost is linear in the URL.
+--- A glob compiled to a Lua pattern was cubic with three stars, and the URL
+--- it runs against is text out of a document the reader did not write.
 ---
 ---@see hover.classify
 
@@ -44,15 +54,20 @@ local uv = vim.uv or vim.loop
 local expand_path = require("lib.nvim.cross.fs.expand_path")
 
 ---@internal
---- The part of a URL a glob is matched against: lowercased, scheme and
+--- The parts of a URL a glob is matched against: lowercased, scheme and
 --- fragment removed, and a path always present -- `https://example.com` and
 --- `https://example.com/` are the same page and must not need two globs.
 ---@param url string
+---@param ignore_port boolean Drop a trailing `:port` from the host.
 ---@return string host
 ---@return string full host, path and query
-local function split(url)
+local function split(url, ignore_port)
   local rest = url:lower():gsub("^%a[%w+.-]*://", ""):gsub("#.*$", "")
   local host, tail = rest:match("^([^/?]*)(.*)$")
+  if ignore_port then
+    -- A trailing port only: never `user@`, never the inside of `[::1]`.
+    host = host:gsub(":%d+$", "")
+  end
   if tail == "" or tail:sub(1, 1) == "?" then
     tail = "/" .. tail
   end
@@ -60,15 +75,40 @@ local function split(url)
 end
 
 ---@internal
---- A glob as an anchored Lua pattern.
+--- Whether `subject` matches `glob`, where `*` is the only wildcard and
+--- matches any run of characters, empty included.
+---
+--- The first piece anchors the start, the last piece anchors the end, and the
+--- pieces between are placed left to right. Taking the leftmost occurrence of
+--- each is always safe for a pattern made only of literals and stars, so
+--- there is nothing to backtrack over.
+---@param subject string
 ---@param glob string
----@return string
-local function compile(glob)
-  local pieces = {}
-  for piece in (glob .. "*"):gmatch("(.-)%*") do
-    pieces[#pieces + 1] = vim.pesc(piece)
+---@return boolean
+local function glob_match(subject, glob)
+  if not glob:find("*", 1, true) then
+    return subject == glob
   end
-  return "^" .. table.concat(pieces, ".*") .. "$"
+  local parts = vim.split(glob, "*", { plain = true })
+  local head, tail = parts[1], parts[#parts]
+  if #subject < #head + #tail or subject:sub(1, #head) ~= head then
+    return false
+  end
+  if tail ~= "" and subject:sub(-#tail) ~= tail then
+    return false
+  end
+  local pos, limit = #head + 1, #subject - #tail
+  for i = 2, #parts - 1 do
+    local part = parts[i]
+    if part ~= "" then
+      local s, e = subject:find(part, pos, true)
+      if not s or e > limit then
+        return false
+      end
+      pos = e + 1
+    end
+  end
+  return true
 end
 
 --- Whether `url` matches `glob`.
@@ -77,8 +117,9 @@ end
 --- does before putting a pin in their configuration.
 ---@param url string
 ---@param glob string
+---@param opts? { ignore_port?: boolean } A pin passes `true`; a credential rule must not.
 ---@return boolean
-function M.matches(url, glob)
+function M.matches(url, glob, opts)
   if type(url) ~= "string" or type(glob) ~= "string" or glob == "" then
     return false
   end
@@ -86,12 +127,16 @@ function M.matches(url, glob)
   if wanted == "" then
     return false
   end
-  local host, full = split(url)
+  -- A port is ignored only when the glob does not name one itself, so
+  -- `example.com:8090` still means exactly that port.
+  local glob_host = wanted:match("^([^/?]*)") or ""
+  local ignore_port = opts ~= nil and opts.ignore_port == true and not glob_host:find(":", 1, true)
+  local host, full = split(url, ignore_port)
   -- A glob that names no path is a statement about the host, and is compared
   -- with the host alone: otherwise `example.com*` would also catch
   -- `example.com.evil.net`, and `example.com` would match nothing at all.
   local subject = wanted:find("/", 1, true) and full or host
-  return subject:match(compile(wanted)) ~= nil
+  return glob_match(subject, wanted)
 end
 
 ---@internal
@@ -160,12 +205,23 @@ end
 function M.resolve(url)
   for _, pin in ipairs(M.list()) do
     for _, glob in ipairs(pin.match) do
-      if M.matches(url, glob) then
+      if M.matches(url, glob, { ignore_port = true }) then
         return { glob = glob, show = pin.show, path = resolve_show(pin.show) }
       end
     end
   end
   return nil
+end
+
+--- Whether a URL as written in a document is covered by a pin.
+---
+--- Asked in the form the classification will see: `http:\\host` is repaired
+--- there, and a pin has to agree with it about what the URL is.
+---@param raw string
+---@return boolean
+function M.covers(raw)
+  local target = require("hover.classify").classify(raw, nil)
+  return target.type == "url" and target.url ~= nil and M.resolve(target.url) ~= nil
 end
 
 --- Replace a classified URL with the file it is pinned to.
@@ -175,6 +231,10 @@ end
 --- original is kept in `pinned.url`, because the one thing a reader looking
 --- at a stand-in for a page wants next is the page itself: `M.open` goes
 --- there rather than to the file.
+---
+--- The file is classified with `classify.file`, **not** `classify.classify`:
+--- the latter would read `//server/share/x.pdf` as a protocol-relative URL
+--- and everything after a `#` in a file name as an anchor.
 ---@param target Hover.Target
 ---@return Hover.Target
 function M.apply(target)
@@ -186,8 +246,8 @@ function M.apply(target)
     return target
   end
 
-  local pinned = require("hover.classify").classify(pin.path, nil)
-  pinned.raw = target.raw
+  local classify = require("hover.classify")
+  local pinned = classify.file(pin.path, target.raw)
   pinned.pinned = { url = target.url, glob = pin.glob, show = pin.show }
   if pinned.type == "missing" then
     -- Not a fall-through to the ordinary link preview. The reader said what
@@ -195,6 +255,11 @@ function M.apply(target)
     -- thing the pin was written to prevent, and it would hide that the file
     -- moved.
     pinned.reason = ("pinned file not found (links.pins: %s)"):format(pin.glob)
+    -- What the file would have been, so the trigger can treat it like that
+    -- file: a gone PDF is announced where a PDF would have opened, and a gone
+    -- `.md` stays as quiet as a present one.
+    local ext = pin.path:match("%.([%w]+)$")
+    pinned.pinned.as = classify.kind_for_ext(ext and ext:lower() or nil)
   end
   return pinned
 end

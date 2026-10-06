@@ -128,6 +128,28 @@ local function check_lib()
 end
 
 ---@internal
+--- How many entries the reader wrote under a list-shaped option.
+---
+--- A value that is not a list -- one rule written without the outer braces, or
+--- a bare string -- counts as one entry, so the "unusable and skipped" warning
+--- fires for it; `#` alone is 0 for a table with only named keys, and the
+--- whole option would be dropped without a word. `false` is "switched off".
+---@param raw any
+---@return integer
+local function written_count(raw)
+  if raw == nil or raw == false then
+    return 0
+  end
+  if type(raw) ~= "table" then
+    return 1
+  end
+  if #raw == 0 and next(raw) ~= nil then
+    return 1
+  end
+  return #raw
+end
+
+---@internal
 --- The state every switch is in, plus the two combinations that look like a
 --- defect from the outside.
 ---@return nil
@@ -377,7 +399,7 @@ local function check_config()
   local links = config.get().links
   local auth = require("hover.auth")
   local rules = auth.list()
-  local written_auth = type(links) == "table" and type(links.auth) == "table" and #links.auth or 0
+  local written_auth = written_count(type(links) == "table" and links.auth or nil)
   if written_auth > 0 then
     if #rules < written_auth then
       health.warn(
@@ -387,6 +409,7 @@ local function check_config()
         ),
         {
           "Each rule needs `match` (host part without a wildcard) and `token_env` (a variable name).",
+          "The setting is a LIST of rules: `auth = { { match = ..., token_env = ... } }`.",
           "`*.example.com` is refused on purpose: it would send the token to every tenant.",
         }
       )
@@ -396,12 +419,13 @@ local function check_config()
     for _, rule in ipairs(rules) do
       if not auth.token_set(rule.token_env) then
         health.warn(
-          ("links.auth: $%s is not set -- nothing is sent to %s"):format(
+          ("links.auth: $%s is not set (or unusable) -- nothing is sent to %s"):format(
             rule.token_env,
             table.concat(rule.match, ", ")
           ),
           {
             "Set it for the user (`setx`), then restart Neovim: a running session keeps its environment.",
+            "A value with a control character inside it (after trimming the ends) counts as unset.",
           }
         )
       end
@@ -417,13 +441,16 @@ local function check_config()
   -- file has moved shows "pinned file not found" in the float, which is right
   -- and still better learned here than by hovering every link in turn.
   local pins = require("hover.pins")
-  local written = type(links) == "table" and type(links.pins) == "table" and #links.pins or 0
+  local written = written_count(type(links) == "table" and links.pins or nil)
   local usable = pins.list()
   if written > 0 then
     if #usable < written then
       health.warn(
         ("links.pins: %d of %d entries unusable and skipped"):format(written - #usable, written),
-        { "Each pin needs `match` (a glob, or a list of them) and `show` (a file), both strings." }
+        {
+          "Each pin needs `match` (a glob, or a list of them) and `show` (a file), both strings.",
+          "The setting is a LIST of pins: `pins = { { match = ..., show = ... } }`.",
+        }
       )
     else
       health.ok(("links.pins: %d configured"):format(#usable))

@@ -127,6 +127,79 @@ describe("hover.auth", function()
       })
       assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki"))
     end)
+
+    it("does not take a port the rule did not name", function()
+      -- `matches` is strict about it for exactly this reason: a credential for
+      -- a host is not a credential for every service listening on it.
+      assert.is_nil(auth.for_url("https://acme.atlassian.net:8443/wiki"))
+      rules({ { match = "acme.atlassian.net:8443", token_env = "HOVER_TEST_TOKEN" } })
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net:8443/wiki"))
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki"))
+    end)
+  end)
+
+  describe("a rule with a path part", function()
+    before_each(function()
+      rules({ { match = "acme.atlassian.net/wiki/*", user = "me", token_env = "HOVER_TEST_TOKEN" } })
+    end)
+
+    it("is not crossed by a dot segment, which curl resolves before it sends", function()
+      -- `/wiki/../other/x` matches `/wiki/*` as written and is requested as
+      -- `/other/x`: measured against a local server with curl 8.18.
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/spaces/A"))
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/../other/x"))
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/%2e%2e/other/x"))
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/.%2E/other/x"))
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/./x"))
+    end)
+
+    it("reads only the path for that, not the query or the fragment", function()
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/x?next=../y"))
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/x#../y"))
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/a..b/c"))
+    end)
+
+    it("leaves a later host-only rule free to cover the URL", function()
+      rules({
+        { match = "acme.atlassian.net/wiki/*", user = "me", token_env = "HOVER_TEST_UNSET" },
+        { match = "acme.atlassian.net", user = "me", token_env = "HOVER_TEST_TOKEN" },
+      })
+      assert.equals(TOKEN, auth.for_url("https://acme.atlassian.net/wiki/../x").token)
+    end)
+
+    it("does not apply to a host-only rule, which means the whole host", function()
+      rules({ { match = "acme.atlassian.net", user = "me", token_env = "HOVER_TEST_TOKEN" } })
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/../other/x"))
+    end)
+  end)
+
+  describe("the token", function()
+    before_each(function()
+      rules({ { match = "acme.atlassian.net", user = "me", token_env = "HOVER_TEST_TOKEN" } })
+    end)
+
+    it("loses the whitespace a file read leaves around it", function()
+      uv.os_setenv("HOVER_TEST_TOKEN", TOKEN .. "\r\n")
+      assert.equals(TOKEN, auth.for_url("https://acme.atlassian.net/x").token)
+      uv.os_setenv("HOVER_TEST_TOKEN", "  " .. TOKEN .. "\n")
+      assert.equals(TOKEN, auth.for_url("https://acme.atlassian.net/x").token)
+      assert.is_true(auth.token_set("HOVER_TEST_TOKEN"))
+    end)
+
+    it("is not a token at all with a control character inside, and nothing is sent", function()
+      -- A CR or LF in a header value splits the request: measured, the part
+      -- after it arrives as a header of its own.
+      uv.os_setenv("HOVER_TEST_TOKEN", "abc\r\nX-Smuggled: 1")
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/x"))
+      assert.is_false(auth.token_set("HOVER_TEST_TOKEN"))
+      uv.os_setenv("HOVER_TEST_TOKEN", "ab\tcd")
+      assert.is_false(auth.token_set("HOVER_TEST_TOKEN"))
+    end)
+
+    it("is not a token when it is only whitespace", function()
+      uv.os_setenv("HOVER_TEST_TOKEN", " \r\n ")
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/x"))
+    end)
   end)
 
   describe("how it reaches curl", function()
@@ -153,10 +226,33 @@ describe("hover.auth", function()
       })
       local request = { raw_args = { "-L", "--max-filesize", "2000000" } }
       auth.apply("https://cloud.example.com/x", request)
-      assert.same(
-        { "-L", "--max-filesize", "2000000", "--proto-redir", "=https" },
-        request.raw_args
-      )
+      assert.same({
+        "--no-location-trusted",
+        "-L",
+        "--max-filesize",
+        "2000000",
+        "--proto-redir",
+        "=https",
+      }, request.raw_args)
+    end)
+
+    it("switches location-trusted off BEFORE -L, because it also clears following", function()
+      -- A `location-trusted` line in the reader's ~/.curlrc is read before the
+      -- command line and would forward the credential across hosts: measured
+      -- with two local servers. `--no-location-trusted` after `-L` would turn
+      -- following off, and no redirect would be followed at all.
+      rules({
+        { match = "cloud.example.com", user = "me@acme.com", token_env = "HOVER_TEST_TOKEN" },
+      })
+      local request = { raw_args = { "-L" } }
+      auth.apply("https://cloud.example.com/x", request)
+      local off, follow
+      for i, arg in ipairs(request.raw_args) do
+        off = arg == "--no-location-trusted" and i or off
+        follow = arg == "-L" and i or follow
+      end
+      assert.is_truthy(off)
+      assert.is_true(off < follow)
     end)
 
     it("leaves a request for any other host untouched", function()
@@ -208,29 +304,64 @@ describe("hover.auth", function()
       return vim.inspect(value):find(TOKEN, 1, true) ~= nil
     end
 
-    it("hands the fetch the credential through curl's own option, not a header in argv", function()
-      local real = require("lib.nvim.net.curl")
-      package.loaded["lib.nvim.net.curl"] = setmetatable({
-        fetch_raw = function(url, request)
-          captured = { url = url, request = request }
-        end,
-      }, { __index = real })
-      local url = require("hover.preview.url")
-      url.reset()
+    --- Where `flag` is in `argv`, or nil.
+    ---@param argv string[]
+    ---@param flag string
+    ---@return integer|nil
+    local function index_of(argv, flag)
+      for i, arg in ipairs(argv) do
+        if arg == flag then
+          return i
+        end
+      end
+      return nil
+    end
 
+    it("sends the fetch's credential on curl's stdin, through the real curl wrapper", function()
+      -- `vim.system` is the stub, the wrapper is the real one: what is asserted
+      -- is the command line and the stdin that actually reach curl, not the
+      -- options table that hover builds on the way.
+      vim.system = function(argv, opts)
+        captured = { argv = argv, opts = opts }
+        return {}
+      end
+      local url = require("hover.preview.url")
       local classify = require("hover.classify")
+      url.reset()
       url.fetch(classify.classify("https://cloud.example.com/wiki/x", nil), {}, function() end)
 
-      assert.equals("https://cloud.example.com/wiki/x", captured.url)
-      assert.same({ user = "me@acme.com", pass = TOKEN }, captured.request.auth)
-      assert.is_nil(captured.request.headers.Authorization)
-      assert.is_false(in_argv(captured.request.raw_args))
-      assert.is_true(vim.tbl_contains(captured.request.raw_args, "--proto-redir"))
+      assert.is_truthy(captured, "the fetch was not started")
+      assert.is_false(in_argv(captured.argv), "the token is on the command line")
+      assert.equals(('user = "me@acme.com:%s"\n'):format(TOKEN), captured.opts.stdin)
+      assert.is_truthy(index_of(captured.argv, "--proto-redir"))
+      assert.is_true(
+        index_of(captured.argv, "--no-location-trusted") < index_of(captured.argv, "-L")
+      )
+      assert.is_truthy(index_of(captured.argv, "--globoff"))
 
+      captured = nil
       url.reset()
       url.fetch(classify.classify("https://other.example.com/", nil), {}, function() end)
-      assert.is_nil(captured.request.auth)
-      assert.is_nil(captured.request.bearer_token)
+      assert.is_nil(captured.opts.stdin)
+      assert.is_nil(index_of(captured.argv, "--no-location-trusted"))
+    end)
+
+    it("does not let curl expand a bracket or a brace in the link into many requests", function()
+      -- Measured: `p[1-100000]` in a hovered link was ~3000 authenticated
+      -- requests inside the 2 s fetch timeout, and the same for a download.
+      -- Unconditional, so the unauthenticated request is protected too.
+      vim.system = function(argv, opts)
+        captured = { argv = argv, opts = opts }
+        return {}
+      end
+      local url = require("hover.preview.url")
+      url.reset()
+      url.fetch(
+        require("hover.classify").classify("https://other.example.com/p[1-100]{a,b}", nil),
+        {},
+        function() end
+      )
+      assert.is_truthy(index_of(captured.argv, "--globoff"))
     end)
 
     it("downloads a document with the credential on stdin and never in argv", function()
@@ -256,6 +387,11 @@ describe("hover.auth", function()
       assert.equals(('user = "me@acme.com:%s"\n'):format(TOKEN), captured.opts.stdin)
       assert.is_true(vim.tbl_contains(captured.argv, "-K"))
       assert.is_true(vim.tbl_contains(captured.argv, "--proto-redir"))
+      assert.is_true(vim.tbl_contains(captured.argv, "--globoff"))
+      -- Ahead of `-sSL`, which carries `-L`: after it, following would be off.
+      assert.is_true(
+        index_of(captured.argv, "--no-location-trusted") < index_of(captured.argv, "-sSL")
+      )
 
       captured = nil
       webpdf.reset()

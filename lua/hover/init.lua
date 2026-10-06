@@ -317,13 +317,17 @@ function M.target_under_cursor(bufnr, opts)
   -- make every link in every document a hover target, which is exactly the
   -- overload the switch exists to prevent.
   --
-  -- Also when a pin is configured: a pin is a reader's statement about what a
-  -- URL shows, and one on a URL the cursor can never find would do nothing.
-  -- What this finds that the web switch would have withheld is still stopped
-  -- in `show` -- an unpinned URL classifies as `url` and is refused there.
-  if force or config.web_enabled() or require("hover.pins").any() then
+  -- Also when a pin is configured, **for a URL a pin covers and no other**: a
+  -- pin is a reader's statement about what a URL shows, and one on a URL the
+  -- cursor can never find would do nothing. An unpinned URL is not claimed
+  -- with `web` off, exactly as before pins existed -- claiming it would end
+  -- the lookup here, and `show` would then refuse it and never reach the
+  -- position previews and bare paths that would have answered.
+  local web = force or config.web_enabled()
+  local pins = require("hover.pins")
+  if web or pins.any() then
     local url = require("hover.bare_url").under_cursor(bufnr)
-    if url then
+    if url and (web or pins.covers(url.target)) then
       return url
     end
   end
@@ -807,6 +811,23 @@ end
 -- ---------------------------------------------------------------------------
 
 ---@internal
+--- The type the `auto_hover` gate is asked about.
+---
+--- A pinned file that has gone missing is a `missing` target, and `missing` is
+--- off by default -- which would make the one hover that exists to say "the
+--- file you pinned is gone" the one that stays silent. So it is asked as the
+--- file it would have been: a gone PDF is announced where a PDF would have
+--- opened, and a gone `.md` stays as quiet as a present one.
+---@param target Hover.Target
+---@return string
+local function gate_type(target)
+  if target.type == "missing" and target.pinned and target.pinned.as then
+    return target.pinned.as
+  end
+  return target.type
+end
+
+---@internal
 --- `classify.classify`, and then the reader's own say on what a URL shows.
 ---
 --- A pin turns a matching link into the local file it names (see
@@ -941,6 +962,16 @@ function M.show(opts)
     return false
   end
 
+  -- A pinned link is a link: with `links` off it does not hover by itself,
+  -- whichever route found it (a bare path in a URL with an extension still
+  -- reaches here). Applied at the gate rather than by skipping the pin, so a
+  -- float opened on request keeps one identity across its own re-trigger.
+  if target.pinned and not opts.force and not config.links_enabled() then
+    M.hide()
+    _suppressed = nil
+    return false
+  end
+
   -- The type is one this reader does not want opening by itself.
   --
   -- Here rather than at the source, and for the opposite reason the web gate
@@ -950,7 +981,7 @@ function M.show(opts)
   -- is the float and the preview behind it, not the work of finding out there
   -- was something here. A reader expecting this to make the plugin cheaper is
   -- getting quiet instead, which is what they asked for.
-  if not opts.force and not config.auto_hover_for(target.type) then
+  if not opts.force and not config.auto_hover_for(gate_type(target)) then
     M.hide()
     _suppressed = nil
     return false
@@ -1265,7 +1296,9 @@ function M.why()
     end
     if target.type == "url" and not config.web_enabled() then
       say("  but web links are off. `:Hover links web on`.")
-    elseif not config.auto_hover_for(target.type) then
+    elseif target.pinned and not config.links_enabled() then
+      say("  but links are off. `:Hover links on`.")
+    elseif not config.auto_hover_for(gate_type(target)) then
       -- The gate `:Hover links web on` used to walk straight into. Both
       -- statements were true at once -- web links hover, and the trigger does
       -- not open them -- and this report knew only the first, so the one
@@ -1501,7 +1534,11 @@ function M.open()
     -- message and no action -- which `pcall` reports as success, so the float
     -- would close over nothing. Falling back to the pick is the old behaviour,
     -- and the old behaviour is at least an opened window.
-    local is_url = target.type == "url"
+    -- A pinned target is a file standing in for a URL, and `what` is that URL:
+    -- it goes the way an unpinned one does, not through the `default` handler
+    -- as a `path=` (open.nvim expands `$VAR` in a path, and a query string is
+    -- not one).
+    local is_url = target.type == "url" or target.pinned ~= nil
     local handler = nil
     if not is_url then
       local ok_registry, registry = pcall(require, "open.registry")

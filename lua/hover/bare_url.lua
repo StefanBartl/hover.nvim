@@ -131,6 +131,23 @@ function M.spans(line)
   return found
 end
 
+---@internal
+--- The bytes no shape in `PATTERNS` may contain: what ends a URL in running text.
+---@type table<integer, true>
+local TERMINATOR = {}
+for byte = 9, 13 do -- tab, newline, vertical tab, form feed, carriage return
+  TERMINATOR[byte] = true
+end
+for _, ch in ipairs({ " ", "<", ">", '"', "'", "`", "|" }) do
+  TERMINATOR[ch:byte()] = true
+end
+
+---@internal
+--- The longest token `under_cursor` will look at, each way from the cursor.
+--- Browsers and servers refuse URLs past a few KB, and the scan is quadratic in
+--- a long run.
+local MAX_TOKEN = 4096
+
 --- The URL under the cursor, in the shape `hover` expects from a
 --- source.
 ---@param bufnr? integer
@@ -164,13 +181,39 @@ function M.under_cursor(bufnr)
     return nil
   end
 
-  for _, span in ipairs(M.spans(line)) do
-    if col >= span.col and col <= span.col_end then
+  -- Only the token under the cursor can be the answer. No shape above contains
+  -- whitespace, an angle bracket, a quote, a backtick or a pipe, so a URL never
+  -- spans one -- and scanning the whole line is wasted work that is not merely
+  -- linear: the patterns restart at every position of a long run, so a
+  -- minified line of a few thousand characters costs seconds, on every
+  -- CursorHold, for as long as the cursor rests there.
+  local left, right = col + 1, col + 1
+  if TERMINATOR[line:byte(left)] or left > #line then
+    return nil
+  end
+  local lo, hi = math.max(1, left - MAX_TOKEN), math.min(#line, right + MAX_TOKEN)
+  while left > lo and not TERMINATOR[line:byte(left - 1)] do
+    left = left - 1
+  end
+  while right < hi and not TERMINATOR[line:byte(right + 1)] do
+    right = right + 1
+  end
+  -- A token that runs on past the cap is not a URL anyone wrote to be clicked.
+  if
+    (left == lo and left > 1 and not TERMINATOR[line:byte(left - 1)])
+    or (right == hi and right < #line and not TERMINATOR[line:byte(right + 1)])
+  then
+    return nil
+  end
+
+  local offset = left - 1
+  for _, span in ipairs(M.spans(line:sub(left, right))) do
+    if col - offset >= span.col and col - offset <= span.col_end then
       return {
         target = span.url,
         lnum = row,
-        col = span.col,
-        col_end = span.col_end,
+        col = span.col + offset,
+        col_end = span.col_end + offset,
         kind = "bare_url",
       }
     end

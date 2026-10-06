@@ -20,9 +20,19 @@
 ---    attacker writes a link to. The path part may use `*` freely; a rule that
 ---    breaks this is skipped, and `:checkhealth hover` says so.
 ---  * **HTTPS only.** Never sent over `http://`, and a redirect may only go to
----    `https://` (`--proto-redir =https`). curl itself does not forward the
----    credential to a *different* host after a redirect -- that needs
----    `--location-trusted`, which is not passed.
+---    `https://` (`--proto-redir =https`). curl does not forward the credential
+---    to a *different* host after a redirect unless `--location-trusted` is on,
+---    and that can be switched on from outside -- a `location-trusted` line in
+---    the reader's own `~/.curlrc` -- so `--no-location-trusted` is passed
+---    explicitly, ahead of `-L`.
+---  * **A path-scoped rule is not crossed by `..`.** curl resolves `.` and `..`
+---    (and `%2e`) in a path before it sends, so `/wiki/../other/x` matches a
+---    rule for `host/wiki/*` as written and is requested as `/other/x`. For a
+---    glob with a path part such a URL is not covered.
+---  * **A token is a single line.** Surrounding whitespace -- the newline a
+---    file read leaves -- is trimmed; a control character left inside means it
+---    is not a token, and nothing is sent. A CR or LF in a header value splits
+---    the request.
 ---  * **Never in argv.** A process's command line is readable by every other
 ---    process on the machine. The credential goes through curl's `-K -`
 ---    config on stdin, the way `lib.nvim.net.curl` already sends one.
@@ -94,6 +104,40 @@ function M.list()
   return out
 end
 
+---@internal
+--- The value of the variable `env`, as a credential: trimmed, or nil when it is
+--- unset, empty, or still holds a control character after the trim.
+---@param env string
+---@return string|nil
+local function read_token(env)
+  local value = (vim.uv or vim.loop).os_getenv(env)
+  if value == nil then
+    return nil
+  end
+  value = value:match("^%s*(.-)%s*$")
+  if value == "" or value:find("%c") then
+    return nil
+  end
+  return value
+end
+
+---@internal
+--- Whether curl would rewrite the path of `url` before sending it: a `.` or
+--- `..` segment, literal or percent-encoded (curl decodes `%2e` there -- measured).
+--- The query and the fragment are not part of the path.
+---@param url string
+---@return boolean
+local function has_dot_segment(url)
+  local path = url:gsub("^%a[%w+.-]*://[^/?#]*", ""):gsub("[?#].*$", "")
+  path = path:gsub("%%2[eE]", ".")
+  for segment in path:gmatch("[^/]+") do
+    if segment == "." or segment == ".." then
+      return true
+    end
+  end
+  return false
+end
+
 --- The credential for `url`, or nil.
 ---
 --- The first rule that matches decides, even when its variable is unset: a
@@ -109,11 +153,17 @@ function M.for_url(url)
   for _, rule in ipairs(M.list()) do
     for _, glob in ipairs(rule.match) do
       if pins.matches(url, glob) then
-        local token = (vim.uv or vim.loop).os_getenv(rule.token_env)
-        if token == nil or token == "" then
-          return nil
+        -- A glob with a path part scopes the credential to that path, and curl
+        -- would request a different one. This glob does not cover the URL; a
+        -- later host-only rule still may.
+        local scoped = (glob:gsub("^%a[%w+.-]*://", "")):find("/", 1, true) ~= nil
+        if not (scoped and has_dot_segment(url)) then
+          local token = read_token(rule.token_env)
+          if token == nil then
+            return nil
+          end
+          return { user = rule.user, token = token }
         end
-        return { user = rule.user, token = token }
       end
     end
   end
@@ -139,6 +189,12 @@ function M.apply(url, request)
     request.bearer_token = credential.token
   end
   request.raw_args = request.raw_args or {}
+  -- First, and ahead of `-L`: `--no-location-trusted` also clears
+  -- follow-location, so one that came later would stop redirects altogether.
+  -- It is here because a `location-trusted` line in the reader's `~/.curlrc`
+  -- is read before this command line and would otherwise forward the
+  -- credential across hosts.
+  table.insert(request.raw_args, 1, "--no-location-trusted")
   vim.list_extend(request.raw_args, { "--proto-redir", "=https" })
   return true
 end
@@ -164,8 +220,7 @@ end
 ---@param env string
 ---@return boolean
 function M.token_set(env)
-  local value = (vim.uv or vim.loop).os_getenv(env)
-  return value ~= nil and value ~= ""
+  return read_token(env) ~= nil
 end
 
 return M
