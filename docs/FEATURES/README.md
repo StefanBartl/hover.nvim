@@ -38,6 +38,12 @@ the alternatives that were rejected, and the bugs that changed the design.
   it, why it is the one feature here whose trigger gets a switch of its own, the
   profile without which a render would go out as the reader, and the fit-factor
   arithmetic that decides how tall a capture may be.
+- **[PINS.md](PINS.md)** — a link shown as a file of your own, for the page
+  nothing can render: why a login form is the correct answer for an anonymous
+  hover and a rule you write is the fix, why the match is a glob with one
+  wildcard, why it is the one link feature with no switch and still works with
+  `links.web` off, and why a pin whose file has gone says so instead of falling
+  back to the page it was written to replace.
 - **[ZEN.md](ZEN.md)** — the third way to make a hover bigger, and the one that
   is not a bigger window: why the previewer's *budget* becomes the screen
   rather than the float merely opening larger, the measurement that made it a

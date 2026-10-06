@@ -206,6 +206,34 @@ return {
     ---@type integer
     timeout_ms = 2000,
 
+    --- Links the reader has decided to show as a file of their own.
+    ---
+    --- **For the page nothing can render.** Behind a single sign-on the hover
+    --- has no cookies -- the browser it starts is given a throwaway profile
+    --- on purpose -- so the text preview and the screenshot both show the
+    --- login form. Print the page to a PDF or a PNG once, and pin it:
+    ---
+    ---     pins = {
+    ---       { match = "confluence.example.com/display/TEAM/*", show = "~/shots/team.pdf" },
+    ---       { match = { "wiki.example.com/a", "wiki.example.com/b" }, show = "~/shots/wiki.png" },
+    ---     }
+    ---
+    --- `match` is a glob: `*` is the only wildcard and matches anything, `/`
+    --- included; scheme, `#fragment` and case are ignored. Without a `/` it is
+    --- matched against the host alone (`*.example.com`), with one against host,
+    --- path and query. The first pin that matches wins. `show` is the file,
+    --- `~` and environment variables expanded, a relative path relative to the
+    --- Neovim configuration. Its extension decides how it is previewed -- a PDF
+    --- is paged and magnified like any other.
+    ---
+    --- Empty by default, and no switch of its own: nothing leaves the machine,
+    --- so there is no disclosure to announce and no cost to gate. It answers
+    --- with `web` off too -- a pinned link is read from disk. A configured
+    --- list *replaces* this one rather than merging into it. See
+    --- `hover.pins`.
+    ---@type Hover.Pin[]
+    pins = {},
+
     --- A link that answers with a PDF, shown as its first page rather than as
     --- its size.
     ---

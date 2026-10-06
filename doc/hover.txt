@@ -353,6 +353,31 @@ cannot carry both numbers. `links.pdf.max_bytes` (25 MB) is the second one, and
 a document over it is refused with both numbers named rather than truncated:
 half a PDF is not a smaller PDF, it is a file that will not open.
 
+                                                                  *hover-pins*
+A LINK CAN BE SHOWN AS A FILE OF YOUR OWN. `links.pins` maps a URL glob to a
+file, and a hovered link that matches is previewed as that file -- a PDF is
+paged and magnified, a picture is cropped, as if the link had pointed at it.
+It is for the page nothing can render: behind single sign-on the hover has no
+cookies (on purpose), so the text preview and the screenshot both show the
+login form. Print the page to a PDF or PNG once, and pin it:
+>lua
+    links = { pins = {
+      { match = "confluence.example.com/display/TEAM/*", show = "~/shots/team.pdf" },
+    } }
+<
+`match` is a glob. `*` is the only wildcard and matches anything, `/`
+included; `?` is literal; scheme, `#fragment` and case are ignored. A glob
+without a `/` is matched against the host alone (`*.example.com`), one with a
+`/` against host, path and query. The first pin that matches wins, and a
+configured list replaces the default rather than merging. `show` expands `~`
+and environment variables; a relative path is relative to the Neovim
+configuration.
+
+There is no switch: a pin reads a file and nothing leaves the machine, so it
+works with `links.web` off. A pin whose file is gone says "pinned file not
+found" rather than falling back to the page it replaces, and `<CR>` still
+opens the real URL. `:checkhealth hover` lists pins whose file does not exist.
+
                                                                    *hover-shot*
 A LINK CAN BE SHOWN AS A PICTURE OF THE PAGE instead of as text.
 `:Hover links web shot` renders it in a headless Chromium at 1280x900 and
@@ -596,6 +621,8 @@ worth asserting.
         enabled = false, max_bytes = 25000000,
         timeout_ms = 30000, cache_days = 7,
       },
+      -- Links shown as a file of your own; see |hover-pins|.
+      pins = {},
       shot = {
         enabled = false, eager = false, timeout_ms = 20000,
         width = 1280, height = 900, cache_days = 7, delay_ms = 1000,
