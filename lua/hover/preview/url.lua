@@ -762,7 +762,12 @@ function M.fetch(target, opts, callback)
     timeout_ms = opts.url_timeout_ms or 2000,
     -- Follow redirects and ask for HTML; without an Accept header some hosts
     -- answer with an API representation that has no <title> at all.
-    raw_args = { "-L", "--max-filesize", "2000000" },
+    --
+    -- `--globoff`: without it curl expands `[1-100]` and `{a,b}` in the URL
+    -- into one request each, and the link is text out of a document. A hover
+    -- on `p[1-100000]` was thousands of requests -- with a credential, each
+    -- one authenticated.
+    raw_args = { "-L", "--globoff", "--max-filesize", "2000000" },
     headers = { Accept = "text/html,application/xhtml+xml" },
   }
   -- A host the reader named in `links.auth` gets its credential, over stdin

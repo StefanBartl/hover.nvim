@@ -383,3 +383,118 @@ describe("hover.health, optional contributors (the soft() helper)", function()
     assert.is_true(any_contains(calls.ok, "images.info: available"))
   end)
 end)
+
+describe("hover.health, links.pins and links.auth", function()
+  local uv = vim.uv or vim.loop
+  local TOKEN = "health-spec-secret-token"
+  local root
+
+  before_each(function()
+    config.reset()
+    uv.os_setenv("HOVER_HEALTH_TOKEN", TOKEN)
+    uv.os_unsetenv("HOVER_HEALTH_UNSET")
+    root = vim.fn.tempname()
+    vim.fn.mkdir(root, "p")
+    vim.fn.writefile({ "x" }, root .. "/there.pdf")
+  end)
+
+  after_each(function()
+    config.reset()
+    uv.os_unsetenv("HOVER_HEALTH_TOKEN")
+    vim.fn.delete(root, "rf")
+  end)
+
+  ---@return table calls
+  local function run()
+    local calls, restore = fake_health()
+    local ok, err = pcall(health.check)
+    restore()
+    assert.is_true(ok, tostring(err))
+    return calls
+  end
+
+  it("says nothing about either when neither is configured", function()
+    local calls = run()
+    assert.is_false(any_contains(calls.ok, "links.pins"))
+    assert.is_false(any_contains(calls.warn, "links.pins"))
+    assert.is_false(any_contains(calls.ok, "links.auth"))
+    assert.is_false(any_contains(calls.warn, "links.auth"))
+  end)
+
+  it("counts the pins, and names one whose file is gone", function()
+    config.setup({
+      links = {
+        pins = {
+          { match = "a.example.com", show = root .. "/there.pdf" },
+          { match = "b.example.com", show = root .. "/gone.pdf" },
+        },
+      },
+    })
+    local calls = run()
+    assert.is_true(any_contains(calls.ok, "links.pins: 2 configured"))
+    assert.is_true(any_contains(calls.warn, "b.example.com"))
+    assert.is_true(any_contains(calls.warn, "does not exist"))
+    assert.is_false(any_contains(calls.warn, "a.example.com"))
+  end)
+
+  it("warns about an entry it skipped, and about a setting that is not a list", function()
+    config.setup({ links = { pins = { { match = "a.example.com" } } } })
+    assert.is_true(any_contains(run().warn, "links.pins: 1 of 1 entries unusable"))
+
+    -- One pin written without the outer braces: `#` is 0 and the whole
+    -- setting would be dropped without a word.
+    config.reset()
+    config.setup({ links = { pins = { match = "a.example.com", show = root .. "/there.pdf" } } })
+    local calls = run()
+    assert.is_true(any_contains(calls.warn, "links.pins: 1 of 1 entries unusable"))
+    assert.is_true(any_contains(calls.warn[#calls.warn].advice, "LIST"))
+  end)
+
+  it("reports an auth rule and whether its variable is set, never the value", function()
+    config.setup({
+      links = {
+        fetch = true,
+        auth = {
+          { match = "ok.example.com", user = "me", token_env = "HOVER_HEALTH_TOKEN" },
+          { match = "unset.example.com", user = "me", token_env = "HOVER_HEALTH_UNSET" },
+        },
+      },
+    })
+    local calls = run()
+    assert.is_true(any_contains(calls.ok, "links.auth: 2 rule(s)"))
+    assert.is_true(any_contains(calls.warn, "$HOVER_HEALTH_UNSET is not set"))
+    assert.is_false(any_contains(calls.warn, "$HOVER_HEALTH_TOKEN"))
+    assert.is_nil(vim.inspect(calls):find(TOKEN, 1, true), "the token reached the health output")
+  end)
+
+  it("warns about a rule skipped for a wildcard in the host", function()
+    config.setup({
+      links = { auth = { { match = "*.example.com", token_env = "HOVER_HEALTH_TOKEN" } } },
+    })
+    local calls = run()
+    assert.is_true(any_contains(calls.warn, "links.auth: 1 of 1 rules unusable"))
+    assert.is_nil(vim.inspect(calls):find(TOKEN, 1, true))
+  end)
+
+  it("warns about a rule written without the outer braces", function()
+    config.setup({
+      links = { auth = { match = "ok.example.com", token_env = "HOVER_HEALTH_TOKEN" } },
+    })
+    assert.is_true(any_contains(run().warn, "links.auth: 1 of 1 rules unusable"))
+  end)
+
+  it("says auth does nothing while fetching is off", function()
+    config.setup({
+      links = { auth = { { match = "ok.example.com", token_env = "HOVER_HEALTH_TOKEN" } } },
+    })
+    assert.is_true(any_contains(run().info, "does nothing while `links.fetch` is off"))
+  end)
+
+  it("counts a token with a control character inside as unset", function()
+    uv.os_setenv("HOVER_HEALTH_TOKEN", "ab\tcd")
+    config.setup({
+      links = { auth = { { match = "ok.example.com", token_env = "HOVER_HEALTH_TOKEN" } } },
+    })
+    assert.is_true(any_contains(run().warn, "$HOVER_HEALTH_TOKEN is not set (or unusable)"))
+  end)
+end)

@@ -70,6 +70,72 @@ describe("hover.pins.matches", function()
     assert.is_true(pins.matches("https://example.com/wiki", "EXAMPLE.com/WIKI#anything"))
   end)
 
+  it("is strict about a port by default, which is what a credential rule needs", function()
+    assert.is_false(pins.matches("https://wiki.corp:8090/x", "wiki.corp"))
+    assert.is_false(pins.matches("https://wiki.corp:8090/x", "wiki.corp/*"))
+    assert.is_true(pins.matches("https://wiki.corp:8090/x", "wiki.corp:8090"))
+    assert.is_true(pins.matches("https://wiki.corp:8090/x", "wiki.corp:*"))
+  end)
+
+  it("lets a pin ignore a port its glob does not name", function()
+    -- 8090 is Confluence's default port, so a pin written the way the
+    -- documentation writes it has to find an intranet host.
+    local loose = { ignore_port = true }
+    assert.is_true(
+      pins.matches("http://wiki.corp:8090/display/T/x", "wiki.corp/display/T/*", loose)
+    )
+    assert.is_true(pins.matches("http://wiki.corp:8090/x", "wiki.corp", loose))
+    assert.is_true(pins.matches("http://wiki.corp:8090/x", "*.corp", loose))
+    -- A port the glob names is still that port.
+    assert.is_false(pins.matches("http://wiki.corp:8091/x", "wiki.corp:8090", loose))
+    -- Never the userinfo: that is the safe direction.
+    assert.is_false(pins.matches("https://me@wiki.corp/x", "wiki.corp", loose))
+    assert.is_false(pins.matches("https://wiki.corp@evil.com/x", "wiki.corp", loose))
+  end)
+
+  it("does not backtrack: several stars against a long URL stay fast", function()
+    -- As a Lua pattern this was cubic in the number of stars: measured 2.7 ms
+    -- at 50 repeats, 475 ms at 200, 8.9 s at 400. The URL is text out of a
+    -- document the reader did not write.
+    local url = "https://example.com/" .. ("pages/view/"):rep(800) .. "x"
+    local started = (vim.uv or vim.loop).hrtime()
+    assert.is_false(pins.matches(url, "example.com/*/pages/*/view/*/edit"))
+    assert.is_true(pins.matches(url, "example.com/*/pages/*/view/*/x"))
+    local ms = ((vim.uv or vim.loop).hrtime() - started) / 1e6
+    assert.is_true(ms < 100, ("took %.1f ms"):format(ms))
+  end)
+
+  it("agrees with a pattern-based reference on random globs and URLs", function()
+    -- The matcher is hand-written, so it is held against the obvious (and
+    -- slow) implementation on inputs small enough for the slow one.
+    math.randomseed(7)
+    local function random(alphabet, len)
+      local out = {}
+      for k = 1, len do
+        out[k] = alphabet[math.random(#alphabet)]
+      end
+      return table.concat(out)
+    end
+    local function reference(subject, glob)
+      local pieces = {}
+      for piece in (glob .. "*"):gmatch("(.-)%*") do
+        pieces[#pieces + 1] = vim.pesc(piece)
+      end
+      return subject:match("^" .. table.concat(pieces, ".*") .. "$") ~= nil
+    end
+    for _ = 1, 3000 do
+      local host = random({ "a", "b", "." }, math.random(1, 5))
+      local path = random({ "a", "b", ".", "/" }, math.random(0, 8))
+      local glob = host .. "/" .. random({ "a", "b", ".", "/", "*" }, math.random(0, 6))
+      local url = "https://" .. host .. "/" .. path
+      assert.equals(
+        reference(host .. "/" .. path, glob),
+        pins.matches(url, glob),
+        url .. " ~ " .. glob
+      )
+    end
+  end)
+
   it("answers false for a glob that is not usable", function()
     assert.is_false(pins.matches("https://example.com", ""))
     assert.is_false(pins.matches("https://example.com", "https://"))
@@ -155,6 +221,64 @@ describe("hover.pins, resolving a link", function()
     assert.equals("missing", t.type)
     assert.matches("pinned file not found", t.reason)
     assert.matches("example.com/%*", t.reason)
+  end)
+
+  it("does not read a UNC path as a protocol-relative URL", function()
+    -- `vim.fs.normalize` turns `\\server\share\x.pdf` into `//server/share/x.pdf`,
+    -- which `classify.classify` reads as `https://server/share/x.pdf` -- a pin
+    -- that then makes a network request instead of paging a file.
+    config.setup({
+      links = { pins = { { match = "wiki.example.com", show = "//fileserver/shots/team.pdf" } } },
+    })
+    local t = pins.apply(require("hover.classify").classify("https://wiki.example.com/a", nil))
+    assert.not_equals("url", t.type)
+    assert.is_nil(t.url)
+    assert.matches("team%.pdf$", t.path)
+    assert.equals("pdf", t.pinned.as)
+  end)
+
+  it("keeps a `#` in the file name, which is not an anchor", function()
+    local pdf = file("report#1.pdf")
+    config.setup({ links = { pins = { { match = "example.com", show = pdf } } } })
+    local t = pins.apply(require("hover.classify").classify("https://example.com/a", nil))
+    assert.equals("pdf", t.type)
+    assert.equals(pdf, t.path)
+  end)
+
+  it("finds a pin for an intranet host whatever port the link carries", function()
+    local pdf = file("intranet.pdf")
+    config.setup({ links = { pins = { { match = "wiki.corp/display/T/*", show = pdf } } } })
+    local t =
+      pins.apply(require("hover.classify").classify("http://wiki.corp:8090/display/T/page", nil))
+    assert.equals(pdf, t.path)
+  end)
+
+  it("says what a missing file would have been, by its extension", function()
+    config.setup({
+      links = {
+        pins = {
+          { match = "a.example.com", show = root .. "/gone.pdf" },
+          { match = "b.example.com", show = root .. "/gone.md" },
+          { match = "c.example.com", show = root .. "/gone.PNG" },
+        },
+      },
+    })
+    local classify = require("hover.classify")
+    assert.equals("pdf", pins.apply(classify.classify("https://a.example.com/", nil)).pinned.as)
+    assert.equals(
+      "markdown",
+      pins.apply(classify.classify("https://b.example.com/", nil)).pinned.as
+    )
+    assert.equals("image", pins.apply(classify.classify("https://c.example.com/", nil)).pinned.as)
+  end)
+
+  it("knows whether a URL as written in a document is covered", function()
+    local pdf = file("covered.pdf")
+    config.setup({ links = { pins = { { match = "example.com/*", show = pdf } } } })
+    assert.is_true(pins.covers("https://example.com/a"))
+    assert.is_true(pins.covers([[http:\\example.com]]), "the Windows typo is repaired first")
+    assert.is_false(pins.covers("https://other.example.org/a"))
+    assert.is_false(pins.covers("not a url"))
   end)
 
   it("resolves a relative `show` against the Neovim configuration", function()
@@ -273,6 +397,132 @@ describe("hover.show on a pinned link, with the web hover off", function()
     })
     assert.is_false(hover.show({}))
     assert.is_falsy(float.win())
+  end)
+
+  it("does not claim an unpinned URL, so what would have answered still can", function()
+    -- Claiming it ended the lookup: `show` then refused the URL and never
+    -- reached the position previews and bare paths that answer without pins.
+    config.setup({
+      links = { web = false, pins = { { match = "other.example.com", show = pinned } } },
+    })
+    assert.is_nil(hover.target_under_cursor(buf, {}))
+    config.setup({
+      links = { web = false, pins = { { match = "confluence.example.com", show = pinned } } },
+    })
+    local found = hover.target_under_cursor(buf, {})
+    assert.equals("https://confluence.example.com/x/y", found.target)
+  end)
+
+  it("matches a pin for a host on a port the link carries", function()
+    vim.api.nvim_buf_set_lines(
+      buf,
+      0,
+      -1,
+      false,
+      { "see http://confluence.example.com:8090/x/y now" }
+    )
+    config.setup({
+      auto_hover = { markdown = true },
+      links = { web = false, pins = { { match = "confluence.example.com", show = pinned } } },
+    })
+    assert.is_true(hover.show({}))
+    assert.matches("stand%-in for the login page", shown())
+  end)
+
+  it("does not hover by itself with links off, whichever route found the URL", function()
+    -- The bare-path route finds a URL whose last component has an extension,
+    -- with `links` off, and the pin turned it into a file that passed the web
+    -- gate: the master switch for link hovers was not one.
+    vim.api.nvim_buf_set_lines(
+      buf,
+      0,
+      -1,
+      false,
+      { "see https://confluence.example.com/x/y.html now" }
+    )
+    config.setup({
+      auto_hover = { markdown = true },
+      links = {
+        enabled = false,
+        pins = { { match = "confluence.example.com", show = pinned } },
+      },
+    })
+    assert.is_false(hover.show({}))
+    assert.is_falsy(float.win())
+    assert.matches("links are off", table.concat(hover.why(), "\n"))
+    -- Asked for outright, it still answers.
+    assert.is_true(hover.show({ force = true }))
+  end)
+
+  it("announces a pinned PDF that has gone, where the PDF would have opened", function()
+    -- `missing` is off in auto_hover, so the one hover that exists to say
+    -- "the file you pinned is gone" stayed silent, and the link just stopped
+    -- hovering.
+    config.setup({
+      links = {
+        web = false,
+        pins = { { match = "confluence.example.com", show = root .. "/gone.pdf" } },
+      },
+    })
+    assert.is_false(config.auto_hover_for("missing"))
+    assert.is_true(hover.show({}))
+    assert.matches("pinned file not found", shown())
+  end)
+
+  it("keeps a gone pinned markdown file as quiet as the file would have been", function()
+    config.setup({
+      links = {
+        web = false,
+        pins = { { match = "confluence.example.com", show = root .. "/gone.md" } },
+      },
+    })
+    assert.is_false(hover.show({}))
+    assert.is_falsy(float.win())
+  end)
+
+  describe("<CR> on the float", function()
+    local calls, real_open, real_registry
+
+    before_each(function()
+      calls = {}
+      real_open = package.loaded["open"]
+      real_registry = package.loaded["open.registry"]
+      package.loaded["open"] = {
+        open = function(target, scope)
+          calls[#calls + 1] = { target = target, scope = scope }
+        end,
+      }
+      package.loaded["open.registry"] = {
+        list_keys = function()
+          return { "default" }
+        end,
+      }
+    end)
+
+    after_each(function()
+      package.loaded["open"] = real_open
+      package.loaded["open.registry"] = real_registry
+    end)
+
+    it("opens the real URL the way an unpinned one is opened, not as a path=", function()
+      -- Through the `default` handler as `path=<url>`, open.nvim expands `$VAR`
+      -- in what it takes for a path, and the browser pick is bypassed.
+      vim.api.nvim_buf_set_lines(
+        buf,
+        0,
+        -1,
+        false,
+        { "see https://confluence.example.com/x/y?a=$HOME now" }
+      )
+      config.setup({
+        links = { web = false, pins = { { match = "confluence.example.com", show = pinned } } },
+      })
+      assert.is_true(hover.show({ force = true }))
+      assert.is_true(hover.open())
+      assert.equals(1, #calls)
+      assert.is_nil(calls[1].target, "the browser pick, not the `default` handler")
+      assert.equals("https://confluence.example.com/x/y?a=$HOME", calls[1].scope)
+    end)
   end)
 
   it("explains the pin in `why`", function()

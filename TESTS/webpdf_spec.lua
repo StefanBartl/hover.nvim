@@ -247,4 +247,38 @@ describe("hover.preview.webpdf", function()
     vim.fn.delete(pdf)
     assert.same(#before, #vim.fn.readdir(root), "the fixture was left behind")
   end)
+
+  it("keeps the cache directory to this account, tightening one an older version made", function()
+    -- A document fetched with a credential is private content: `curl -o`
+    -- creates its file 644, so the directory is what keeps other local
+    -- accounts out. `mkdir` leaves an existing directory alone and this one
+    -- predates `links.auth`, so it has to be tightened as well. Windows has no
+    -- mode bits to check.
+    assert.is_truthy(webpdf)
+    if vim.fn.has("win32") == 1 then
+      return
+    end
+    local uv = vim.uv or vim.loop
+    local root = vim.fn.stdpath("cache") .. "/hover.nvim/webpdf"
+    vim.fn.mkdir(root, "p")
+    assert.is_true(uv.fs_chmod(root, 493), "could not loosen the directory for the case") -- 0755
+
+    local real_system = vim.system
+    vim.system = function()
+      return {}
+    end
+    local ok, err = pcall(function()
+      webpdf.reset()
+      webpdf.preview(
+        require("hover.classify").classify("https://perm.example.com/p-" .. uv.hrtime() .. ".pdf"),
+        { headers = { ["content-type"] = "application/pdf", ["content-length"] = "1000" } },
+        { url_pdf_max_bytes = 25000000 },
+        function() end
+      )
+    end)
+    vim.system = real_system
+    assert.is_true(ok, tostring(err))
+
+    assert.equals(0, bit.band(uv.fs_stat(root).mode, 63), "group or other can still read it")
+  end)
 end)

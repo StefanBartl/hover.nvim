@@ -74,6 +74,11 @@ wildcard has nothing to remember.
   that host and *not* `example.com.evil.net`; `*.example.com` is every
   subdomain. A glob with a `/` is compared against host, path and query:
   `example.com/wiki/*`, or `example.com/view?id=42` for one page.
+- **A pin ignores a port its glob does not name.** `example.com` covers
+  `example.com:8090`, which is where an intranet Confluence lives; a glob that
+  names a port (`example.com:8090`) means exactly that port. A `user@` in the
+  link is never ignored. (`hover.auth` uses the same match *strictly*: a port is
+  part of the host for a credential.)
 
 The first pin that matches wins, in the order written. A configured list
 **replaces** the default rather than merging into it: merged by index, a
@@ -92,7 +97,9 @@ one pin mean a different file in every directory.
 The extension decides the preview, so what a pin can show is what a link can:
 `.pdf`, an image, an office document, a video, markdown. Only `pdf` and `image`
 open by themselves (`auto_hover`); the rest open on `:Hover show`, as they do
-for a link that points at them.
+for a link that points at them. A UNC path (`\\server\share\x.pdf`) and a `#`
+in the file name are paths, not a URL and an anchor: the file is classified
+directly, not sent back through the link classification.
 
 ## When the file is gone
 
@@ -102,3 +109,9 @@ page a pin exists for is the one whose own preview is a login form, and quietly
 showing it would hide that the file moved. `:checkhealth hover` lists every
 pin whose file does not exist, so it is learned there rather than by hovering
 each link in turn.
+
+The float is announced **as the file would have been**: a gone PDF or image
+opens by itself, where the PDF or image would have, while a gone `.md` or
+`.docx` stays as quiet as a present one and shows on `:Hover show`. (`missing`
+is off in `auto_hover` by default, and a pin that has gone is not allowed to be
+the one hover that exists to say so and stays silent.)

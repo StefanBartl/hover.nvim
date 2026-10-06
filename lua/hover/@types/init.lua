@@ -79,7 +79,7 @@
 --- would hand the token to every tenant, an attacker's included -- and the rule
 --- is skipped if it does. HTTPS only, and never on a command line.
 ---@class Hover.AuthRule
----@field match string|string[] # Glob(s), as `Hover.Pin.match`, whose host part is literal. `acme.atlassian.net` or `acme.atlassian.net/wiki/*`.
+---@field match string|string[] # Glob(s), as `Hover.Pin.match`, whose host part is literal. `acme.atlassian.net` or `acme.atlassian.net/wiki/*`. A port is part of the host (`wiki.acme.com:8090` is not `wiki.acme.com`), and a glob with a path part does not cover a URL with a `..` segment.
 ---@field user? string # With it the credential is HTTP Basic (`user:token`: Confluence Cloud takes the account email and an API token); without, `Authorization: Bearer` (a Data Center personal access token).
 ---@field token_env string # Name of the environment variable holding the token, e.g. `"CONFLUENCE_TOKEN"`.
 
@@ -89,7 +89,7 @@
 --- cookies, so the text preview and the screenshot both show the login form.
 --- Print the page to a PDF or a PNG once and pin it.
 ---@class Hover.Pin
----@field match string|string[] # URL glob(s). `*` is the only wildcard and matches anything, `/` included; scheme, `#fragment` and case are ignored. A glob without a `/` is matched against the host alone (`*.example.com`), one with a `/` against host, path and query (`example.com/wiki/*`).
+---@field match string|string[] # URL glob(s). `*` is the only wildcard and matches anything, `/` included; scheme, `#fragment` and case are ignored. A glob without a `/` is matched against the host alone (`*.example.com`), one with a `/` against host, path and query (`example.com/wiki/*`). A port the glob does not name is ignored.
 ---@field show string # The file. `~` and environment variables are expanded; a relative path is relative to the Neovim configuration, not to the document the link is in. Its extension decides how it is previewed -- a PDF is paged and magnified like any other.
 
 --- A link that answers with a PDF, shown as its first page.
@@ -307,7 +307,7 @@
 ---@field ext? string # Lowercased extension, when there is one.
 ---@field size? integer # Byte size, for local files.
 ---@field reason? string # Why it is `missing`.
----@field pinned? { url: string, glob: string, show: string } # Set when `links.pins` replaced a URL with a file: the URL as classified, the glob that matched and the `show` as configured. `raw` stays the link as written.
+---@field pinned? { url: string, glob: string, show: string, as?: string } # Set when `links.pins` replaced a URL with a file: the URL as classified, the glob that matched and the `show` as configured. `raw` stays the link as written.
 
 -- #####################################################################
 -- registry.lua, bare_path.lua, bare_url.lua

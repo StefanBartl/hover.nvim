@@ -170,4 +170,104 @@ describe("hover.bare_url.under_cursor", function()
       assert.equals(2 + #"https://example.com" - 1, src.col_end)
     end
   )
+
+  describe("scanning only the token under the cursor", function()
+    -- `under_cursor` used to scan the whole line. The patterns restart at every
+    -- position of a long run, so a minified line of a few thousand characters
+    -- cost seconds on every CursorHold. Bounding the scan to the token must not
+    -- change any answer: held here against `spans` over the whole line.
+
+    ---@param line string
+    ---@param col integer 0-based
+    ---@return string|nil target
+    ---@return integer|nil col
+    ---@return integer|nil col_end
+    local function reference(line, col)
+      for _, span in ipairs(bare_url.spans(line)) do
+        if col >= span.col and col <= span.col_end then
+          return span.url, span.col, span.col_end
+        end
+      end
+      return nil
+    end
+
+    it("answers exactly what the whole-line scan answers, on random lines", function()
+      math.randomseed(11)
+      local bs = string.char(92)
+      local pieces = {
+        "https://a.b/c",
+        "http:" .. bs .. bs .. "h.io" .. bs .. "p",
+        "www.x.org/y",
+        "mailto:a@b.c",
+        "see",
+        " ",
+        " ",
+        '"',
+        "'",
+        "<",
+        ">",
+        "|",
+        "`",
+        "(",
+        ")",
+        "[",
+        "]",
+        ".",
+        ",",
+        "x",
+        "://",
+        "ab",
+      }
+      for _ = 1, 1500 do
+        local parts = {}
+        for i = 1, math.random(1, 9) do
+          parts[i] = pieces[math.random(#pieces)]
+        end
+        local line = table.concat(parts)
+        if line ~= "" then
+          api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+          for col = 0, #line - 1 do
+            api.nvim_win_set_cursor(win, { 1, col })
+            local got = bare_url.under_cursor(buf)
+            local want, want_col, want_end = reference(line, col)
+            if want == nil then
+              -- A line without a URL shape under the cursor.
+              assert.is_nil(got, ("%q @%d"):format(line, col))
+            else
+              assert.is_not_nil(got, ("%q @%d"):format(line, col))
+              assert.equals(want, got.target, ("%q @%d"):format(line, col))
+              assert.equals(want_col, got.col)
+              assert.equals(want_end, got.col_end)
+            end
+          end
+        end
+      end
+    end)
+
+    it("finds a URL far into a long line, with the right columns", function()
+      local prefix = ("word "):rep(2000)
+      local line = prefix .. "https://example.com/a?b=c tail"
+      api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+      api.nvim_win_set_cursor(win, { 1, #prefix + 10 })
+      local got = bare_url.under_cursor(buf)
+      assert.equals("https://example.com/a?b=c", got.target)
+      assert.equals(#prefix, got.col)
+      assert.equals(#prefix + #"https://example.com/a?b=c" - 1, got.col_end)
+    end)
+
+    it("does not spend seconds on one long run of text, and finds nothing in it", function()
+      -- A 20000-character run measured 3 s through the whole-line scan, at every
+      -- CursorHold. A token past the cap is not a link anyone wrote to click.
+      local line = ("a"):rep(20000) .. " https://example.com/x"
+      api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+      api.nvim_win_set_cursor(win, { 1, 10 })
+      local started = (vim.uv or vim.loop).hrtime()
+      assert.is_nil(bare_url.under_cursor(buf))
+      local ms = ((vim.uv or vim.loop).hrtime() - started) / 1e6
+      assert.is_true(ms < 100, ("took %.0f ms"):format(ms))
+      -- The URL after it is still found.
+      api.nvim_win_set_cursor(win, { 1, 20000 + 8 })
+      assert.equals("https://example.com/x", bare_url.under_cursor(buf).target)
+    end)
+  end)
 end)
