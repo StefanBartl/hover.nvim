@@ -69,7 +69,19 @@
 ---@field timeout_ms? integer # Fetch timeout. Default 2000.
 ---@field pdf? Hover.WebPdfConfig
 ---@field shot? Hover.ShotConfig
+---@field auth? Hover.AuthRule[] # Credentials for the hosts a hover may authenticate to, for the fetch and the PDF download. A configured list replaces the default. See `hover.auth`.
 ---@field pins? Hover.Pin[] # Links shown as a file of the reader's own. First match wins; a configured list replaces the default rather than merging into it. See `hover.pins`.
+
+--- A host the reader has named as one a hover may authenticate to.
+---
+--- The token is never in the configuration: `token_env` names an environment
+--- variable. The host part of `match` must have no wildcard -- `*.example.com`
+--- would hand the token to every tenant, an attacker's included -- and the rule
+--- is skipped if it does. HTTPS only, and never on a command line.
+---@class Hover.AuthRule
+---@field match string|string[] # Glob(s), as `Hover.Pin.match`, whose host part is literal. `acme.atlassian.net` or `acme.atlassian.net/wiki/*`.
+---@field user? string # With it the credential is HTTP Basic (`user:token`: Confluence Cloud takes the account email and an API token); without, `Authorization: Bearer` (a Data Center personal access token).
+---@field token_env string # Name of the environment variable holding the token, e.g. `"CONFLUENCE_TOKEN"`.
 
 --- A link the reader has decided to show as a file instead.
 ---

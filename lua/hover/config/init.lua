@@ -224,8 +224,12 @@ local function replace_key_lists(opts)
   -- merged by index, a shorter list given to a second `setup()` would leave
   -- the earlier call's remaining pins in force.
   local links = opts.links
-  if type(links) == "table" and links.pins ~= nil and type(_options.links) == "table" then
-    _options.links.pins = vim.deepcopy(links.pins)
+  if type(links) == "table" and type(_options.links) == "table" then
+    for _, name in ipairs({ "pins", "auth" }) do
+      if links[name] ~= nil then
+        _options.links[name] = vim.deepcopy(links[name])
+      end
+    end
   end
 
   -- Flat key lists: the whole list is the setting.
