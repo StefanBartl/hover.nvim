@@ -254,8 +254,8 @@ describe("hover.preview.webpdf", function()
     -- accounts out. `mkdir` leaves an existing directory alone and this one
     -- predates `links.auth`, so it has to be tightened as well. Windows has no
     -- mode bits to check.
-    assert.is_truthy(webpdf)
     if vim.fn.has("win32") == 1 then
+      pending("no mode bits on Windows -- the 0700 directory is proved on POSIX (CI)")
       return
     end
     local uv = vim.uv or vim.loop

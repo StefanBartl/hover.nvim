@@ -371,7 +371,7 @@ variable, and an unset one sends nothing. THE HOST PART OF `match` HAS NO
 WILDCARD -- `*.atlassian.net` would hand the token to every tenant, an
 attacker's included -- and a rule that breaks this is skipped. A port is part
 of the host (`wiki.acme.com` does not cover `wiki.acme.com:8090`), and a rule
-with a path part is not crossed by `..` (curl resolves it before it sends).
+is matched against the path curl will send (`.` and `..` resolved first).
 HTTPS only; redirects may only go to https, and `--no-location-trusted` is
 passed so a `location-trusted` in your ~/.curlrc cannot forward the credential;
 the link is not a curl pattern (`--globoff`); the token is trimmed, and one

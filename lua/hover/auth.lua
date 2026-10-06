@@ -9,7 +9,7 @@
 --- token), and the same without `user` is `Authorization: Bearer` (what a
 --- Data Center personal access token takes).
 ---
---- **Four rules, each of which is a way to leak the token if it were
+--- **Six rules, each of which is a way to leak the token if it were
 --- otherwise.**
 ---
 ---  * **The token is never in the configuration.** `token_env` names an
@@ -25,10 +25,12 @@
 ---    and that can be switched on from outside -- a `location-trusted` line in
 ---    the reader's own `~/.curlrc` -- so `--no-location-trusted` is passed
 ---    explicitly, ahead of `-L`.
----  * **A path-scoped rule is not crossed by `..`.** curl resolves `.` and `..`
----    (and `%2e`) in a path before it sends, so `/wiki/../other/x` matches a
----    rule for `host/wiki/*` as written and is requested as `/other/x`. For a
----    glob with a path part such a URL is not covered.
+---  * **A rule is matched against the path curl will send.** curl resolves `.`
+---    and `..` (and `%2e`) before it sends, so `/wiki/../other/x` is requested
+---    as `/other/x` and is out of a rule for `host/wiki/*`, while `/wiki/./x`
+---    is requested as `/wiki/x` and is in it. A same-host redirect that
+---    *starts* inside a path scope may still land outside it: the scope says
+---    which URLs are asked for, not where the host sends them on.
 ---  * **A token is a single line.** Surrounding whitespace -- the newline a
 ---    file read leaves -- is trimmed; a control character left inside means it
 ---    is not a token, and nothing is sent. A CR or LF in a header value splits
@@ -122,20 +124,45 @@ local function read_token(env)
 end
 
 ---@internal
---- Whether curl would rewrite the path of `url` before sending it: a `.` or
---- `..` segment, literal or percent-encoded (curl decodes `%2e` there -- measured).
---- The query and the fragment are not part of the path.
+--- `url` with its path as curl will send it: `.` and `..` segments resolved
+--- (RFC 3986), a `%2e` read as `.` -- both measured against curl 8.18 -- and
+--- the query and fragment left alone.
+---
+--- The rules are matched against *this*, because the question a rule asks is
+--- "is this request in my scope", and the request is the resolved one:
+--- `/wiki/../other/x` is requested as `/other/x` and is out of a `/wiki/*`
+--- rule, `/wiki/./x` is requested as `/wiki/x` and is in it. Skipping a rule
+--- for any dot segment instead handed an in-scope request to the next, broader
+--- rule, and past a rule whose unset variable meant "send nothing".
 ---@param url string
----@return boolean
-local function has_dot_segment(url)
-  local path = url:gsub("^%a[%w+.-]*://[^/?#]*", ""):gsub("[?#].*$", "")
-  path = path:gsub("%%2[eE]", ".")
-  for segment in path:gmatch("[^/]+") do
-    if segment == "." or segment == ".." then
-      return true
+---@return string
+local function curl_path(url)
+  local origin, path, rest = url:match("^(%a[%w+.-]*://[^/?#]*)([^?#]*)(.*)$")
+  if not origin then
+    return url
+  end
+  local out = {}
+  local segments = vim.split(path, "/", { plain = true })
+  for i, segment in ipairs(segments) do
+    local dots = segment:gsub("%%2[eE]", ".")
+    local last = i == #segments
+    if dots == "." then
+      if last then
+        out[#out + 1] = ""
+      end
+    elseif dots == ".." then
+      -- Never above the root, which is the empty first segment.
+      if #out > 1 then
+        out[#out] = nil
+      end
+      if last then
+        out[#out + 1] = ""
+      end
+    else
+      out[#out + 1] = segment
     end
   end
-  return false
+  return origin .. table.concat(out, "/") .. rest
 end
 
 --- The credential for `url`, or nil.
@@ -150,20 +177,15 @@ function M.for_url(url)
     return nil
   end
   local pins = require("hover.pins")
+  local resolved = curl_path(url)
   for _, rule in ipairs(M.list()) do
     for _, glob in ipairs(rule.match) do
-      if pins.matches(url, glob) then
-        -- A glob with a path part scopes the credential to that path, and curl
-        -- would request a different one. This glob does not cover the URL; a
-        -- later host-only rule still may.
-        local scoped = (glob:gsub("^%a[%w+.-]*://", "")):find("/", 1, true) ~= nil
-        if not (scoped and has_dot_segment(url)) then
-          local token = read_token(rule.token_env)
-          if token == nil then
-            return nil
-          end
-          return { user = rule.user, token = token }
+      if pins.matches(resolved, glob) then
+        local token = read_token(rule.token_env)
+        if token == nil then
+          return nil
         end
+        return { user = rule.user, token = token }
       end
     end
   end

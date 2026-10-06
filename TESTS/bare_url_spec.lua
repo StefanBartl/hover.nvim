@@ -269,5 +269,60 @@ describe("hover.bare_url.under_cursor", function()
       api.nvim_win_set_cursor(win, { 1, 20000 + 8 })
       assert.equals("https://example.com/x", bare_url.under_cursor(buf).target)
     end)
+
+    it("finds a 5 KB URL at every offset, its scheme and host included", function()
+      -- A signed or SSO redirect URL is real. A cap applied per side from the
+      -- cursor answered such a URL in its middle and not on its host, which is
+      -- where a reader rests the cursor.
+      local url = "https://example.com/" .. ("a"):rep(5000)
+      local line = "see " .. url .. " end"
+      api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+      for _, offset in ipairs({ 0, 8, 19, 20, 500, 2500, 4999, #url - 1 }) do
+        api.nvim_win_set_cursor(win, { 1, 4 + offset })
+        local got = bare_url.under_cursor(buf)
+        assert.is_not_nil(got, "offset " .. offset)
+        assert.equals(url, got.target, "offset " .. offset)
+      end
+    end)
+
+    it("refuses a token past the cap as a whole, wherever the cursor is in it", function()
+      local url = "https://example.com/" .. ("a"):rep(9000)
+      api.nvim_buf_set_lines(buf, 0, -1, false, { url })
+      for _, col in ipairs({ 0, 8, 100, 4500, 8000, #url - 1 }) do
+        api.nvim_win_set_cursor(win, { 1, col })
+        assert.is_nil(bare_url.under_cursor(buf), "col " .. col)
+      end
+    end)
+
+    it("finds nothing on a terminator, and handles multibyte neighbours", function()
+      local line = 'é "https://example.com/é" ü'
+      api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+      local at_quote = line:find('"', 1, true) - 1
+      api.nvim_win_set_cursor(win, { 1, at_quote })
+      assert.is_nil(bare_url.under_cursor(buf), "on the opening quote")
+      api.nvim_win_set_cursor(win, { 1, at_quote + 1 })
+      assert.equals("https://example.com/é", bare_url.under_cursor(buf).target)
+      -- Every byte of the two-byte letter inside the URL.
+      local accent = line:find('é"', 1, true) - 1
+      for col = accent, accent + 1 do
+        api.nvim_win_set_cursor(win, { 1, col })
+        assert.equals("https://example.com/é", bare_url.under_cursor(buf).target, "col " .. col)
+      end
+    end)
+
+    it("does not scan a long token that has no URL anchor in it", function()
+      -- The patterns restart at every position of a long run; one with no
+      -- `://` to end in is all cost. A 4 KB alphanumeric token measured 150 ms
+      -- through the whole-line scan, on a line that has a `://` elsewhere.
+      local line = ("a"):rep(8000) .. " see https://example.com/x"
+      api.nvim_buf_set_lines(buf, 0, -1, false, { line })
+      api.nvim_win_set_cursor(win, { 1, 4000 })
+      local started = (vim.uv or vim.loop).hrtime()
+      assert.is_nil(bare_url.under_cursor(buf))
+      assert.is_true(((vim.uv or vim.loop).hrtime() - started) / 1e6 < 20)
+      -- The URL after it is still found, from the token it is in.
+      api.nvim_win_set_cursor(win, { 1, 8000 + 10 })
+      assert.equals("https://example.com/x", bare_url.under_cursor(buf).target)
+    end)
   end)
 end)

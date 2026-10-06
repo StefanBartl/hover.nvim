@@ -59,12 +59,19 @@ every service listening on it. Name the port to cover it
 (`wiki.acme.com:8090`). (A [pin](PINS.md), which sends nothing anywhere,
 ignores a port its glob does not name.)
 
-**A path-scoped rule is not crossed by `..`.** curl resolves `.` and `..` — and
-`%2e` — in a path *before* it sends, so `/wiki/../other/x` matches a rule for
-`acme.atlassian.net/wiki/*` as written and is requested as `/other/x`
-(measured against a local server). For a glob with a path part, such a URL is
-not covered; a later host-only rule still may be. A host-only rule means the
-whole host and is not affected.
+**A rule is matched against the path curl will send.** curl resolves `.` and
+`..` — and `%2e` — in a path *before* it sends (measured against a local
+server): `/wiki/../other/x` is requested as `/other/x` and is out of a rule for
+`acme.atlassian.net/wiki/*`, while `/wiki/./x` is requested as `/wiki/x` and is
+in it. The URL is resolved the same way before the rules are consulted, so the
+rule that governs the request is the one that decides — including an earlier,
+narrower rule whose variable is unset ("send nothing") against a later,
+broader one. A host-only rule means the whole host and is not affected.
+
+**A path scope is about what is asked for, not where the host sends you.** A
+same-host redirect that *starts* inside `acme.atlassian.net/wiki/*` and lands
+outside it carries the credential with it: curl follows it, and it is the same
+host. Redirects to another host or to `http://` never carry it.
 
 **HTTPS only.** A credential is never sent over `http://`, and a redirect may
 only go to `https://` (`--proto-redir =https`). curl does not forward a

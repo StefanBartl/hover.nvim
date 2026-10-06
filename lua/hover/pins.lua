@@ -129,7 +129,8 @@ function M.matches(url, glob, opts)
   end
   -- A port is ignored only when the glob does not name one itself, so
   -- `example.com:8090` still means exactly that port.
-  local glob_host = wanted:match("^([^/?]*)") or ""
+  -- A colon inside `[...]` is an IPv6 literal, not a port.
+  local glob_host = (wanted:match("^([^/?]*)") or ""):gsub("%b[]", "")
   local ignore_port = opts ~= nil and opts.ignore_port == true and not glob_host:find(":", 1, true)
   local host, full = split(url, ignore_port)
   -- A glob that names no path is a statement about the host, and is compared
@@ -203,6 +204,13 @@ end
 ---@param url string
 ---@return { glob: string, show: string, path: string }|nil
 function M.resolve(url)
+  -- Only a URL with an authority has a host for a glob to be about.
+  -- `mailto:a@b.example.com` has none, and the scheme is stripped only when
+  -- it is followed by `//`, so `*.example.com` would otherwise pin an e-mail
+  -- address (and `tel:`, `data:`, `javascript:`) to a file.
+  if type(url) ~= "string" or not url:find("^%a[%w+.-]*://") then
+    return nil
+  end
   for _, pin in ipairs(M.list()) do
     for _, glob in ipairs(pin.match) do
       if M.matches(url, glob, { ignore_port = true }) then
