@@ -156,8 +156,8 @@ doc/tags
 # than the plugin's own code.
 docs/map/
 
-# Test dependencies resolved by scripts/minimal_init.lua, and CI's checkout
-# target for lib.nvim/plenary. Never source.
+# Test dependencies resolved by TESTS/minimal_init.lua, and CI's checkout
+# target for testing.nvim/lib.nvim/ui.nvim. Never source.
 .deps/
 
 # Agent worktrees and session state.

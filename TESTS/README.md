@@ -1,32 +1,36 @@
 # TESTS/ — what is covered, and what is not
 
-`TESTS/` is a [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
-busted-style suite. There is no framework-free harness here and none is
-wanted — plenary is already a hard test dependency (see
-`scripts/minimal_init.lua`), and every spec in this directory follows its
-`describe`/`it`/`before_each`/`after_each` shape.
+`TESTS/` is a busted-style suite (`describe`/`it`/`before_each`/`after_each`)
+run by [testing.nvim](https://github.com/StefanBartl/testing.nvim); the
+project settings are in [`.testing.lua`](../.testing.lua). Every spec file
+runs in a child editor of its own (`isolated = "file"`).
 
 ## Running it
 
 ```sh
 bash scripts/test.sh                    # every spec
-bash scripts/test.sh TESTS/foo_spec.lua # one file, same environment as the suite
+bash scripts/test.sh --file foo         # spec files whose name contains "foo"
+bash scripts/test.sh --json ir.json     # also write the machine-readable result
 ```
 
-`scripts/test.sh` resolves `lib.nvim` (hard dependency), `ui.nvim` (needed
-because `TESTS/status_view_spec.lua` asserts the dashboard actually opens)
-and `plenary.nvim` itself via `LIB_NVIM_DIR`/`UI_NVIM_DIR`/`PLENARY_DIR`, a
-`.deps/<name>` checkout, or a sibling directory next to this repo — see the
-comment at the top of `scripts/minimal_init.lua`. `images.nvim` is optional;
-without it the zoom crop specs report `pending` rather than failing, and
-`HOVER_ALLOW_PENDING=1` (what CI sets) is what keeps that from failing the
-build while still printing every pending spec by name.
+`scripts/test.sh` resolves `testing.nvim` (the runner), `lib.nvim` (hard
+dependency) and `ui.nvim` (needed because `TESTS/status_view_spec.lua`
+asserts the dashboard actually opens) via `TESTING_NVIM_DIR`/`LIB_NVIM_DIR`/
+`UI_NVIM_DIR`, a `.deps/<name>` checkout, or a sibling directory next to this
+repo — see the comment at the top of `TESTS/minimal_init.lua`. `images.nvim`
+is optional; without it the zoom crop spec reports `skip` (with its reason)
+rather than failing.
+
+The guards of testing.nvim are on (`guards` in `.testing.lua`): a spec that
+writes outside the temp directory, starts a process other than `git`,
+`magick` or `vlc`, blocks on a prompt or swallows a scheduled error fails.
+The state guard is off (every file has its own editor).
 
 [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) runs `stylua
 --check`, `luacheck lua plugin` and the full suite on Ubuntu, Windows and
 macOS on every push and PR to `main`.
 
-`scripts/minimal_init.lua` sets `vim.g.lib_nvim_deps_disable_first_run`, so
+`TESTS/minimal_init.lua` sets `vim.g.lib_nvim_deps_disable_first_run`, so
 no spec run opens lib.nvim's declared-tools popup — see the comment there.
 A spec must not depend on which float happens to be on screen anyway, but
 that popup in particular arrives on a later tick, only where a declared tool
@@ -113,12 +117,12 @@ is about that module specifically, as opposed to the module merely being
   and `office_spec.lua` both test everything *around* those calls (caching,
   eviction, refusal, error shaping) with the call itself stubbed.
 - **UI that needs a real live backend** — `images.nvim` actually drawing a
-  picture, and the ImageMagick-backed zoom crop check, report `pending` in
-  CI rather than being skipped silently (`HOVER_ALLOW_PENDING=1`); see
-  `scripts/test.sh`'s own comment for why a silent skip was rejected
-  (`zoom_spec.lua`'s crop check went unnoticed for a period specifically
-  because a `pending()` inside an `it()` still counts as a `Success` in
-  plenary's own summary).
+  picture, and the ImageMagick-backed zoom crop check, report `skip` with
+  their reason in CI rather than being skipped silently; a skip is its own
+  status in the runner's summary and never counts as a pass
+  (`zoom_spec.lua`'s crop check once went unnoticed for a period because a
+  `pending()` inside an `it()` still counted as a `Success` in the old
+  runner's summary).
 
 ## The 2026-09-18 audit
 

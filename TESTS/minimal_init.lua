@@ -1,65 +1,90 @@
--- scripts/minimal_init.lua -- headless test bootstrap for hover.nvim.
+-- TESTS/minimal_init.lua -- puts this plugin and its dependencies on the runtimepath.
 --
--- Run from the repo root:
---   nvim --clean --headless -u scripts/minimal_init.lua \
---     -c "PlenaryBustedDirectory TESTS/ { minimal_init = 'scripts/minimal_init.lua', sequential = true }"
+--   nvim -n -i NONE --headless -u TESTS/minimal_init.lua ...
 --
--- (scripts/test.sh wraps exactly that.) `-u` rather than `-c luafile` after
--- startup matters: 'runtimepath' additions must land before Neovim's own
--- plugin/ scan, which is what registers plenary's :PlenaryBusted* commands in
--- the first place -- appending rtp afterwards leaves those commands
--- undefined. `--clean` matters too: without it 'runtimepath' still defaults to
--- stdpath('config')/stdpath('data') -- a real user's own Neovim config,
--- plugins and all -- which is not what a CI run (or anyone else's machine)
--- should be exercising.
-vim.opt.rtp:append(vim.fn.getcwd())
+-- It runs nothing itself. A dependency that cannot be found is FATAL (NEW-40): the message names
+-- all four places that were searched and the process exits with code 1, so that a run which could
+-- not load its dependency never looks green. Each dependency <name> is looked up in, in this order:
+--   1. $<NAME>_DIR                  (lib.nvim -> $LIB_NVIM_DIR)
+--   2. <repo>/.deps/<name>          (what CI checks out)
+--   3. <repo>/../<name>             (a sibling checkout)
+--   4. stdpath('data')/lazy/<name>  (what a plugin manager installed)
+-- An override (1) that is set but wrong decides alone; it is never skipped.
 
---- lib.nvim is a *hard* runtime dependency here (notify, bindings.autocmd,
---- debounce, image_preview, net.curl, memo.lru, strings.width): hover.nvim's
---- own modules `require("lib.*")` with no fallback, so the specs cannot run
---- without it on the rtp. plenary.nvim is the busted-compatible harness the
---- specs are written against.
----
---- Three ways each can be found, in descending order of explicitness: an
---- explicit env var (`LIB_NVIM_DIR`/`PLENARY_DIR`), a `.deps/<name>` checkout
---- (what CI uses -- see .github/workflows/ci.yml), or a sibling checkout next
---- to this repo (`../lib.nvim`, `../plenary.nvim`) for a contributor who
---- already has both cloned that way.
----
---- On failure it names all three and exits 1. A test bootstrap that gives up
---- quietly is worse than one that fails: the specs then report `module '...'
---- not found`, which looks like a defect in the code just changed (`NEW-40`).
----@param env_var string
----@param deps_name string
----@param marker string module `require()`d to confirm the directory is right
-local function add_dep(env_var, deps_name, marker)
-  if pcall(require, marker) then
-    return
-  end
-  local candidates = {}
-  local env_val = vim.env[env_var]
-  if env_val and env_val ~= "" then
-    candidates[#candidates + 1] = env_val
-  end
-  candidates[#candidates + 1] = vim.fn.getcwd() .. "/.deps/" .. deps_name
-  candidates[#candidates + 1] = vim.fs.dirname(vim.fn.getcwd()) .. "/" .. deps_name
-  for _, dir in ipairs(candidates) do
-    if dir and vim.fn.isdirectory(dir) == 1 then
-      vim.opt.rtp:append(dir)
-      if pcall(require, marker) then
-        return
+local this = vim.fn.fnamemodify(debug.getinfo(1, "S").source:sub(2), ":p")
+local root = vim.fs.dirname(vim.fs.dirname(vim.fs.normalize(this)))
+
+local DEPS = { "testing.nvim", "lib.nvim", "ui.nvim" }
+
+---@type table<string, string>
+local MARKERS = { ["lib.nvim"] = "lua/lib/nvim", ["testing.nvim"] = "lua/testing" }
+
+---@param name string
+---@return string
+local function env_name(name)
+  return (name:upper():gsub("[^%w]", "_")) .. "_DIR"
+end
+
+---@param dir string|nil
+---@param marker string
+---@return boolean
+local function valid(dir, marker)
+  return dir ~= nil and dir ~= "" and vim.fn.isdirectory(dir .. "/" .. marker) == 1
+end
+
+local found, failures = {}, {}
+for _, name in ipairs(DEPS) do
+  local marker = MARKERS[name] or "lua"
+  local override = vim.env[env_name(name)]
+  local places = {
+    { "$" .. env_name(name), override },
+    { (".deps/%s"):format(name), root .. "/.deps/" .. name },
+    { ("../%s"):format(name), vim.fs.dirname(root) .. "/" .. name },
+    {
+      ("stdpath('data')/lazy/%s"):format(name),
+      vim.fs.normalize(vim.fn.stdpath("data")) .. "/lazy/" .. name,
+    },
+  }
+  local hit
+  if override ~= nil and override ~= "" then
+    if valid(override, marker) then
+      hit = override
+    end
+  else
+    for i = 2, #places do
+      if valid(places[i][2], marker) then
+        hit = places[i][2]
+        break
       end
     end
   end
-  io.stderr:write(("scripts/minimal_init.lua: %s not found.\n"):format(deps_name))
-  io.stderr:write(
-    ("  Set %s, or clone it to .deps/%s, or place it beside this repo.\n"):format(
-      env_var,
-      deps_name
+  if hit then
+    found[name] = hit
+  else
+    local lines = { ("error: dependency '%s' not found. Searched, in this order:"):format(name) }
+    for i, p in ipairs(places) do
+      lines[#lines + 1] = ("  %d. %s (%s)"):format(i, p[1], p[2] or "unset")
+    end
+    lines[#lines + 1] = ("Set $%s, or clone it to .deps/%s, or place it beside this repo."):format(
+      env_name(name),
+      name
     )
-  )
+    failures[#failures + 1] = table.concat(lines, "\n")
+  end
+end
+
+if #failures > 0 then
+  io.stderr:write(table.concat(failures, "\n"), "\n")
   os.exit(1)
 end
+
+vim.opt.rtp:prepend(root)
+for _, name in ipairs(DEPS) do
+  vim.opt.rtp:append(found[name])
+end
+
+-- Carried over from scripts/minimal_init.lua (removed by the migration): what the suite needs
+-- besides the runtimepath. Review each block; the diff of the removed file shows all of it.
 
 --- images.nvim is *optional*, unlike the two above, and the difference is
 --- deliberate: hover.nvim runs without it, and only the zoom specs need it --
@@ -103,13 +128,10 @@ local function add_optional(env_var, deps_name, marker)
   end
 end
 
-add_dep("LIB_NVIM_DIR", "lib.nvim", "lib.nvim.notify")
 -- ui.nvim is optional in the plugin itself (status_view.lua pcalls ui.kit
 -- and hover.nvim falls back to a plain message without it), but
 -- TESTS/status_view_spec.lua asserts the board actually opens, so the suite
 -- cannot pass without it -- same treatment as lib.nvim above.
-add_dep("UI_NVIM_DIR", "ui.nvim", "ui.kit")
-add_dep("PLENARY_DIR", "plenary.nvim", "plenary")
 add_optional("IMAGES_NVIM_DIR", "images.nvim", "images.convert")
 
 --- No first-run popup during a test run, and the reason is a red macOS leg
@@ -129,7 +151,7 @@ add_optional("IMAGES_NVIM_DIR", "images.nvim", "images.convert")
 --- (`stdpath("cache")/lib.nvim/cache/lib.nvim.deps.first_run.json`), once per
 --- cache directory, so only the *first* spec child in a whole run can see it
 --- at all. Two spec files call `setup()` -- `registry_spec` and
---- `status_view_spec` -- and which one plenary schedules first differs per
+--- `status_view_spec` -- and which one the old runner schedules first differs per
 --- platform: `registry_spec` went first on Linux and Windows and quietly
 --- absorbed the popup, `status_view_spec` went first on macOS and asserted
 --- against it.
@@ -141,7 +163,9 @@ add_optional("IMAGES_NVIM_DIR", "images.nvim", "images.convert")
 --- own Neovim, which it had been doing every time.
 vim.g.lib_nvim_deps_disable_first_run = true
 
--- Swap and shada stay off for the whole suite, including plenary's child
+-- Swap and shada stay off for the whole suite, including the old runner's child
 -- processes that reuse this file: stale swap files fail suites with E326.
 vim.o.swapfile = false
 vim.o.shadafile = "NONE"
+
+return { root = root, deps = found }

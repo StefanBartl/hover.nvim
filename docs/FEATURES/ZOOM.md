@@ -279,6 +279,12 @@ the totals would have caught it.
 legitimately pending on a runner with no ImageMagick — but the names are
 printed there too, so a *new* one is visible where it cannot be fatal.
 
+*Since the move to testing.nvim this bookkeeping is the runner's.* A guarded
+spec reports `skip` with its reason (the crop check prints "skipped: no
+images.convert.crop or no ImageMagick"), a skip is its own status in the
+summary and never a Success, and `HOVER_ALLOW_PENDING` is gone. The bootstrap
+is `TESTS/minimal_init.lua`; it adds images.nvim only when it finds one.
+
 **The most likely reason to see it locally is a worktree.** `minimal_init`
 finds images.nvim through `IMAGES_NVIM_DIR`, a `.deps/` checkout, or the
 sibling directory — and from `.claude/worktrees/<name>/` the sibling is the

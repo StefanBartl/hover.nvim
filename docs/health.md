@@ -140,6 +140,6 @@ next place to look.
 
 ## What this deliberately does not do
 
-It does not run the test suite. The specs need plenary and a writable temp directory, and
+It does not run the test suite. The specs need the testing.nvim runner and a writable temp directory, and
 a `:checkhealth` that shells out to a test runner reports on the machine it happens to be
 run on rather than on the installation in front of it.

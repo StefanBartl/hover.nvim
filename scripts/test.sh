@@ -1,101 +1,127 @@
 #!/usr/bin/env bash
 #
-# Runs the plenary spec suite headlessly. Wraps scripts/minimal_init.lua --
-# see that file for what it resolves and why.
+# Runs the spec suite of this project with testing.nvim:
 #
-#   scripts/test.sh                    every spec under TESTS/
-#   scripts/test.sh TESTS/foo_spec.lua a single spec file
+#   scripts/test.sh                  every spec under TESTS/
+#   scripts/test.sh --file config    only spec files whose name contains "config"
+#   scripts/test.sh --json ir.json   also write the machine-readable result (the IR)
 #
-# Env vars (all optional -- see scripts/minimal_init.lua's own fallbacks):
-#   LIB_NVIM_DIR   path to a lib.nvim checkout
-#   UI_NVIM_DIR    path to a ui.nvim checkout
-#   PLENARY_DIR    path to a plenary.nvim checkout
+# Everything after the script name is handed to `testing run .` unchanged.
 #
-# Fails loudly and with exit code 1 (NEW-40): a runner that reports success
-# without having loaded its harness is worse than no runner at all.
+# Exit code 0: all specs passed. 1: a spec failed, OR nvim / the runner / a dependency was not
+# found (the harness not running must never look like a green run). Never waits silently.
+# A dependency <name> is looked up in, in this order:
+#   1. $<NAME>_DIR                  (testing.nvim -> $TESTING_NVIM_DIR, lib.nvim -> $LIB_NVIM_DIR)
+#   2. <repo>/.deps/<name>          (what CI checks out)
+#   3. <repo>/../<name>             (a sibling checkout)
+#   4. stdpath('data')/lazy/<name>  (what a plugin manager installed)
 
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
+ROOT="$(pwd)"
 
-command -v nvim >/dev/null 2>&1 || {
-  printf '\033[31m%s\033[0m\n' "nvim is not on PATH." >&2
+# The runner first, then what the project needs (this list is the `deps` of .testing.lua).
+DEPS=('testing.nvim' 'lib.nvim' 'ui.nvim')
+
+fail() {
+  printf '\033[31m%s\033[0m\n' "$1" >&2
   exit 1
 }
 
-target="${1:-TESTS/}"
+command -v nvim >/dev/null 2>&1 || fail "error: nvim is not on PATH."
 
-# A single file runs *in this process*, not through `PlenaryBustedFile`, and
-# the reason is an environment difference rather than speed.
-#
-# `PlenaryBustedFile` reaches `test_harness.test_file`, which calls the runner
-# with **no options at all** -- so the child it spawns gets `--noplugin` and no
-# `-u`, and therefore not this script's `minimal_init`. The directory branch
-# below hands `minimal_init` over explicitly, so the two branches ran the same
-# spec in two different environments: measured 2026-09-02, images.nvim was on
-# the runtimepath for a directory run of `zoom_spec.lua` and absent for a
-# single-file run of the same file.
-#
-# That is worse than a slow runner. A spec that skips when run alone and runs
-# in the suite -- or the reverse -- makes both results untrustworthy, and it is
-# how the zoom crop check stayed invisible: it reported *pending* to everyone
-# who ran it by itself.
-#
-# `plenary.busted.run` executes the file here, in the nvim that `-u` has
-# already configured, so a single-file run is by construction the same
-# environment as the whole suite.
-if [[ "$target" == *.lua ]]; then
-  cmd="lua require('plenary.busted').run(vim.fn.fnamemodify('$target', ':p'))"
-else
-  cmd="PlenaryBustedDirectory $target { minimal_init = 'scripts/minimal_init.lua', sequential = true }"
-fi
-
-# A pending spec is invisible in the summary, and there are two shapes of it.
-# Both measured here on 2026-09-03 rather than assumed:
-#
-#   `pending("...")` at describe level -- prints a Pending line and is *not*
-#   counted anywhere. The only trace is a Success total that got smaller,
-#   which reads as "nobody added a spec", not as "one stopped running".
-#
-#   `pending("...")` *inside* an `it`, which is what a guarded spec does --
-#   prints a Pending line **and still counts the `it` as a Success**. Measured
-#   on zoom_spec: 24 `it` blocks, "Success: 24", one of which asserted
-#   nothing. So the summary does not merely omit a skipped spec, it reports it
-#   as green.
-#
-# Neither shape touches the exit code. That is how the zoom crop check stayed
-# invisible for as long as it did, and no amount of reading the totals would
-# have caught it.
-#
-# So the runner counts them itself. `tee` rather than a capture-then-print,
-# because a suite that only speaks at the end is worse to wait on, and
-# PIPESTATUS rather than $? because the pipeline's status is `tee`'s.
-#
-# HOVER_ALLOW_PENDING=1 is the way to have a deliberate `pending()` marker: it
-# stays visible in the output and stops failing the run. Silence was never the
-# problem; unnoticed silence was.
-log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
-
-nvim -n --clean --headless -u scripts/minimal_init.lua -c "$cmd" 2>&1 | tee "$log"
-status=${PIPESTATUS[0]}
-
-# Strip the colour codes before counting: plenary writes "Pending" in yellow.
-pending=$(sed 's/\x1b\[[0-9;]*m//g' "$log" | grep -c '^Pending' || true)
-
-# Named always, fatal only where it can be. On a CI runner the crop check is
-# *deliberately* pending -- there is no images.nvim and no ImageMagick to prove
-# it with -- so failing there would only teach everyone to ignore the message.
-# Printing there still costs nothing and is the whole point: a *new* pending
-# shows up in the log even where it cannot stop the build.
-if [[ "$pending" -gt 0 ]]; then
-  printf '\033[31m%s\033[0m\n' "$pending pending spec(s) -- a guarded one still counts as green above:" >&2
-  sed 's/\x1b\[[0-9;]*m//g' "$log" | grep '^Pending' | sed 's/^/  /' >&2
-  if [[ -z "${HOVER_ALLOW_PENDING:-}" ]]; then
-    printf '%s\n' "Set HOVER_ALLOW_PENDING=1 where one is expected (CI does)." >&2
-    printf '%s\n' "Locally this usually means images.nvim was not found: set IMAGES_NVIM_DIR." >&2
-    exit 1
+# stdpath('data') of the default app name, computed before NVIM_APPNAME is changed below.
+data_dir() {
+  local app="${NVIM_APPNAME:-nvim}"
+  if [[ -n "${LOCALAPPDATA:-}" ]]; then
+    printf '%s' "$LOCALAPPDATA/$app-data"
+  else
+    printf '%s' "${XDG_DATA_HOME:-$HOME/.local/share}/$app"
   fi
-fi
+}
+DATA="$(data_dir)"
 
-exit "$status"
+marker_of() {
+  case "$1" in
+    lib.nvim) printf 'lua/lib/nvim' ;;
+    testing.nvim) printf 'lua/testing' ;;
+    *) printf 'lua' ;;
+  esac
+}
+
+env_name_of() {
+  printf '%s_DIR' "$(printf '%s' "$1" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9' '_')"
+}
+
+# A path as shown in an error message: one separator style on every platform (Git Bash would
+# otherwise print /e/repos/x next to C:\Users\x\AppData\Local).
+show_path() {
+  if command -v cygpath >/dev/null 2>&1 && cygpath -m -- "$1" 2>/dev/null; then
+    return 0
+  fi
+  printf '%s' "${1//\\//}"
+}
+
+# resolve <name>: sets RESOLVED, or exits 1 naming all four places.
+resolve() {
+  local name="$1" marker envname override
+  marker="$(marker_of "$name")"
+  envname="$(env_name_of "$name")"
+  override="${!envname:-}"
+  local p1="unset"
+  [[ -n "$override" ]] && p1="$(show_path "$override")"
+  local p2 p3 p4
+  p2="$(show_path "$ROOT/.deps/$name")"
+  p3="$(show_path "$ROOT/../$name")"
+  p4="$(show_path "$DATA/lazy/$name")"
+
+  if [[ -n "$override" ]]; then
+    # An override that is set decides alone: it is never skipped for another checkout.
+    if [[ -d "$override/$marker" ]]; then
+      RESOLVED="$override"
+      return 0
+    fi
+  else
+    local dir
+    for dir in "$ROOT/.deps/$name" "$ROOT/../$name" "$DATA/lazy/$name"; do
+      if [[ -d "$dir/$marker" ]]; then
+        RESOLVED="$dir"
+        return 0
+      fi
+    done
+  fi
+
+  fail "error: dependency '$name' not found. Searched, in this order:
+  1. \$$envname ($p1)
+  2. .deps/$name ($p2)
+  3. ../$name ($p3)
+  4. stdpath('data')/lazy/$name ($p4)
+Set \$$envname, or clone it to .deps/$name, or place it beside this repo."
+}
+
+DRIVER=""
+for name in "${DEPS[@]}"; do
+  resolve "$name"
+  # The runner resolves the same dependencies itself; hand it exactly what was found here.
+  export "$(env_name_of "$name")=$RESOLVED"
+  if [[ "$name" == "testing.nvim" ]]; then
+    DRIVER="$RESOLVED/scripts/testing.lua"
+  fi
+done
+[[ -f "$DRIVER" ]] || fail "error: the runner entry is missing: $DRIVER"
+
+# Throwaway app name: the run gets its own stdpath("config"/"data"/"state"), never the developer's.
+export NVIM_APPNAME="${NVIM_APPNAME:-hover-tests}"
+# A run with `isolated = "none"` writes the plugin's state where Neovim keeps it: point state and
+# cache at a scratch directory, removed afterwards (a child editor has a sandbox of its own).
+scratch="$(mktemp -d)"
+trap 'rm -rf "$scratch"' EXIT
+if command -v cygpath >/dev/null 2>&1; then
+  scratch="$(cygpath -m "$scratch")"
+fi
+export XDG_STATE_HOME="$scratch/state"
+export XDG_CACHE_HOME="$scratch/cache"
+
+# No `exec`: the trap must remove the scratch directory afterwards (`set -e` keeps the exit code).
+nvim -n -i NONE --headless -u NONE -l "$DRIVER" run . "$@"

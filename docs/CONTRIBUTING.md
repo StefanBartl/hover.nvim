@@ -78,8 +78,9 @@ broken.
 
 ## Tests
 
-`TESTS/` is a [plenary.nvim](https://github.com/nvim-lua/plenary.nvim)
-busted-style suite; no sibling plugin has to be installed to run it.
+`TESTS/` is a busted-style suite run by
+[testing.nvim](https://github.com/StefanBartl/testing.nvim) (`bash scripts/test.sh`);
+it needs `lib.nvim` and `ui.nvim` next to this repo (or in `.deps/`), no other plugin.
 [GitHub Actions](../.github/workflows/ci.yml) runs it on every push and PR to
 `main`.
 

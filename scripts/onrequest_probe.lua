@@ -28,7 +28,7 @@
 -- engine, which is how a detected engine that cannot answer is told apart
 -- from a path that is broken.
 --
--- Dependencies are found the way scripts/minimal_init.lua finds them: an env
+-- Dependencies are found the way TESTS/minimal_init.lua finds them: an env
 -- var, a `.deps/<name>` checkout, or a sibling directory.
 
 vim.opt.rtp:append(vim.fn.getcwd())

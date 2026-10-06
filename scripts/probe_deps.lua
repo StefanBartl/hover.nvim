@@ -2,11 +2,11 @@
 --
 -- Shared by `scripts/onrequest_probe.lua` and `scripts/pdfzoom_probe.lua`,
 -- which both run outside the test harness and therefore outside
--- `scripts/minimal_init.lua`. Three candidates, in descending order of
+-- `TESTS/minimal_init.lua`. Three candidates, in descending order of
 -- explicitness: an environment variable, a `.deps/<name>` checkout, and a
 -- sibling directory -- the same order and the same reasoning as
 -- `minimal_init.lua`, which cannot be reused here because it also brings up
--- plenary and a runtimepath a probe has no use for.
+-- the test runner's dependencies and a runtimepath a probe has no use for.
 --
 -- **Built with explicit indices, not a `{a, b, c}` literal**, and that is the
 -- whole reason this file exists rather than a second copy of five lines. The
