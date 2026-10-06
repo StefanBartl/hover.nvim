@@ -43,7 +43,7 @@ jobs:
   # need a terminal -- drawing images, rasterizing a PDF, converting an office
   # document. Those have no CI anywhere and are evidenced only by hand.
   tests:
-    name: plenary specs (${{ matrix.os }})
+    name: specs (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     strategy:
@@ -57,7 +57,7 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v5
-      # All three are resolved by scripts/minimal_init.lua from .deps/ -- see
+      # All three are resolved by TESTS/minimal_init.lua from .deps/ -- see
       # the three lookup paths it documents. lib.nvim is a hard dependency, so
       # a run without it is not a degraded run, it is no run at all. ui.nvim
       # is optional in the plugin itself, but TESTS/status_view_spec.lua
@@ -72,25 +72,31 @@ jobs:
           repository: StefanBartl/ui.nvim
           path: .deps/ui.nvim
           ref: ci-verified
-      - uses: actions/checkout@v5
-        with:
-          repository: nvim-lua/plenary.nvim
-          path: .deps/plenary.nvim
-          # Pinned to the 2026-09-20 HEAD; bump deliberately, not by drifting.
-          ref: 74b06c6c75e4eeb3108ec01852001636d85a932b
       - uses: rhysd/action-setup-vim@v1
         with:
           neovim: true
           version: stable
-      # The crop check needs images.nvim and the ImageMagick it runs, neither of
-      # which a runner has, so it reports pending here by design. The runner
-      # still prints and names every pending spec -- this only stops it from
-      # failing the build over the one that is expected.
+      # Checked out from the branch that only moves once the dependency's own CI is green.
+      - uses: actions/checkout@v5
+        with:
+          repository: "StefanBartl/testing.nvim"
+          path: .deps/testing.nvim
+          ref: ci-verified
+
+      # images.nvim is deliberately NOT checked out: the zoom crop check needs it and the
+      # ImageMagick it runs, so it reports pending here by design (TESTS/minimal_init.lua
+      # adds images.nvim only when it finds one, e.g. a sibling checkout of a contributor).
       - run: |
           exec > >(tee -a "$RUNNER_TEMP/test-output.log") 2>&1
-          bash scripts/test.sh
-        env:
-          HOVER_ALLOW_PENDING: "1"
+          bash scripts/test.sh --json "$RUNNER_TEMP/testing-ir.json"
+      # The IR is what a reporter or a person reads to find out WHICH case failed on WHICH platform.
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: testing-ir-${{ matrix.os }}
+          path: ${{ runner.temp }}/testing-ir.json
+          if-no-files-found: ignore
+          retention-days: 14
       - uses: actions/upload-artifact@v7
         if: failure()
         with:
