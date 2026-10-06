@@ -19,6 +19,7 @@ short version of all of it; `:help hover` is the same ground offline.
 | [what-you-get.md](what-you-get.md) | The six `:Hover` routes that carry most of the daily use, out of the box |
 | [scope.md](scope.md) | What it can answer depending on the target — the reference table at a glance |
 | [WORKFLOW.md](WORKFLOW.md) | How the pieces combine day to day: the quiet ladder and which lever to reach for, scroll against resize against zoom, and what to do when no hover appears |
+| [WORKFLOW-LOGIN-PAGES.md](WORKFLOW-LOGIN-PAGES.md) | A link shows a login page: why the hover is anonymous, and the three ways out — pin a file, authenticate a document download, or open it — with setup, a decision tree and a troubleshooting table |
 | [commands.md](commands.md) | Every `:Hover` route, its arguments, and what each one does |
 | [BINDINGS.md](BINDINGS.md) | Every keymap, user command, autocmd, highlight group and global variable this plugin installs — and which keys are *borrowed* rather than owned |
 | [configuration.md](configuration.md) | Every option `setup()` takes, with its default and what it means |

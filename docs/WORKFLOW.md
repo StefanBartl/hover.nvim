@@ -10,6 +10,9 @@ were reading, and the only reason that is ever welcome is that the float is wort
 than the paragraph. Every lever below is a way of saying where that line sits for you
 right now.
 
+A link that shows a login page instead of its content is a different problem with its own
+page: [WORKFLOW-LOGIN-PAGES.md](WORKFLOW-LOGIN-PAGES.md).
+
 ---
 
 ## The quiet ladder: reach for the narrowest lever that answers
