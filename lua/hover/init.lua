@@ -316,7 +316,12 @@ function M.target_under_cursor(bufnr, opts)
   -- Only when the web hover is on: this is the source that would otherwise
   -- make every link in every document a hover target, which is exactly the
   -- overload the switch exists to prevent.
-  if force or config.web_enabled() then
+  --
+  -- Also when a pin is configured: a pin is a reader's statement about what a
+  -- URL shows, and one on a URL the cursor can never find would do nothing.
+  -- What this finds that the web switch would have withheld is still stopped
+  -- in `show` -- an unpinned URL classifies as `url` and is refused there.
+  if force or config.web_enabled() or require("hover.pins").any() then
     local url = require("hover.bare_url").under_cursor(bufnr)
     if url then
       return url
@@ -801,6 +806,25 @@ end
 -- Showing, hiding, scrolling
 -- ---------------------------------------------------------------------------
 
+---@internal
+--- `classify.classify`, and then the reader's own say on what a URL shows.
+---
+--- A pin turns a matching link into the local file it names (see
+--- `hover.pins`), so it is applied *here*, once, where a found string becomes
+--- a target -- the two places that do that (`show` and `why`) would otherwise
+--- each need to remember it, and one that forgot would explain a hover the
+--- other does not show.
+---@param raw string
+---@param source string|nil
+---@return Hover.Target
+local function classify_target(raw, source)
+  local target = classify.classify(raw, source)
+  if target.type == "url" then
+    return require("hover.pins").apply(target)
+  end
+  return target
+end
+
 --- Show the hover for the target under the cursor. No-op when there is none.
 ---@param opts? { force?: boolean } `force` ignores every volume switch.
 ---@return boolean shown
@@ -854,7 +878,7 @@ function M.show(opts)
     -- decide what a *path-like string* is. The source already decided.
     target = { type = "git", raw = found.target }
   else
-    target = classify.classify(found.target, source ~= "" and source or nil)
+    target = classify_target(found.target, source ~= "" and source or nil)
   end
 
   -- **An explicitly requested hover must not be reset by its own trigger.**
@@ -1228,7 +1252,7 @@ function M.why()
 
   local found = M.target_under_cursor(bufnr, {})
   if found then
-    local target = classify.classify(
+    local target = classify_target(
       found.target,
       (function()
         local n = api.nvim_buf_get_name(bufnr)
@@ -1236,6 +1260,9 @@ function M.why()
       end)()
     )
     say("target: %s (%s, via %s)", found.target, target.type, found.kind or "source")
+    if target.pinned then
+      say("  pinned: `links.pins` shows %s for it.", target.pinned.show)
+    end
     if target.type == "url" and not config.web_enabled() then
       say("  but web links are off. `:Hover links web on`.")
     elseif not config.auto_hover_for(target.type) then
@@ -1404,7 +1431,11 @@ function M.open()
   end
 
   local what
-  if target.type == "url" then
+  if target.pinned then
+    -- The file is a stand-in; what the reader wants next from a stand-in is
+    -- the page it stands in for, and that is the one thing a pin cannot show.
+    what = target.pinned.url
+  elseif target.type == "url" then
     what = target.url or target.raw
   elseif target.type == "missing" or target.type == "git" then
     -- Nothing on disk, or an object id no opener understands.

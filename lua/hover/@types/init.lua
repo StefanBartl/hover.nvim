@@ -69,6 +69,16 @@
 ---@field timeout_ms? integer # Fetch timeout. Default 2000.
 ---@field pdf? Hover.WebPdfConfig
 ---@field shot? Hover.ShotConfig
+---@field pins? Hover.Pin[] # Links shown as a file of the reader's own. First match wins; a configured list replaces the default rather than merging into it. See `hover.pins`.
+
+--- A link the reader has decided to show as a file instead.
+---
+--- For the page nothing can render: behind a single sign-on the hover has no
+--- cookies, so the text preview and the screenshot both show the login form.
+--- Print the page to a PDF or a PNG once and pin it.
+---@class Hover.Pin
+---@field match string|string[] # URL glob(s). `*` is the only wildcard and matches anything, `/` included; scheme, `#fragment` and case are ignored. A glob without a `/` is matched against the host alone (`*.example.com`), one with a `/` against host, path and query (`example.com/wiki/*`).
+---@field show string # The file. `~` and environment variables are expanded; a relative path is relative to the Neovim configuration, not to the document the link is in. Its extension decides how it is previewed -- a PDF is paged and magnified like any other.
 
 --- A link that answers with a PDF, shown as its first page.
 ---
@@ -285,6 +295,7 @@
 ---@field ext? string # Lowercased extension, when there is one.
 ---@field size? integer # Byte size, for local files.
 ---@field reason? string # Why it is `missing`.
+---@field pinned? { url: string, glob: string, show: string } # Set when `links.pins` replaced a URL with a file: the URL as classified, the glob that matched and the `show` as configured. `raw` stays the link as written.
 
 -- #####################################################################
 -- registry.lua, bare_path.lua, bare_url.lua

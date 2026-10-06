@@ -371,6 +371,33 @@ local function check_config()
       }
     )
   end
+
+  -- `links.pins`: what a link is shown as, decided by the reader. A pin whose
+  -- file has moved shows "pinned file not found" in the float, which is right
+  -- and still better learned here than by hovering every link in turn.
+  local pins = require("hover.pins")
+  local links = config.get().links
+  local written = type(links) == "table" and type(links.pins) == "table" and #links.pins or 0
+  local usable = pins.list()
+  if written > 0 then
+    if #usable < written then
+      health.warn(
+        ("links.pins: %d of %d entries unusable and skipped"):format(written - #usable, written),
+        { "Each pin needs `match` (a glob, or a list of them) and `show` (a file), both strings." }
+      )
+    else
+      health.ok(("links.pins: %d configured"):format(#usable))
+    end
+    for _, pin in ipairs(usable) do
+      local exists, path = pins.exists(pin.show)
+      if not exists then
+        health.warn(
+          ("links.pins: %s -> %s does not exist"):format(table.concat(pin.match, ", "), path),
+          { "A hover on a matching link says `pinned file not found` until it does." }
+        )
+      end
+    end
+  end
 end
 
 --- `:checkhealth hover`.
