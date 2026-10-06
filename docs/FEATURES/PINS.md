@@ -56,8 +56,11 @@ makes none.
 
 The consequence is in the bare-URL source, which does not look for URLs at all
 while `web` is off. With a pin configured it does, because a pin on a URL the
-cursor can never find would do nothing. An *unpinned* URL found that way is
-still refused one step later, so `web = false` keeps meaning what it meant.
+cursor can never find would do nothing — but it **claims only a URL a pin
+covers**. An unpinned URL is left alone exactly as before pins existed, so
+whatever would have answered there (a position preview, a bare path) still can.
+Only a URL with an authority (`scheme://host`) can be pinned: `mailto:` and
+`tel:` have no host for a glob to be about.
 
 ## Why the match is a glob, and a small one
 

@@ -1309,11 +1309,25 @@ function M.why()
       -- order `show` asks them in: a URL with `web` off never reaches the type
       -- gate at all, and a report that named the second reason would send the
       -- reader to fix something that is not what stopped them.
-      say(
-        "  but %s targets do not open by themselves. `:Hover auto %s`, or `:Hover show`.",
-        target.type,
-        target.type
-      )
+      --
+      -- It names the type the gate was actually asked about: a pinned file
+      -- that has gone is asked as the file it would have been, and sending the
+      -- reader to `:Hover auto missing` for a `.md` pin would be advice that
+      -- cannot work.
+      local asked = gate_type(target)
+      if asked ~= target.type then
+        say(
+          "  but a pinned file that has gone opens like a %s file would, and those do not open by themselves. `:Hover auto %s`, or `:Hover show`.",
+          asked,
+          asked
+        )
+      else
+        say(
+          "  but %s targets do not open by themselves. `:Hover auto %s`, or `:Hover show`.",
+          target.type,
+          target.type
+        )
+      end
     elseif _suppressed and _suppressed == identity(target) then
       say("  but it was dismissed. Move off it, or `:Hover show`.")
     else

@@ -150,12 +150,71 @@ describe("hover.auth", function()
       assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/../other/x"))
       assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/%2e%2e/other/x"))
       assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/.%2E/other/x"))
-      assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/./x"))
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/.."))
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/other/../other/x"))
+    end)
+
+    it(
+      "is matched against the path curl sends, so a dot segment that stays inside is inside",
+      function()
+        -- Measured with curl 8.18: `/wiki/./x`, `/wiki/%2e/x` and `/wiki/a/../x`
+        -- all arrive as `GET /wiki/x`.
+        assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/./x"))
+        assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/%2e/x"))
+        assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/a/../x"))
+        -- ...and a URL that only reaches the scope through a dot segment is in it.
+        assert.is_truthy(auth.for_url("https://acme.atlassian.net/other/../wiki/x"))
+        -- Never above the root: curl stays at `/`, so these are `/wiki/x` and
+        -- `/other/x`.
+        assert.is_truthy(auth.for_url("https://acme.atlassian.net/../wiki/x"))
+        assert.is_truthy(auth.for_url("https://acme.atlassian.net/../../wiki/x"))
+        assert.is_nil(auth.for_url("https://acme.atlassian.net/../../other/x"))
+      end
+    )
+
+    it("does not hand an in-scope request to a broader rule, or past an unset one", function()
+      -- The first rule that matches decides, even when its variable is unset.
+      -- Skipping the rule for any dot segment gave `/wiki/./x` to the admin
+      -- token, where the reader's ordering says the read-only token -- or
+      -- nothing -- applies.
+      uv.os_setenv("HOVER_TEST_BROAD", "broad-token-value")
+      rules({
+        { match = "acme.example/wiki/*", user = "ro", token_env = "HOVER_TEST_TOKEN" },
+        { match = "acme.example", user = "admin", token_env = "HOVER_TEST_BROAD" },
+      })
+      assert.equals(TOKEN, auth.for_url("https://acme.example/wiki/x").token)
+      assert.equals(TOKEN, auth.for_url("https://acme.example/wiki/./x").token)
+      assert.equals(TOKEN, auth.for_url("https://acme.example/wiki/%2e/x").token)
+      assert.equals("broad-token-value", auth.for_url("https://acme.example/wiki/../x").token)
+
+      rules({
+        { match = "acme.example/wiki/*", user = "ro", token_env = "HOVER_TEST_UNSET" },
+        { match = "acme.example", user = "admin", token_env = "HOVER_TEST_BROAD" },
+      })
+      assert.is_nil(auth.for_url("https://acme.example/wiki/x"))
+      assert.is_nil(auth.for_url("https://acme.example/wiki/./x"), "past an unset rule")
+      assert.is_nil(auth.for_url("https://acme.example/wiki/a/../x"), "past an unset rule")
+      uv.os_unsetenv("HOVER_TEST_BROAD")
+    end)
+
+    it("takes a rule written with its scheme", function()
+      rules({
+        {
+          match = "https://acme.atlassian.net/wiki/*",
+          user = "me",
+          token_env = "HOVER_TEST_TOKEN",
+        },
+      })
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/x"))
+      assert.is_nil(auth.for_url("https://acme.atlassian.net/wiki/../x"))
     end)
 
     it("reads only the path for that, not the query or the fragment", function()
-      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/x?next=../y"))
-      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/x#../y"))
+      -- Resolving the whole string instead of the path would turn each of these
+      -- into `/other` or `/x` and drop the credential.
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/x?next=/../../other"))
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/x#/../../other"))
+      assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/x?a=../y"))
       assert.is_truthy(auth.for_url("https://acme.atlassian.net/wiki/a..b/c"))
     end)
 

@@ -88,6 +88,13 @@ describe("hover.pins.matches", function()
     assert.is_true(pins.matches("http://wiki.corp:8090/x", "*.corp", loose))
     -- A port the glob names is still that port.
     assert.is_false(pins.matches("http://wiki.corp:8091/x", "wiki.corp:8090", loose))
+    assert.is_true(pins.matches("http://wiki.corp:8090/x", "wiki.corp:8090", loose))
+    assert.is_true(pins.matches("http://wiki.corp:8090/x", "wiki.corp:8090/*", loose))
+    -- A bracketed IPv6 literal has colons that are not a port.
+    assert.is_true(pins.matches("https://[::1]:8080/x", "[::1]/x", loose))
+    assert.is_true(pins.matches("https://[::1]/x", "[::1]/x", loose))
+    assert.is_false(pins.matches("https://[::1]:8080/x", "[::1]:9090/x", loose))
+    assert.is_false(pins.matches("https://[::1]:8080/x", "[::1]/x"), "strict by default")
     -- Never the userinfo: that is the safe direction.
     assert.is_false(pins.matches("https://me@wiki.corp/x", "wiki.corp", loose))
     assert.is_false(pins.matches("https://wiki.corp@evil.com/x", "wiki.corp", loose))
@@ -105,9 +112,23 @@ describe("hover.pins.matches", function()
     assert.is_true(ms < 100, ("took %.1f ms"):format(ms))
   end)
 
+  it("does not let two literals between stars overlap", function()
+    -- `*ab*b*` needs an `ab` and, after it, a `b`: the `b` of `ab` is not both.
+    assert.is_false(pins.matches("https://example.com/ab", "example.com/*ab*b*"))
+    assert.is_false(pins.matches("https://example.com/aba", "example.com/*ab*ba"))
+    assert.is_true(pins.matches("https://example.com/abxb", "example.com/*ab*b*"))
+    assert.is_true(pins.matches("https://example.com/abba", "example.com/*ab*ba"))
+    -- A tail that overlaps the last middle literal.
+    assert.is_false(pins.matches("https://example.com/xab", "example.com/*ab*ab"))
+    assert.is_true(pins.matches("https://example.com/xabab", "example.com/*ab*ab"))
+  end)
+
   it("agrees with a pattern-based reference on random globs and URLs", function()
     -- The matcher is hand-written, so it is held against the obvious (and
-    -- slow) implementation on inputs small enough for the slow one.
+    -- slow) implementation on inputs small enough for the slow one. The
+    -- generator is aimed at the part that can go wrong -- several stars with
+    -- literals between them that overlap -- and the shapes it reaches are
+    -- counted below, so it cannot quietly drift back to easy cases.
     math.randomseed(7)
     local function random(alphabet, len)
       local out = {}
@@ -123,15 +144,64 @@ describe("hover.pins.matches", function()
       end
       return subject:match("^" .. table.concat(pieces, ".*") .. "$") ~= nil
     end
-    for _ = 1, 3000 do
-      local host = random({ "a", "b", "." }, math.random(1, 5))
-      local path = random({ "a", "b", ".", "/" }, math.random(0, 8))
-      local glob = host .. "/" .. random({ "a", "b", ".", "/", "*" }, math.random(0, 6))
+    local runs, two_middles, matches_true = 6000, 0, 0
+    for _ = 1, runs do
+      local host = random({ "a", "b", "." }, math.random(1, 3))
+      local path = random({ "a", "b" }, math.random(0, 10))
+      local tail = random({ "a", "b", "*" }, math.random(4, 14))
+      local glob = host .. "/" .. tail
       local url = "https://" .. host .. "/" .. path
+      local want = reference(host .. "/" .. path, glob)
+      assert.equals(want, pins.matches(url, glob), url .. " ~ " .. glob)
+      if want then
+        matches_true = matches_true + 1
+      end
+      local middles = 0
+      local pieces = vim.split(tail, "*", { plain = true })
+      for i = 2, #pieces - 1 do
+        if pieces[i] ~= "" then
+          middles = middles + 1
+        end
+      end
+      if middles >= 2 then
+        two_middles = two_middles + 1
+      end
+    end
+    assert.is_true(
+      two_middles >= 800,
+      ("only %d globs with two middle literals"):format(two_middles)
+    )
+    assert.is_true(matches_true >= 200 and matches_true <= runs - 200, "both outcomes must occur")
+  end)
+
+  it("does not hand a glob a host it was not written for", function()
+    -- Host-only globs, stars in the host, and a host that differs from the
+    -- glob's, against a host-only reference.
+    math.randomseed(9)
+    local function random(alphabet, len)
+      local out = {}
+      for k = 1, len do
+        out[k] = alphabet[math.random(#alphabet)]
+      end
+      return table.concat(out)
+    end
+    local function reference(subject, glob)
+      local pieces = {}
+      for piece in (glob .. "*"):gmatch("(.-)%*") do
+        pieces[#pieces + 1] = vim.pesc(piece)
+      end
+      return subject:match("^" .. table.concat(pieces, ".*") .. "$") ~= nil
+    end
+    for _ = 1, 3000 do
+      local host = random({ "a", "b", "." }, math.random(1, 7))
+      local glob = random({ "a", "b", ".", "*" }, math.random(1, 7))
+      local url = "https://" .. host .. "/p"
+      assert.equals(reference(host, glob), pins.matches(url, glob), url .. " ~ " .. glob)
+      -- A trailing port never changes a strict answer for a glob that names none.
       assert.equals(
-        reference(host .. "/" .. path, glob),
-        pins.matches(url, glob),
-        url .. " ~ " .. glob
+        reference(host .. ":8080", glob),
+        pins.matches("https://" .. host .. ":8080/p", glob),
+        "strict, with a port"
       )
     end
   end)
@@ -270,6 +340,20 @@ describe("hover.pins, resolving a link", function()
       pins.apply(classify.classify("https://b.example.com/", nil)).pinned.as
     )
     assert.equals("image", pins.apply(classify.classify("https://c.example.com/", nil)).pinned.as)
+  end)
+
+  it("does not pin a URL that has no host, however the glob is written", function()
+    -- `mailto:` is not followed by `//`, so the scheme was never stripped and
+    -- `*.example.com` matched the address as if it were a host.
+    local pdf = file("opaque.pdf")
+    config.setup({ links = { pins = { { match = "*.example.com", show = pdf } } } })
+    assert.is_true(pins.covers("https://wiki.example.com/a"))
+    assert.is_false(pins.covers("mailto:alice@wiki.example.com"))
+    assert.is_false(pins.covers("tel:+4912345"))
+    assert.is_false(pins.covers("javascript:alert(1)//wiki.example.com"))
+    local t = pins.apply(require("hover.classify").classify("mailto:a@b.example.com", nil))
+    assert.equals("url", t.type)
+    assert.is_nil(t.pinned)
   end)
 
   it("knows whether a URL as written in a document is covered", function()
@@ -478,6 +562,18 @@ describe("hover.show on a pinned link, with the web hover off", function()
     })
     assert.is_false(hover.show({}))
     assert.is_falsy(float.win())
+
+    -- `why` names the type the gate was asked about. Sending the reader to
+    -- `:Hover auto missing` would be advice that cannot work: the gate asks
+    -- about `markdown`.
+    local report = table.concat(hover.why(), "\n")
+    assert.matches("`:Hover auto markdown`", report)
+    assert.is_nil(report:find("`:Hover auto missing`", 1, true), report)
+
+    -- And following that advice is what opens it.
+    config.setup({ auto_hover = { markdown = true } })
+    assert.is_true(hover.show({}))
+    assert.matches("pinned file not found", shown())
   end)
 
   describe("<CR> on the float", function()

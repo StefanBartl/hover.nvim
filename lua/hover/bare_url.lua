@@ -53,6 +53,11 @@ local PATTERNS = {
 }
 
 ---@internal
+--- The literal every match of the pattern at the same index contains.
+---@type string[]
+local ANCHORS = { "://", ":\\", "mailto:", "www." }
+
+---@internal
 --- Strip what a sentence or a markup construct wrapped around the URL.
 ---
 --- Two separate jobs. Trailing sentence punctuation is never part of a URL
@@ -110,9 +115,13 @@ function M.spans(line)
     return false
   end
 
-  for _, pattern in ipairs(PATTERNS) do
+  for idx, pattern in ipairs(PATTERNS) do
     local init = 1
-    while init <= #line do
+    -- A plain `find` for the literal every match of this pattern contains,
+    -- first: the patterns start a scan at every position of a long
+    -- `[%w+.-]` run, and one that has no `://` to end in is all cost and no
+    -- answer. A 4 KB alphanumeric token measured 150 ms; it is now free.
+    while init <= #line and line:find(ANCHORS[idx], init, true) do
       local s, e = line:find(pattern, init)
       if not s then
         break
@@ -143,10 +152,10 @@ for _, ch in ipairs({ " ", "<", ">", '"', "'", "`", "|" }) do
 end
 
 ---@internal
---- The longest token `under_cursor` will look at, each way from the cursor.
---- Browsers and servers refuse URLs past a few KB, and the scan is quadratic in
---- a long run.
-local MAX_TOKEN = 4096
+--- The longest token `under_cursor` will look at. Common servers refuse a URL
+--- past about 8 KB, and a signed or SSO redirect of 4-8 KB is real; past it the
+--- scan, which restarts at every position of a long run, is the cost.
+local MAX_TOKEN = 8192
 
 --- The URL under the cursor, in the shape `hover` expects from a
 --- source.
@@ -198,11 +207,10 @@ function M.under_cursor(bufnr)
   while right < hi and not TERMINATOR[line:byte(right + 1)] do
     right = right + 1
   end
-  -- A token that runs on past the cap is not a URL anyone wrote to be clicked.
-  if
-    (left == lo and left > 1 and not TERMINATOR[line:byte(left - 1)])
-    or (right == hi and right < #line and not TERMINATOR[line:byte(right + 1)])
-  then
+  -- A token past the cap is refused as a whole, wherever the cursor is in it:
+  -- the answer must not depend on the offset, which a cap applied per side did
+  -- (a 5 KB URL answered in its middle and not on its host).
+  if right - left + 1 > MAX_TOKEN then
     return nil
   end
 

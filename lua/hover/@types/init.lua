@@ -79,7 +79,7 @@
 --- would hand the token to every tenant, an attacker's included -- and the rule
 --- is skipped if it does. HTTPS only, and never on a command line.
 ---@class Hover.AuthRule
----@field match string|string[] # Glob(s), as `Hover.Pin.match`, whose host part is literal. `acme.atlassian.net` or `acme.atlassian.net/wiki/*`. A port is part of the host (`wiki.acme.com:8090` is not `wiki.acme.com`), and a glob with a path part does not cover a URL with a `..` segment.
+---@field match string|string[] # Glob(s), as `Hover.Pin.match`, whose host part is literal. `acme.atlassian.net` or `acme.atlassian.net/wiki/*`. A port is part of the host (`wiki.acme.com:8090` is not `wiki.acme.com`), and a rule is matched against the path curl will send (`.` and `..` resolved first).
 ---@field user? string # With it the credential is HTTP Basic (`user:token`: Confluence Cloud takes the account email and an API token); without, `Authorization: Bearer` (a Data Center personal access token).
 ---@field token_env string # Name of the environment variable holding the token, e.g. `"CONFLUENCE_TOKEN"`.
 
