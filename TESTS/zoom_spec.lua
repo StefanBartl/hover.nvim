@@ -509,6 +509,31 @@ describe("hover.zoom and hover.nav", function()
     assert.same({ want.w, want.h }, { seen.width, seen.height })
   end)
 
+  it("makes the cache directory itself, whatever the crop writer does", function()
+    -- A writer stand-in that, unlike images.nvim today, does not create the destination's directory:
+    -- on a fresh profile `stdpath("cache")/hover.nvim/zoom` does not exist, and the crop would then
+    -- never be written. The directory is this module's to make, not a side effect of its dependency.
+    local dir = vim.fn.stdpath("cache") .. "/hover.nvim/zoom"
+    vim.fn.delete(dir, "rf")
+    assert.equals(0, vim.fn.isdirectory(dir), "the fresh-cache premise does not hold")
+
+    local seen_out
+    local real = package.loaded["images.convert"]
+    package.loaded["images.convert"] = {
+      crop = function(_, _, out, _, on_done)
+        seen_out = out
+        on_done(nil)
+      end,
+    }
+    local ok, err = pcall(media.zoomed, root .. "/pic.png", { zoom = 1 }, function() end)
+    package.loaded["images.convert"] = real
+    assert.is_true(ok, tostring(err))
+
+    assert.is_truthy(seen_out, "the crop writer was never reached")
+    assert.same(vim.fs.normalize(dir), vim.fs.normalize(vim.fs.dirname(seen_out)))
+    assert.equals(1, vim.fn.isdirectory(dir), "the destination directory was not created")
+  end)
+
   it("is reachable as a command, in both directions", function()
     require("hover.bindings.usrcmds").setup()
     assert.is_true(show_at("see ./pic.png here", 5))
