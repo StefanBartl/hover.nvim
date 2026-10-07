@@ -316,6 +316,12 @@ local function via_cfile(bufnr)
   -- cursor / from the buffer, not a Vim cmdline special.
   local expanded = expand_path(path)
 
+  -- A network path is not followed from text under the cursor: the stat below
+  -- is a synchronous SMB connection (`classify.is_network_path`).
+  if expanded:match("^[\\/][\\/]") then
+    return nil
+  end
+
   -- Absolute already: hand it back untouched.
   if expanded:match("^/") or expanded:match("^%a:[\\/]") or expanded:match("^[\\/][\\/]") then
     if uv.fs_stat(expanded) then

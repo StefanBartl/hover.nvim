@@ -421,6 +421,7 @@
 ---@field max_width? integer # Width page text is wrapped to; default is the hover's own.
 ---@field timeout_ms? integer # How long a fetch may take; default is `links.timeout_ms`.
 ---@field source_path? string # Absolute path of the document the target is written in; a relative path is resolved against its directory.
+---@field bufnr? integer # The buffer of that document, for a registered preview that reads it (an in-page `#anchor` needs it or `source_path` to be loaded).
 ---@field line? integer # First line to show of a text file.
 ---@field line_end? integer # Last line of a range; shown exactly.
 

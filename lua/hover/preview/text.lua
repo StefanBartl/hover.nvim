@@ -27,6 +27,64 @@ local M = {}
 --- re-reads from the start rather than keeping the file open: a hover is a
 --- glance, and holding a handle across an unbounded lifetime to save a
 --- fraction of a millisecond is the wrong trade.
+--- Bytes kept of one line, and bytes read from the file at a time. `f:lines()`
+--- reads a line whole, so a 150 MB file without a newline (minified JSON, a log
+--- that never wrapped) cost seconds and a few hundred MB for a preview of twenty
+--- lines; here the rest of an over-long line is read and dropped in chunks.
+local LINE_CAP = 8192
+local CHUNK = 65536
+
+---@internal
+--- An iterator over the lines of `f`, none longer than `LINE_CAP` bytes (the
+--- rest of such a line is skipped, and a `…` marks the cut).
+---@param f file*
+---@return fun(): string|nil
+local function bounded_lines(f)
+  local pending, pos = "", 1
+  local skipping, eof = nil, false
+  return function()
+    while true do
+      local nl = pending:find("\n", pos, true)
+      if skipping then
+        if nl then
+          pos = nl + 1
+          local line = skipping
+          skipping = nil
+          return line
+        end
+        pending, pos = "", 1
+      elseif nl then
+        local line = pending:sub(pos, nl - 1)
+        pos = nl + 1
+        return line
+      elseif #pending - pos + 1 > LINE_CAP then
+        skipping = pending:sub(pos, pos + LINE_CAP - 1) .. "…"
+        pending, pos = "", 1
+      end
+      if eof then
+        if skipping then
+          local line = skipping
+          skipping = nil
+          return line
+        end
+        if pos <= #pending then
+          local line = pending:sub(pos)
+          pending, pos = "", 1
+          return line
+        end
+        return nil
+      end
+      local chunk = f:read(CHUNK)
+      if chunk then
+        pending = pending:sub(pos) .. chunk
+        pos = 1
+      else
+        eof = true
+      end
+    end
+  end
+end
+
 ---@param path string
 ---@param limit integer
 ---@param skip integer|nil lines to drop before collecting (0-based offset)
@@ -46,7 +104,7 @@ local function head(path, limit, skip)
 
   local seen = 0
   local truncated = false
-  for line in f:lines() do
+  for line in bounded_lines(f) do
     seen = seen + 1
     if seen > skip then
       if #out >= limit then
@@ -186,7 +244,7 @@ function M.directory(target, opts)
   local dirbrowse = require("hover.preview.dirbrowse")
   local limit = opts.max_lines or 20
 
-  local entries = dirbrowse.scan(target.path)
+  local entries, capped = dirbrowse.scan(target.path)
   if not entries then
     return { lines = { "(cannot read directory)" }, title = vim.fs.basename(target.path) }
   end
@@ -203,7 +261,8 @@ function M.directory(target, opts)
     end
     out = dirbrowse.render(shown)
     if total > limit then
-      out[#out + 1] = ("… (%d entries)"):format(total)
+      out[#out + 1] = capped and ("… (%d+ entries, not all read)"):format(total)
+        or ("… (%d entries)"):format(total)
     end
   end
 
