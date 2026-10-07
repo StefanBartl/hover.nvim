@@ -48,13 +48,15 @@ describe("hover.preview.monitor.detect, parsing the helper script's stdout", fun
   it("parses a well-formed line into screen/x/y/w/h", function()
     stub_stdout("0 100 200 800 600\n")
     local result = monitor.detect()
-    if result == nil then
-      -- This Neovim build has no detectable platform at all (`detect_platform`
-      -- answered nil before `vim.system` was ever reached) -- nothing to
-      -- parse, and nothing wrong either.
-      return
-    end
     assert.same({ screen = 0, x = 100, y = 200, w = 800, h = 600 }, result)
+  end)
+
+  it("creates the cache directory for the helper script when it is missing", function()
+    -- A fresh profile has no cache directory yet; the script could not be written and detect()
+    -- answered nil forever (the stubbed stdout was never even asked for).
+    stub_stdout("0 1 2 3 4\n")
+    monitor.detect()
+    assert.equals(1, vim.fn.isdirectory(vim.fn.stdpath("cache")))
   end)
 
   it("reports no screen index for a negative screen, keeping the rectangle", function()
@@ -62,14 +64,7 @@ describe("hover.preview.monitor.detect, parsing the helper script's stdout", fun
     -- still meaningful even without one.
     stub_stdout("-1 10 20 300 400\n")
     local result = monitor.detect()
-    if result == nil then
-      return
-    end
-    assert.is_nil(result.screen)
-    assert.equals(10, result.x)
-    assert.equals(20, result.y)
-    assert.equals(300, result.w)
-    assert.equals(400, result.h)
+    assert.same({ screen = nil, x = 10, y = 20, w = 300, h = 400 }, result)
   end)
 
   it("returns nil for stdout that does not match the expected shape", function()

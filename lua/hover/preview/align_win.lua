@@ -428,7 +428,10 @@ function M.try_centre_new_window()
     content = script_linux(target)
   end
 
-  local path = vim.fn.stdpath("cache") .. "/hover_align_video_window" .. ext
+  -- The cache directory does not exist on a fresh profile; create it, or the script is never written.
+  local cache = vim.fn.stdpath("cache")
+  pcall(vim.fn.mkdir, cache, "p")
+  local path = cache .. "/hover_align_video_window" .. ext
   local fd = io.open(path, "w")
   if not fd then
     return

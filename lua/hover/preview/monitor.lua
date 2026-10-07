@@ -164,7 +164,11 @@ function M.detect(timeout_ms)
     linux = script_linux,
   })[platform]()
 
-  local path = vim.fn.stdpath("cache") .. "/hover_detect_monitor" .. ext
+  -- The cache directory does not exist on a fresh profile (or in a sandboxed run); without it the
+  -- script could never be written and the answer would silently always be nil.
+  local cache = vim.fn.stdpath("cache")
+  pcall(vim.fn.mkdir, cache, "p")
+  local path = cache .. "/hover_detect_monitor" .. ext
   local fd = io.open(path, "w")
   if not fd then
     return nil
