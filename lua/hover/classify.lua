@@ -60,6 +60,18 @@ local function resolve_path(target, source_path)
   return vim.fs.normalize(base .. "/" .. expanded)
 end
 
+--- Whether `path` is a network (UNC) path: `\\server\share`, `//server/share`,
+--- `\\?\UNC\...`. Touching one is a synchronous SMB connection -- up to
+--- twenty seconds when the host is gone, and on Windows a place the account's
+--- credentials are offered -- so a path *taken from a document* is not followed
+--- there. A path the reader configured themselves (a pin) goes through `M.file`
+--- and is not affected.
+---@param path string
+---@return boolean
+function M.is_network_path(path)
+  return type(path) == "string" and path:match("^[\\/][\\/]") ~= nil
+end
+
 ---@internal
 --- Repair a URL written with Windows separators.
 ---
@@ -119,7 +131,17 @@ function M.classify(target, source_path)
     path_part = raw
   end
 
-  return M.file(resolve_path(path_part, source_path), raw, anchor)
+  local abs = resolve_path(path_part, source_path)
+  if M.is_network_path(abs) then
+    return {
+      type = "missing",
+      raw = raw,
+      path = abs,
+      anchor = anchor,
+      reason = "network paths are not previewed",
+    }
+  end
+  return M.file(abs, raw, anchor)
 end
 
 --- What a file with this extension is, as a target type: `image`, `pdf`,
@@ -183,6 +205,18 @@ function M.file(abs, raw, anchor)
 
   if stat.type == "directory" then
     return { type = "directory", raw = raw, path = abs, size = stat.size }
+  end
+
+  -- A FIFO, a device or a socket exists but is not something to read: opening
+  -- a named pipe for a preview blocks the editor until someone writes to it.
+  if stat.type ~= "file" then
+    return {
+      type = "missing",
+      raw = raw,
+      path = abs,
+      anchor = anchor,
+      reason = "not a regular file",
+    }
   end
 
   local ext = extension(abs)

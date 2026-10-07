@@ -767,7 +767,18 @@ function M.fetch(target, opts, callback)
     -- into one request each, and the link is text out of a document. A hover
     -- on `p[1-100000]` was thousands of requests -- with a credential, each
     -- one authenticated.
-    raw_args = { "-L", "--globoff", "--max-filesize", "2000000" },
+    -- `--proto`/`--proto-redir`: a page may redirect to `ftp://`, `gopher://`
+    -- or `file://`; only http(s) is followed.
+    raw_args = {
+      "-L",
+      "--globoff",
+      "--proto",
+      "=http,https",
+      "--proto-redir",
+      "=http,https",
+      "--max-filesize",
+      "2000000",
+    },
     headers = { Accept = "text/html,application/xhtml+xml" },
   }
   -- A host the reader named in `links.auth` gets its credential, over stdin

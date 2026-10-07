@@ -382,13 +382,14 @@ end
 --- it an address, `www.` too, anything else is a path relative to the
 --- directory of `opts.source_path`, or the working directory). The answer is
 --- text: `Hover.Content` (`lines`, `filetype?`, `title?`, `highlight?`), never
---- a window. A picture, a PDF, an office document or a video answers with the
---- same badge the hover shows when it cannot draw one; no browser is started
---- and no PDF is downloaded.
+--- a window. A picture, a PDF, an office document or a video answers with a
+--- badge (what it is, how big), whatever its bytes look like; no browser is
+--- started and no PDF is downloaded. A network (UNC) path is not followed.
+--- Lines never hold a newline, so they can go straight into a buffer.
 ---
 --- **An address is fetched only when the reader's own setting allows it**
---- (`links.fetch`), because a preview is a request from this machine to that
---- host. A caller that has its own consent (a keypress that asks for exactly
+--- (`links.web` and `links.fetch` both on), because a preview is a request
+--- from this machine to that host. A caller that has its own consent (a keypress that asks for exactly
 --- this) passes `fetch = true`; `fetch = false` keeps it offline. A host named
 --- in `links.auth` gets its credential as it does for the hover, and the last
 --- answer is kept, so asking again costs no second request.
@@ -416,7 +417,18 @@ function M.preview_target(target, cb, opts)
       return
     end
     settled = true
-    cb(content or { lines = { "(nothing to preview)" } })
+    if type(content) ~= "table" then
+      content = { lines = { "(nothing to preview)" } }
+    elseif type(content.lines) == "table" then
+      -- A newline inside a line is refused by nvim_buf_set_lines; the hover
+      -- float flattens them itself, a caller should not have to.
+      local flat = {}
+      for i, line in ipairs(content.lines) do
+        flat[i] = (tostring(line):gsub("[\r\n]", " "))
+      end
+      content = vim.tbl_extend("force", content, { lines = flat })
+    end
+    cb(content)
   end
 
   -- The content is made inside the pcall and handed over outside it: a
@@ -437,10 +449,19 @@ function M.preview_target(target, cb, opts)
 
     -- A preview a plugin registered for this type wins, as it does for the
     -- hover (markdown.nvim resolves `#heading` anchors this way). It may decline.
+    -- The buffer it is asked about is the document the target is written in
+    -- (`opts.bufnr`, or the one loaded for `opts.source_path`), else the
+    -- current one. An in-page `#anchor` has no meaning without that document,
+    -- so without it the claim is not asked.
+    local bufnr = opts.bufnr
+    if not bufnr and opts.source_path and opts.source_path ~= "" then
+      local b = vim.fn.bufnr(opts.source_path)
+      bufnr = b > 0 and b or nil
+    end
     local claimed = require("hover.registry").preview_for(classified.type)
-    if claimed then
+    if claimed and (bufnr or classified.type ~= "anchor") then
       local claimed_ok, claimed_content =
-        pcall(claimed, classified, popts, api.nvim_get_current_buf())
+        pcall(claimed, classified, popts, bufnr or api.nvim_get_current_buf())
       if claimed_ok and claimed_content then
         content = claimed_content
         return
@@ -471,9 +492,13 @@ function M.preview_target(target, cb, opts)
       content = text.directory(classified, popts)
     elseif kind == "anchor" or kind == "git" then
       content = { lines = { classified.raw } }
+    elseif kind == "image" or kind == "pdf" or kind == "office" or kind == "video" then
+      -- Never read as text, whatever the first bytes look like (an SVG or an
+      -- uncompressed PDF is printable): a badge says what it is.
+      content = require("hover.preview.binary").badge(classified)
     else
-      -- file, markdown, image, pdf, office, video: a text file's lines, or
-      -- the badge `text.file` gives anything that is not text.
+      -- file, markdown: the lines of the file, or the badge `text.file` gives
+      -- anything that is not text.
       content = text.file(classified, popts)
     end
   end)

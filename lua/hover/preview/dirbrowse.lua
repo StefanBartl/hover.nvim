@@ -24,17 +24,25 @@ local uv = vim.uv or vim.loop
 --- Scan `dir`'s immediate children, directories first, both groups
 --- alphabetical by name -- the order the directory preview has always shown.
 ---@param dir string absolute directory path
+---@param cap integer|nil entries read at most (default 5000): a directory of a million files must not stall the editor
 ---@return Hover.DirEntry[]|nil nil when the directory cannot be read
-function M.scan(dir)
+---@return boolean capped the directory has more entries than were read
+function M.scan(dir, cap)
   local handle = uv.fs_scandir(dir)
   if not handle then
     return nil
   end
 
+  cap = cap or 5000
   local dirs, files = {}, {}
+  local capped = false
   while true do
     local name, kind = uv.fs_scandir_next(handle)
     if not name then
+      break
+    end
+    if #dirs + #files >= cap then
+      capped = true
       break
     end
     local path = vim.fs.joinpath(dir, name)
@@ -71,7 +79,7 @@ function M.scan(dir)
   for _, e in ipairs(files) do
     out[#out + 1] = e
   end
-  return out
+  return out, capped
 end
 
 --- Render `entries` into display lines, one per entry, in the order given --
