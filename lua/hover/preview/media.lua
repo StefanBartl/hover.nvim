@@ -487,6 +487,9 @@ function M.zoomed(path, opts, on_result)
     vim.fn.sha256(key or (path .. tostring(rect.x)))
   )
   local spec = ("%dx%d+%d+%d"):format(rect.w, rect.h, rect.x, rect.y)
+  -- The directory does not exist on a fresh profile. images.nvim's own crop makes it today, but that is
+  -- its implementation detail, not its contract; a writer that is handed a path must not depend on it.
+  pcall(vim.fn.mkdir, vim.fs.dirname(out), "p")
 
   convert.crop(path, spec, out, nil, function(cropped)
     if not cropped then
