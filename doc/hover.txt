@@ -819,6 +819,20 @@ hover.status()                            { mode, switches, auto } -- for a
 hover.target_under_cursor({bufnr}, {opts})
                                           The target under the cursor, or nil.
                                           `opts.force` opens every volume gate.
+                                                      *hover.preview_target()*
+hover.preview_target({target}, {cb}, {opts})
+                                          For other plugins: what a path or
+                                          an address stands for, as text,
+                                          without a float. `cb` gets
+                                          `{ lines, filetype?, title?,
+                                          highlight? }` once, unless the
+                                          returned `{ cancel }` handle was
+                                          used first. An address is fetched
+                                          only if `links.fetch` is on or
+                                          `opts.fetch = true`. Also
+                                          `opts.max_lines`, `max_width`,
+                                          `timeout_ms`, `source_path`, `line`,
+                                          `line_end`.
 
 ==============================================================================
 PLAYING A VIDEO                                              *hover-video-play*

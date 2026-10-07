@@ -414,6 +414,16 @@
 ---@field zoom_cx? number # Centre of the magnified view, as a fraction of the source width. Default 0.5.
 ---@field zoom_cy? number # Centre of the magnified view, as a fraction of the source height. Default 0.5.
 
+--- What `hover.preview_target` takes besides the target.
+---@class Hover.PreviewTargetOpts
+---@field fetch? boolean # An address is fetched: true asks for it, false keeps it offline; unset follows `links.fetch`.
+---@field max_lines? integer # Lines the answer may have; default is the hover's own.
+---@field max_width? integer # Width page text is wrapped to; default is the hover's own.
+---@field timeout_ms? integer # How long a fetch may take; default is `links.timeout_ms`.
+---@field source_path? string # Absolute path of the document the target is written in; a relative path is resolved against its directory.
+---@field line? integer # First line to show of a text file.
+---@field line_end? integer # Last line of a range; shown exactly.
+
 ---@class Hover.Content
 ---@field lines string[]
 ---@field filetype? string # Set only where a filetype is known, never guessed.

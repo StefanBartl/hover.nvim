@@ -372,6 +372,110 @@ function M.link_under_cursor(bufnr)
 end
 
 -- ---------------------------------------------------------------------------
+-- Previews for other plugins
+-- ---------------------------------------------------------------------------
+
+--- Preview a link target without a float, a cursor or a buffer: the entry for
+--- another plugin that wants to show what a path or an address stands for.
+---
+--- `target` is classified exactly as a link in a document is (a scheme makes
+--- it an address, `www.` too, anything else is a path relative to the
+--- directory of `opts.source_path`, or the working directory). The answer is
+--- text: `Hover.Content` (`lines`, `filetype?`, `title?`, `highlight?`), never
+--- a window. A picture, a PDF, an office document or a video answers with the
+--- same badge the hover shows when it cannot draw one; no browser is started
+--- and no PDF is downloaded.
+---
+--- **An address is fetched only when the reader's own setting allows it**
+--- (`links.fetch`), because a preview is a request from this machine to that
+--- host. A caller that has its own consent (a keypress that asks for exactly
+--- this) passes `fetch = true`; `fetch = false` keeps it offline. A host named
+--- in `links.auth` gets its credential as it does for the hover, and the last
+--- answer is kept, so asking again costs no second request.
+---
+--- **`cb` is called exactly once, unless the returned handle cancelled
+--- first.** For a local target it may run before this function returns; for a
+--- fetched address it runs later, on the main loop. Cancel when the answer is
+--- no longer wanted (the cursor moved on): the request is not aborted, but
+--- the callback never runs.
+---
+---@param target string  # a path or an address, as written
+---@param cb fun(content: Hover.Content)
+---@param opts? Hover.PreviewTargetOpts
+---@return { cancel: fun() }
+function M.preview_target(target, cb, opts)
+  opts = opts or {}
+  local settled, cancelled = false, false
+  local handle = {
+    cancel = function()
+      cancelled = true
+    end,
+  }
+  local function finish(content)
+    if settled or cancelled then
+      return
+    end
+    settled = true
+    cb(content or { lines = { "(nothing to preview)" } })
+  end
+
+  local ok, err = pcall(function()
+    local classified = classify.classify(target, opts.source_path)
+    local popts = config.preview_opts()
+    popts.max_lines = opts.max_lines or popts.max_lines
+    popts.max_width = opts.max_width or popts.max_width
+    popts.url_timeout_ms = opts.timeout_ms or popts.url_timeout_ms
+    popts.line, popts.line_end = opts.line, opts.line_end
+    if type(opts.fetch) == "boolean" then
+      popts.url_fetch = opts.fetch
+    end
+    -- Text only: no browser render, no PDF download, no inline picture.
+    popts.shot_enabled, popts.url_pdf, popts.inline_images = false, false, false
+
+    local text = require("hover.preview.text")
+    local kind = classified.type
+    if kind == "url" then
+      local url = require("hover.preview.url")
+      if popts.url_fetch then
+        url.fetch(classified, popts, function(content)
+          -- curl's exit is a fast event context.
+          vim.schedule(function()
+            finish(content)
+          end)
+        end)
+      else
+        finish(url.offline(classified))
+      end
+    elseif kind == "missing" then
+      finish(text.missing(classified))
+    elseif kind == "directory" then
+      finish(text.directory(classified, popts))
+    elseif kind == "anchor" or kind == "git" then
+      finish({ lines = { classified.raw } })
+    else
+      -- file, markdown, image, pdf, office, video: a text file's lines, or
+      -- the badge `text.file` gives anything that is not text.
+      local key = cache.key(classified, popts)
+      local cached = cache.get(key)
+      if cached then
+        finish(cached)
+      else
+        local content = text.file(classified, popts)
+        cache.put(key, content)
+        finish(content)
+      end
+    end
+  end)
+  if not ok then
+    finish({
+      lines = { "(the preview could not be made)", tostring(err) },
+      highlight = "HoverError",
+    })
+  end
+  return handle
+end
+
+-- ---------------------------------------------------------------------------
 -- Building a preview
 -- ---------------------------------------------------------------------------
 
