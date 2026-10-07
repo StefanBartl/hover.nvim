@@ -215,6 +215,51 @@ describe("hover.preview_target", function()
     assert.equals("HoverError", answers[1].highlight)
   end)
 
+  it("calls a callback that raises once, and lets its error through", function()
+    local path = dir .. "/y.txt"
+    vim.fn.writefile({ "y" }, path)
+    local calls = 0
+    local ok = pcall(hover.preview_target, path, function()
+      calls = calls + 1
+      error("mine")
+    end)
+    assert.is_false(ok)
+    assert.equals(1, calls)
+  end)
+
+  it("lets a registered preview claim the type, and may be declined", function()
+    local registry = require("hover.registry")
+    registry.reset()
+    registry.register("spec", {
+      previews = {
+        markdown = function(target)
+          if target.anchor == "intro" then
+            return { lines = { "claimed " .. target.anchor } }
+          end
+        end,
+      },
+    })
+    local path = dir .. "/doc.md"
+    vim.fn.writefile({ "# Intro", "text" }, path)
+    local claimed = ask(path .. "#intro")
+    local declined = ask(path .. "#other")
+    registry.reset()
+    assert.same({ "claimed intro" }, claimed[1].lines)
+    assert.same({ "# Intro", "text" }, declined[1].lines)
+  end)
+
+  it("does not serve one size to another, nor share the hover's cache", function()
+    local path = dir .. "/sizes.txt"
+    local lines = {}
+    for i = 1, 30 do
+      lines[i] = "line " .. i
+    end
+    vim.fn.writefile(lines, path)
+    local few = ask(path, { max_lines = 3 })
+    local many = ask(path, { max_lines = 20 })
+    assert.is_true(#few[1].lines < #many[1].lines)
+  end)
+
   it("answers an empty target", function()
     local answers = ask("")
     assert.equals(1, #answers)

@@ -30,6 +30,8 @@ anything else a path (relative to the directory of `opts.source_path`, or the wo
 callback just never runs). For a local target it may run before the function returns; for a fetched
 address it runs later, on the main loop.
 
+- **A preview a plugin registered for the type wins**, as for the hover (markdown.nvim resolves
+  `#heading` anchors this way). The answer is not kept in `hover.cache`.
 - **Text only.** A picture, PDF, office document or video answers with the badge the hover shows when
   it cannot draw one; no browser is started and no PDF is downloaded.
 - **An address is fetched only if you may:** `links.fetch` is on, or the caller passes `fetch = true`
