@@ -18,6 +18,26 @@ act on, so all of them are safe to bind unconditionally.
 | `hover.dismiss()` | Close it **and keep it away** while the cursor stays on this target |
 | `hover.pin(on)` | Keep this float while the cursor goes elsewhere; omitted, it toggles |
 | `hover.target_under_cursor(bufnr, opts)` | The target under the cursor, or `nil` |
+| `hover.preview_target(target, cb, opts)` | For other plugins: what a path or an address stands for, as text (`Hover.Content`), without a float. Returns a `{ cancel }` handle; see below |
+
+### `hover.preview_target(target, cb, opts)`
+
+Asks the hover what a link target is, for a plugin that shows previews of its own (ui.nvim's slot
+panel does). `target` is classified like a link in a document: a scheme or `www.` makes an address,
+anything else a path (relative to the directory of `opts.source_path`, or the working directory).
+`cb` receives a `Hover.Content` -- `lines`, and `filetype`, `title`, `highlight` where they apply --
+**exactly once**, unless the returned handle's `cancel()` ran first (the request is not aborted, the
+callback just never runs). For a local target it may run before the function returns; for a fetched
+address it runs later, on the main loop.
+
+- **Text only.** A picture, PDF, office document or video answers with the badge the hover shows when
+  it cannot draw one; no browser is started and no PDF is downloaded.
+- **An address is fetched only if you may:** `links.fetch` is on, or the caller passes `fetch = true`
+  (its own consent, e.g. a keypress that asks for exactly this); `fetch = false` forces offline. A
+  host named in `links.auth` gets its credential, and the last answer is kept, so asking again costs
+  no second request.
+- Other options: `max_lines`, `max_width` (default: the hover's own), `timeout_ms`, `line`/`line_end`
+  (a text file starts there).
 
 `dismiss` rather than `hide` is what a key should call: under `CursorHold` the event fires
 again after any keystroke followed by quiet, so `hide()` makes the float vanish and then
