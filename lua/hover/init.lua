@@ -419,6 +419,9 @@ function M.preview_target(target, cb, opts)
     cb(content or { lines = { "(nothing to preview)" } })
   end
 
+  -- The content is made inside the pcall and handed over outside it: a
+  -- callback that raises is its owner's error, not a reason to call it twice.
+  local content, async
   local ok, err = pcall(function()
     local classified = classify.classify(target, opts.source_path)
     local popts = config.preview_opts()
@@ -432,45 +435,56 @@ function M.preview_target(target, cb, opts)
     -- Text only: no browser render, no PDF download, no inline picture.
     popts.shot_enabled, popts.url_pdf, popts.inline_images = false, false, false
 
+    -- A preview a plugin registered for this type wins, as it does for the
+    -- hover (markdown.nvim resolves `#heading` anchors this way). It may decline.
+    local claimed = require("hover.registry").preview_for(classified.type)
+    if claimed then
+      local claimed_ok, claimed_content =
+        pcall(claimed, classified, popts, api.nvim_get_current_buf())
+      if claimed_ok and claimed_content then
+        content = claimed_content
+        return
+      end
+    end
+
+    -- No `hover.cache` here: its key does not know the size or the text-only
+    -- options used below, so the hover and this function would serve each
+    -- other's content. A text file is cheap to read again.
     local text = require("hover.preview.text")
     local kind = classified.type
     if kind == "url" then
       local url = require("hover.preview.url")
       if popts.url_fetch then
-        url.fetch(classified, popts, function(content)
+        async = true
+        url.fetch(classified, popts, function(fetched)
           -- curl's exit is a fast event context.
           vim.schedule(function()
-            finish(content)
+            finish(fetched)
           end)
         end)
       else
-        finish(url.offline(classified))
+        content = url.offline(classified)
       end
     elseif kind == "missing" then
-      finish(text.missing(classified))
+      content = text.missing(classified)
     elseif kind == "directory" then
-      finish(text.directory(classified, popts))
+      content = text.directory(classified, popts)
     elseif kind == "anchor" or kind == "git" then
-      finish({ lines = { classified.raw } })
+      content = { lines = { classified.raw } }
     else
       -- file, markdown, image, pdf, office, video: a text file's lines, or
       -- the badge `text.file` gives anything that is not text.
-      local key = cache.key(classified, popts)
-      local cached = cache.get(key)
-      if cached then
-        finish(cached)
-      else
-        local content = text.file(classified, popts)
-        cache.put(key, content)
-        finish(content)
-      end
+      content = text.file(classified, popts)
     end
   end)
   if not ok then
-    finish({
+    content = {
       lines = { "(the preview could not be made)", tostring(err) },
       highlight = "HoverError",
-    })
+    }
+  end
+  if content or not async then
+    finish(content)
   end
   return handle
 end
