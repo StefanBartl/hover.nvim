@@ -74,12 +74,13 @@ function M.is_network_path(path)
   if type(path) ~= "string" or not path:match("^[\\/][\\/]") then
     return false
   end
-  -- The long forms of a *local* path -- `\\?\C:\...`, `\\.\C:\...` -- name a
-  -- drive letter. Everything else behind `\\` is not a file of this machine:
+  -- The long forms of a *local* path -- `\\?\C:\...`, `\\.\C:\...`,
+  -- `\\?\Volume{GUID}\...` -- name a drive or a volume. Everything else behind
+  -- `\\` is not a file of this machine:
   -- a server (`\\srv\share`, `\\?\UNC\...`), a device that reaches one
   -- (`\\.\GLOBALROOT\Device\Mup\...`), or a pipe (`\\.\pipe\name`, which blocks a
   -- reader until the other end writes).
-  if path:match("^[\\/][\\/][?.][\\/]%a:[\\/]") then
+  if path:match("^[\\/][\\/][?.][\\/]%a:") or path:match("^[\\/][\\/][?.][\\/][Vv]olume{") then
     return false
   end
   return true
@@ -153,7 +154,7 @@ function M.classify(target, source_path)
       raw = raw,
       path = vim.fs.normalize(expand_path(path_part)),
       anchor = anchor,
-      reason = "network paths are not previewed",
+      reason = "network, device and pipe paths are not previewed",
       refused = true,
     }
   end

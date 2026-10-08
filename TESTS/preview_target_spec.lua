@@ -522,15 +522,142 @@ describe("hover.preview_target", function()
       end
     end)
 
+    --- Read files in binary mode, as Linux and macOS do: on Windows the text mode
+    --- takes the CR away before the code under test sees it.
+    ---@param fn fun()
+    local function reading_binary(fn)
+      local original = io.open
+      io.open = function(path, mode)
+        return original(path, mode == "r" and "rb" or mode)
+      end
+      local ok, err = pcall(fn)
+      io.open = original
+      assert(ok, err)
+    end
+
     it("does not count the CR of a CRLF line against the cap", function()
       local path = dir .. "/crlf.txt"
       local fd = assert(io.open(path, "wb"))
       fd:write(string.rep("a", 8192), "\r\n", "next\r\n")
       fd:close()
-      local lines = ask(path, { max_lines = 5 })[1].lines
-      assert.equals(string.rep("a", 8192), lines[1])
-      assert.equals("next", lines[2])
+      reading_binary(function()
+        local lines = ask(path, { max_lines = 5 })[1].lines
+        assert.equals(string.rep("a", 8192), lines[1])
+        assert.equals("next", lines[2])
+      end)
     end)
+
+    it("does not count it either when the chunk ends between the CR and the LF", function()
+      local path = dir .. "/crlf_boundary.txt"
+      local fd = assert(io.open(path, "wb"))
+      -- the CR is the last byte of the first 64 KiB chunk
+      local filler = {}
+      local size = 0
+      while size < 65536 - 8192 - 1 do
+        filler[#filler + 1] = "short line\n"
+        size = size + 11
+      end
+      local pad = 65536 - 8192 - 1 - size
+      fd:write(table.concat(filler), string.rep("p", pad - 1), "\n")
+      fd:write(string.rep("a", 8192), "\r\n", "next\r\n")
+      fd:close()
+      reading_binary(function()
+        local lines = ask(path, { max_lines = 100000 })[1].lines
+        local seen_a, seen_next = false, false
+        for _, l in ipairs(lines) do
+          if l == string.rep("a", 8192) then
+            seen_a = true
+          end
+          if l == "next" then
+            seen_next = true
+          end
+        end
+        assert.is_true(seen_a, "the 8192-character line was cut")
+        assert.is_true(seen_next)
+      end)
+    end)
+
+    it("says a directory is not all read when the cap is below the number asked for", function()
+      local dirbrowse = require("hover.preview.dirbrowse")
+      local original = dirbrowse.CAP
+      dirbrowse.CAP = 40
+      for i = 1, 60 do
+        vim.fn.writefile({}, dir .. ("/many%05d.txt"):format(i))
+      end
+      local ok, lines = pcall(function()
+        return require("hover.preview.text").directory({ path = dir }, { max_lines = 100 }).lines
+      end)
+      dirbrowse.CAP = original
+      assert.is_true(ok, lines)
+      assert.equals(41, #lines)
+      assert.is_truthy(lines[#lines]:find("not all read", 1, true))
+    end)
+
+    it("calls the volume form of a local path local, and a pipe not", function()
+      local classify = require("hover.classify")
+      assert.is_false(
+        classify.is_network_path([[\\?\Volume{b2b56ce8-e378-4995-8fa8-ca40713e733f}\Windows]])
+      )
+      assert.is_false(classify.is_network_path([[\\?\C:]]))
+      assert.is_true(classify.is_network_path([[\\.\pipe\nvim.1234.0]]))
+    end)
+
+    it("does not stat a network path even when the lookup is asked for outright", function()
+      local bufnr = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(
+        bufnr,
+        0,
+        -1,
+        false,
+        { "see //fileserver/share/docs/readme.md here" }
+      )
+      vim.api.nvim_set_current_buf(bufnr)
+      vim.api.nvim_win_set_cursor(0, { 1, 10 })
+      local uv = vim.uv or vim.loop
+      local original = uv.fs_stat
+      local touched = {}
+      uv.fs_stat = function(path)
+        if tostring(path):find("fileserver", 1, true) then
+          touched[#touched + 1] = path
+        end
+        return original(path)
+      end
+      local trace = {}
+      local ok, found =
+        pcall(require("hover.bare_path").under_cursor, bufnr, { force = true, trace = trace })
+      uv.fs_stat = original
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+      assert.is_true(ok, found)
+      assert.is_nil(found)
+      assert.equals("network", trace.stopped_at)
+      assert.same({}, touched)
+    end)
+
+    it(
+      "finds the document's buffer by the same spelling, and another spelling of its path",
+      function()
+        local registry = require("hover.registry")
+        registry.reset()
+        local seen = {}
+        registry.register("spec", {
+          previews = {
+            anchor = function(_, _, bufnr)
+              seen[#seen + 1] = bufnr
+              return { lines = { "anchor" } }
+            end,
+          },
+        })
+        local doc = dir .. "/spelled.md"
+        vim.fn.writefile({ "# Intro" }, doc)
+        vim.cmd.edit(doc)
+        local doc_buf = vim.api.nvim_get_current_buf()
+        vim.cmd.enew()
+        vim.fn.mkdir(dir .. "/sub", "p")
+        ask("#intro", { source_path = dir .. "/sub/../spelled.md" })
+        registry.reset()
+        assert.same({ doc_buf }, seen)
+      end
+    )
 
     it("takes the head of a big directory in name order, not some entries", function()
       for i = 1, 50 do

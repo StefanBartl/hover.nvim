@@ -375,6 +375,51 @@ end
 -- Previews for other plugins
 -- ---------------------------------------------------------------------------
 
+--- The buffer of the document at `path`, by its name and not by a pattern
+--- (`vim.fn.bufnr` also takes `doc.md.bak` for `doc.md`). The same spelling first
+--- (cheap); then by real path among the loaded file buffers, the most recent
+--- ones first and not many of them -- a link to the document, or another case on
+--- a system that ignores it -- never for a buffer on a network path, whose real
+--- path is a connection.
+---@param path string
+---@return integer|nil
+function M._buffer_of(path)
+  local classify_mod = require("hover.classify")
+  local fold = (vim.fn.has("win32") == 1 or vim.fn.has("mac") == 1)
+      and function(p)
+        return vim.fs.normalize(p):lower()
+      end
+    or vim.fs.normalize
+  local want = fold(path)
+  local candidates = {}
+  for _, b in ipairs(api.nvim_list_bufs()) do
+    local name = api.nvim_buf_get_name(b)
+    if
+      name ~= ""
+      and not name:find("://", 1, true)
+      and not classify_mod.is_network_path(name)
+      and vim.bo[b].buftype == ""
+    then
+      if fold(name) == want then
+        return b
+      end
+      candidates[#candidates + 1] = { b, name }
+    end
+  end
+  if classify_mod.is_network_path(path) then
+    return nil
+  end
+  local normkey = require("lib.nvim.fs.normkey")
+  local real
+  for i = #candidates, math.max(1, #candidates - 49), -1 do
+    real = real or normkey(path)
+    if normkey(candidates[i][2]) == real then
+      return candidates[i][1]
+    end
+  end
+  return nil
+end
+
 --- Preview a link target without a float, a cursor or a buffer: the entry for
 --- another plugin that wants to show what a path or an address stands for.
 ---
@@ -458,27 +503,9 @@ function M.preview_target(target, cb, opts)
     -- claim to ask.
     local bufnr = opts.bufnr
     if claimed and not bufnr and opts.source_path and opts.source_path ~= "" then
-      -- By name, exactly: `vim.fn.bufnr(name)` also takes a buffer whose name
-      -- merely contains it (`doc.md.bak` for `doc.md`). The real path (a temp
-      -- directory behind a link, another case on Windows or macOS) is asked of
-      -- the buffers that have the document's file name only: a buffer on a
-      -- share that is gone would stall the lookup of every other.
-      local normkey = require("lib.nvim.fs.normkey")
-      local wanted_name = vim.fs.basename(opts.source_path):lower()
-      local want
-      for _, b in ipairs(api.nvim_list_bufs()) do
-        local name = api.nvim_buf_get_name(b)
-        if name ~= "" and not name:find("://", 1, true) then
-          if vim.fs.basename(name):lower() == wanted_name then
-            want = want or normkey(opts.source_path)
-            if normkey(name) == want then
-              bufnr = b
-              break
-            end
-          end
-        end
-      end
+      bufnr = M._buffer_of(opts.source_path)
     end
+
     if claimed and (bufnr or classified.type ~= "anchor") then
       local claimed_ok, claimed_content =
         pcall(claimed, classified, popts, bufnr or api.nvim_get_current_buf())
@@ -1523,7 +1550,7 @@ function M.why()
       ambiguous = ("%s resolved to nothing, and could have been prose. `:Hover paths missing` only reports the unambiguous ones."):format(
         token
       ),
-      network = ("%s is a network path, which is not followed from text (a connection to that host would stall the editor)."):format(
+      network = ("%s is a network, device or pipe path, which is not followed from text (opening it could stall the editor)."):format(
         token
       ),
     })[trace.stopped_at]
