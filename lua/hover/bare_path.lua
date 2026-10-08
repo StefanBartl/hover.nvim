@@ -245,6 +245,18 @@ local function via_gopath()
 end
 
 ---@internal
+--- Does the line hold a network path as a word of its own (`\\server\share`,
+--- `//server/share`, also after a quote or a bracket)? gopath reads the whole
+--- line and stats what it finds there, whichever word the cursor is on: with
+--- such a path on the line it is not asked at all.
+---@param line string
+---@return boolean
+local function line_has_network_path(line)
+  return line:find("%f[%S][\\/][\\/][^%s\\/]") ~= nil
+    or line:find("[\"'(<%[=,;][\\/][\\/][^%s\\/]") ~= nil
+end
+
+---@internal
 --- Whether gopath is worth asking, once `<cfile>` has already failed.
 ---
 --- **Measured, and the reason this gate exists.** gopath answers every case
@@ -459,14 +471,17 @@ function M.under_cursor(bufnr, opts)
   -- `target_line`, not `line`: `line` is already the buffer line's *text*
   -- above, and this is a line *number* the target named.
   local resolved, target_line, target_line_end
+  local gopath_ok = not line_has_network_path(line)
   if opts.force then
-    resolved, target_line = via_gopath()
+    if gopath_ok then
+      resolved, target_line = via_gopath()
+    end
     if not resolved then
       resolved, target_line, target_line_end = via_cfile(bufnr)
     end
   else
     resolved, target_line, target_line_end = via_cfile(bufnr)
-    if not resolved and gopath_can_help(token) then
+    if not resolved and gopath_ok and gopath_can_help(token) then
       resolved, target_line = via_gopath()
     end
   end

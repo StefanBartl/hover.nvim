@@ -35,7 +35,7 @@ narrow, because this rule has been wrong twice in two different directions:
 | Evidence | Example | But not |
 | --- | --- | --- |
 | a truncation | `...nvim/init.lua` | |
-| a drive or UNC prefix | `C:\Users\x`, `\\server\share` | |
+| a drive prefix | `C:\Users\x` | a network path (`\\server\share`) is never followed or reported |
 | an extension on the **last** component | `docs/gone.md`, `./src/app.ts` | `github.com/user/repo` |
 
 None of this touches a target that **exists** — `docs/` and `and/or` both hover

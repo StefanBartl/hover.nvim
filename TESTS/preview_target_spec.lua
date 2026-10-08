@@ -550,17 +550,13 @@ describe("hover.preview_target", function()
     it("does not count it either when the chunk ends between the CR and the LF", function()
       local path = dir .. "/crlf_boundary.txt"
       local fd = assert(io.open(path, "wb"))
-      -- the CR is the last byte of the first 64 KiB chunk
-      local filler = {}
-      local size = 0
-      while size < 65536 - 8192 - 1 do
-        filler[#filler + 1] = "short line\n"
-        size = size + 11
-      end
-      local pad = 65536 - 8192 - 1 - size
-      fd:write(table.concat(filler), string.rep("p", pad - 1), "\n")
+      -- 5213 lines of 11 bytes = 57343 bytes, then 8192 characters: the CR is byte 65536,
+      -- the last byte of the first 64 KiB chunk
+      fd:write(string.rep("short line\n", 5213))
       fd:write(string.rep("a", 8192), "\r\n", "next\r\n")
       fd:close()
+      local data = assert(io.open(path, "rb")):read("*a")
+      assert.equals(65536, data:find("\r", 1, true))
       reading_binary(function()
         local lines = ask(path, { max_lines = 100000 })[1].lines
         local seen_a, seen_next = false, false
@@ -575,6 +571,77 @@ describe("hover.preview_target", function()
         assert.is_true(seen_a, "the 8192-character line was cut")
         assert.is_true(seen_next)
       end)
+    end)
+
+    it("does not let gopath stat a network path, wherever on the line it is", function()
+      local bufnr = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(
+        bufnr,
+        0,
+        -1,
+        false,
+        { "see //fileserver/share/docs/readme.md and notes.md" }
+      )
+      vim.api.nvim_set_current_buf(bufnr)
+      -- the cursor is on notes.md, which is no network path itself
+      vim.api.nvim_win_set_cursor(0, { 1, 46 })
+      local asked = 0
+      local saved = package.loaded["gopath.resolve"]
+      package.loaded["gopath.resolve"] = {
+        resolve_at_cursor = function()
+          asked = asked + 1
+          return nil
+        end,
+      }
+      local bare_path = require("hover.bare_path")
+      local ok = pcall(bare_path.under_cursor, bufnr, { force = true })
+      local ok2 = pcall(bare_path.under_cursor, bufnr, {})
+      package.loaded["gopath.resolve"] = saved
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+      assert.is_true(ok and ok2)
+      assert.equals(0, asked)
+    end)
+
+    it("finds the buffer of a document on a share by its exact name", function()
+      local hover_mod = require("hover")
+      local share = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_name(share, "//host.invalid/share/doc.md")
+      local found = hover_mod._buffer_of("//host.invalid/share/doc.md")
+      vim.api.nvim_buf_delete(share, { force = true })
+      assert.equals(share, found)
+    end)
+
+    it("asks the real path of file buffers only, never of a terminal or a share", function()
+      local hover_mod = require("hover")
+      local doc = dir .. "/real.md"
+      vim.fn.writefile({ "# x" }, doc)
+      vim.cmd.edit(doc)
+      local doc_buf = vim.api.nvim_get_current_buf()
+      local odd = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_name(odd, "term://" .. dir .. "//123:sh")
+      local share = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_name(share, "//host.invalid/share/other.md")
+      vim.cmd.enew()
+      -- a spelling the first pass cannot fold: it is the real-path pass that finds it
+      local alias = dir .. "/alias_of_real.md"
+      local normkey = require("lib.nvim.fs.normkey")
+      local asked = {}
+      package.loaded["lib.nvim.fs.normkey"] = function(path)
+        asked[#asked + 1] = path
+        if path == alias then
+          return normkey(doc)
+        end
+        return normkey(path)
+      end
+      local ok, found = pcall(hover_mod._buffer_of, alias)
+      package.loaded["lib.nvim.fs.normkey"] = normkey
+      assert.is_true(ok, found)
+      assert.equals(doc_buf, found)
+      assert.is_true(#asked > 0)
+      for _, path in ipairs(asked) do
+        assert.is_nil(path:find("term://", 1, true))
+        assert.is_nil(path:find("host.invalid", 1, true))
+      end
     end)
 
     it("says a directory is not all read when the cap is below the number asked for", function()
@@ -678,45 +745,6 @@ describe("hover.preview_target", function()
       assert.is_true(classify.is_network_path([[\\?\UNC\server\share]]))
       assert.is_false(classify.is_network_path([[\\?\C:\Windows]]))
       assert.is_false(classify.is_network_path([[\\.\C:\x]]))
-    end)
-
-    it("finds the document's buffer without asking about unrelated ones", function()
-      local registry = require("hover.registry")
-      registry.reset()
-      local seen = {}
-      registry.register("spec", {
-        previews = {
-          anchor = function(_, _, bufnr)
-            seen[#seen + 1] = bufnr
-            return { lines = { "anchor" } }
-          end,
-        },
-      })
-      local doc = dir .. "/target.md"
-      vim.fn.writefile({ "# Intro" }, doc)
-      vim.cmd.edit(doc)
-      local doc_buf = vim.api.nvim_get_current_buf()
-      -- buffers that must not be touched by the lookup
-      local normkey = require("lib.nvim.fs.normkey")
-      local asked = {}
-      package.loaded["lib.nvim.fs.normkey"] = function(path)
-        asked[#asked + 1] = path
-        return normkey(path)
-      end
-      local odd = vim.api.nvim_create_buf(true, false)
-      vim.api.nvim_buf_set_name(odd, "term://" .. dir .. "//123:sh")
-      -- a buffer on a share: its real path is a connection, and it is never asked
-      local share = vim.api.nvim_create_buf(true, false)
-      vim.api.nvim_buf_set_name(share, "//fileserver/share/other.md")
-      vim.cmd.enew()
-      ask("#intro", { source_path = doc })
-      package.loaded["lib.nvim.fs.normkey"] = normkey
-      registry.reset()
-      assert.same({ doc_buf }, seen)
-      for _, path in ipairs(asked) do
-        assert.is_nil(path:find("term://", 1, true))
-        assert.is_nil(path:find("fileserver", 1, true))
-      end
     end)
 
     it("finds the buffer of the document by its exact name", function()

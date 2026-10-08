@@ -597,7 +597,7 @@ AND at least one alphanumeric character somewhere.
 A missing path is reported only when it cannot have been anything else: >
 
   a truncation                          ...nvim/init.lua
-  a drive or UNC prefix                 C:\Users\x   \\server\share
+  a drive prefix                        C:\Users\x
   an extension on the LAST component    docs/gone.md   ./src/app.ts
 <
 Everything else stays silent -- including text that really is a path
