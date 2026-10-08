@@ -464,6 +464,22 @@ describe("hover.preview_target", function()
       assert.equals("HoverMissing", broken.highlight)
     end)
 
+    it("does not report a network path written with slashes in prose as a broken target", function()
+      local bufnr = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(
+        bufnr,
+        0,
+        -1,
+        false,
+        { "see //fileserver/share/docs/readme.md here" }
+      )
+      vim.api.nvim_set_current_buf(bufnr)
+      vim.api.nvim_win_set_cursor(0, { 1, 10 })
+      local found = require("hover.bare_path").under_cursor(bufnr, {})
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+      assert.is_nil(found)
+    end)
+
     it("does not report a network path in prose as a broken target", function()
       local bufnr = vim.api.nvim_create_buf(false, true)
       vim.api.nvim_buf_set_lines(
@@ -493,13 +509,85 @@ describe("hover.preview_target", function()
 
     it("does not cut a multibyte character in half", function()
       local path = dir .. "/wide.txt"
-      vim.fn.writefile({ string.rep("é", 6000), string.rep("é", 6000) }, path)
+      -- 'x' first, so that the cap (8192) falls between the two bytes of a character
+      vim.fn.writefile({ "x" .. string.rep("é", 6000), "x" .. string.rep("é", 6000) }, path)
       local answers = ask(path, { max_lines = 5 })
+      assert.equals(2, #answers[1].lines)
       for _, line in ipairs(answers[1].lines) do
-        local body = line:sub(1, #line - 3)
         assert.equals("…", line:sub(#line - 2))
-        assert.equals(0, #body % 2)
+        local body = line:sub(1, #line - 3)
         assert.equals("é", body:sub(-2))
+        -- no lead byte left alone at the end
+        assert.is_nil(body:find("[\194-\244]$"))
+      end
+    end)
+
+    it("does not count the CR of a CRLF line against the cap", function()
+      local path = dir .. "/crlf.txt"
+      local fd = assert(io.open(path, "wb"))
+      fd:write(string.rep("a", 8192), "\r\n", "next\r\n")
+      fd:close()
+      local lines = ask(path, { max_lines = 5 })[1].lines
+      assert.equals(string.rep("a", 8192), lines[1])
+      assert.equals("next", lines[2])
+    end)
+
+    it("takes the head of a big directory in name order, not some entries", function()
+      for i = 1, 50 do
+        vim.fn.writefile({ "x" }, dir .. ("/h%02d.txt"):format(i))
+      end
+      local entries, capped = require("hover.preview.dirbrowse").scan(dir, 10)
+      assert.is_true(capped)
+      assert.equals(10, #entries)
+      for i, e in ipairs(entries) do
+        assert.equals(("h%02d.txt"):format(i), e.name)
+      end
+    end)
+
+    it("does not follow a pipe or a device, and not a path through the redirector", function()
+      local classify = require("hover.classify")
+      assert.is_true(classify.is_network_path([[\\.\pipe\nvim.1234.0]]))
+      assert.is_true(classify.is_network_path([[\\.\GLOBALROOT\Device\Mup\host\share\a.md]]))
+      assert.is_true(classify.is_network_path([[\\?\UNC\server\share]]))
+      assert.is_false(classify.is_network_path([[\\?\C:\Windows]]))
+      assert.is_false(classify.is_network_path([[\\.\C:\x]]))
+    end)
+
+    it("finds the document's buffer without asking about unrelated ones", function()
+      local registry = require("hover.registry")
+      registry.reset()
+      local seen = {}
+      registry.register("spec", {
+        previews = {
+          anchor = function(_, _, bufnr)
+            seen[#seen + 1] = bufnr
+            return { lines = { "anchor" } }
+          end,
+        },
+      })
+      local doc = dir .. "/target.md"
+      vim.fn.writefile({ "# Intro" }, doc)
+      vim.cmd.edit(doc)
+      local doc_buf = vim.api.nvim_get_current_buf()
+      -- buffers that must not be touched by the lookup
+      local normkey = require("lib.nvim.fs.normkey")
+      local asked = {}
+      package.loaded["lib.nvim.fs.normkey"] = function(path)
+        asked[#asked + 1] = path
+        return normkey(path)
+      end
+      local odd = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_name(odd, "term://" .. dir .. "//123:sh")
+      local other = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_name(other, dir .. "/other.md")
+      vim.cmd.enew()
+      ask("#intro", { source_path = doc })
+      package.loaded["lib.nvim.fs.normkey"] = normkey
+      registry.reset()
+      assert.same({ doc_buf }, seen)
+      for _, path in ipairs(asked) do
+        assert.is_nil(path:find("term://", 1, true))
+        assert.is_nil(path:find("other.md", 1, true))
       end
     end)
 
@@ -531,24 +619,6 @@ describe("hover.preview_target", function()
       vim.fn.writefile({ "%PDF-1.1" }, pdf)
       assert.is_truthy(ask(svg)[1].lines[1]:find("Image", 1, true))
       assert.is_truthy(ask(pdf)[1].lines[1]:find("PDF document", 1, true))
-    end)
-
-    it("reads a directory in one bounded batch", function()
-      for i = 1, 50 do
-        vim.fn.writefile({ "x" }, dir .. ("/g%02d.txt"):format(i))
-      end
-      local uv = vim.uv or vim.loop
-      local original = uv.fs_scandir
-      uv.fs_scandir = function()
-        error("the whole directory must not be read at once")
-      end
-      local ok, entries, capped = pcall(require("hover.preview.dirbrowse").scan, dir, 10)
-      uv.fs_scandir = original
-      if uv.fs_opendir then
-        assert.is_true(ok, entries)
-        assert.equals(10, #entries)
-        assert.is_true(capped)
-      end
     end)
   end)
 end)

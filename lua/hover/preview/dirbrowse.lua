@@ -30,38 +30,27 @@ local uv = vim.uv or vim.loop
 function M.scan(dir, cap)
   cap = cap or 5000
 
-  -- The entries as `{ name, kind }`, at most `cap + 1` of them. `fs_scandir`
-  -- reads the whole directory before it hands out the first name; `fs_opendir`
-  -- with a batch size stops at the batch, so a directory of a million files costs
-  -- one batch.
+  -- The entries as `{ name, kind }`, at most `cap` of them. `fs_scandir` reads
+  -- the directory in one go (in name order on Unix, and NTFS keeps it in name
+  -- order as well), so the head of a big directory is its alphabetical head;
+  -- what the cap bounds is the work done in Lua for each entry. `fs_opendir`
+  -- would stop at a batch, but hands out the entries in no order, and a listing
+  -- of "some names" is worse than one of the first.
   local raw, capped = {}, false
-  local opened = uv.fs_opendir and uv.fs_opendir(dir, nil, cap + 1)
-  if opened then
-    local batch = uv.fs_readdir(opened) or {}
-    uv.fs_closedir(opened)
-    for i, e in ipairs(batch) do
-      if i > cap then
-        capped = true
-        break
-      end
-      raw[i] = { name = e.name, kind = e.type }
+  local handle = uv.fs_scandir(dir)
+  if not handle then
+    return nil
+  end
+  while true do
+    local name, kind = uv.fs_scandir_next(handle)
+    if not name then
+      break
     end
-  else
-    local handle = uv.fs_scandir(dir)
-    if not handle then
-      return nil
+    if #raw >= cap then
+      capped = true
+      break
     end
-    while true do
-      local name, kind = uv.fs_scandir_next(handle)
-      if not name then
-        break
-      end
-      if #raw >= cap then
-        capped = true
-        break
-      end
-      raw[#raw + 1] = { name = name, kind = kind }
-    end
+    raw[#raw + 1] = { name = name, kind = kind }
   end
 
   local dirs, files = {}, {}

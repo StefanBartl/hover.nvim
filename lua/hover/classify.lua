@@ -74,11 +74,13 @@ function M.is_network_path(path)
   if type(path) ~= "string" or not path:match("^[\\/][\\/]") then
     return false
   end
-  -- `\\?\C:\...` and `\\.\C:\...` are local paths in the long form; only
-  -- `\\?\UNC\...` names another machine.
-  local long = path:match("^[\\/][\\/][?.][\\/](.*)$")
-  if long then
-    return long:match("^[Uu][Nn][Cc][\\/]") ~= nil
+  -- The long forms of a *local* path -- `\\?\C:\...`, `\\.\C:\...` -- name a
+  -- drive letter. Everything else behind `\\` is not a file of this machine:
+  -- a server (`\\srv\share`, `\\?\UNC\...`), a device that reaches one
+  -- (`\\.\GLOBALROOT\Device\Mup\...`), or a pipe (`\\.\pipe\name`, which blocks a
+  -- reader until the other end writes).
+  if path:match("^[\\/][\\/][?.][\\/]%a:[\\/]") then
+    return false
   end
   return true
 end

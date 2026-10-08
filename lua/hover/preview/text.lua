@@ -35,7 +35,8 @@ local LINE_CAP = 8192
 local CHUNK = 65536
 
 ---@internal
---- An iterator over the lines of `f`, none longer than `LINE_CAP` bytes (the
+--- An iterator over the lines of `f`, none longer than `LINE_CAP` bytes plus the
+--- 3-byte marker of a cut (the
 --- rest of such a line is skipped, and a `…` marks the cut).
 --- `line` cut to `LINE_CAP` bytes -- not in the middle of a character -- and a
 --- `…` where it was cut.
@@ -74,6 +75,11 @@ local function bounded_lines(f)
       elseif nl then
         local line = pending:sub(pos, nl - 1)
         pos = nl + 1
+        -- The CR of a CRLF line is not part of it (on Windows the text mode took
+        -- it already): a line of exactly LINE_CAP characters is not cut.
+        if line:byte(-1) == 13 then
+          line = line:sub(1, -2)
+        end
         if #line > LINE_CAP then
           line = cap_line(line)
         end
