@@ -51,7 +51,7 @@ is about that module specifically, as opposed to the module merely being
 | `bindings/autocmds.lua` | `registry_spec.lua` | `attach`/`anything_to_show`/`detach_all` all directly exercised, including that a wiped buffer and `detach_all` take back the records and the group (`taking it back`) |
 | `bindings/init.lua` | — | three-line aggregator, no branching of its own; each of the three `setup()`s it calls is covered where it is used directly |
 | `bindings/keymaps.lua` | `playback_spec.lua`, `resize_spec.lua`, `zen_spec.lua`, `zoom_spec.lua`, `office`/`shot` via others | borrow/release behaviour asserted directly in each |
-| `bindings/usrcmds.lua` | `docs_spec.lua`, `resize_spec.lua`, `switches_spec.lua`, `zen_spec.lua`, `zoom_spec.lua` | route table cross-checked against `docs/commands.md` in `docs_spec.lua` |
+| `bindings/usrcmds.lua` | `docs_spec.lua`, `resize_spec.lua`, `switches_spec.lua`, `usrcmds_help_spec.lua`, `zen_spec.lua`, `zoom_spec.lua` | route table cross-checked against `docs/commands.md` in `docs_spec.lua`; every positional argument has a one-line text for lib.nvim's option float in `usrcmds_help_spec.lua` |
 | `cache.lua` | `shot_spec.lua`, `switches_spec.lua`, `url_spec.lua`, `webpdf_spec.lua` | |
 | `classify.lua` | `classify_spec.lua` | added by the 2026-09-18 audit — previously reached only incidentally, with an already-existing path handed to it |
 | `config/auto_types.lua` | `switches_spec.lua` | one function, one branch (append `"position"`, sort); exercised as a dependency |
