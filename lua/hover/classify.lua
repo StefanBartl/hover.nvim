@@ -57,7 +57,9 @@ local function resolve_path(target, source_path)
     return vim.fs.normalize(expanded)
   end
   local base = source_path and source_path ~= "" and vim.fs.dirname(source_path) or vim.fn.getcwd()
-  return vim.fs.normalize(base .. "/" .. expanded)
+  -- Not `base .. "/" ..` when base ends in a separator (`/`, `C:/`): a leading
+  -- `//` is what a network path looks like.
+  return vim.fs.normalize((base:gsub("[\\/]+$", "")) .. "/" .. expanded)
 end
 
 --- Whether `path` is a network (UNC) path: `\\server\share`, `//server/share`,
@@ -69,7 +71,16 @@ end
 ---@param path string
 ---@return boolean
 function M.is_network_path(path)
-  return type(path) == "string" and path:match("^[\\/][\\/]") ~= nil
+  if type(path) ~= "string" or not path:match("^[\\/][\\/]") then
+    return false
+  end
+  -- `\\?\C:\...` and `\\.\C:\...` are local paths in the long form; only
+  -- `\\?\UNC\...` names another machine.
+  local long = path:match("^[\\/][\\/][?.][\\/](.*)$")
+  if long then
+    return long:match("^[Uu][Nn][Cc][\\/]") ~= nil
+  end
+  return true
 end
 
 ---@internal
@@ -131,17 +142,20 @@ function M.classify(target, source_path)
     path_part = raw
   end
 
-  local abs = resolve_path(path_part, source_path)
-  if M.is_network_path(abs) then
+  -- A network path *written in the document* is not followed. A relative link
+  -- in a document that itself lives on a share resolves onto that share, and
+  -- the connection is already there: that is the reader's own place.
+  if M.is_network_path(expand_path(path_part)) then
     return {
       type = "missing",
       raw = raw,
-      path = abs,
+      path = vim.fs.normalize(expand_path(path_part)),
       anchor = anchor,
       reason = "network paths are not previewed",
+      refused = true,
     }
   end
-  return M.file(abs, raw, anchor)
+  return M.file(resolve_path(path_part, source_path), raw, anchor)
 end
 
 --- What a file with this extension is, as a target type: `image`, `pdf`,
@@ -216,6 +230,7 @@ function M.file(abs, raw, anchor)
       path = abs,
       anchor = anchor,
       reason = "not a regular file",
+      refused = true,
     }
   end
 

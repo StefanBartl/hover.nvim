@@ -318,7 +318,7 @@ local function via_cfile(bufnr)
 
   -- A network path is not followed from text under the cursor: the stat below
   -- is a synchronous SMB connection (`classify.is_network_path`).
-  if expanded:match("^[\\/][\\/]") then
+  if require("hover.classify").is_network_path(expanded) then
     return nil
   end
 
@@ -476,6 +476,14 @@ function M.under_cursor(bufnr, opts)
     -- unambiguously a path as `docs/gone.md`, but only one of the two ends
     -- in an extension, and that is what the test looks for.
     local path_token = (split_location(token))
+    -- A network path is neither followed nor reported as broken: nothing was
+    -- looked at, so nothing is known (`classify.is_network_path`).
+    if require("hover.classify").is_network_path(expand_path(path_token)) then
+      if trace then
+        trace.stopped_at = "network"
+      end
+      return nil
+    end
     if not is_unambiguous_path(path_token) then
       if trace then
         trace.stopped_at = "ambiguous"

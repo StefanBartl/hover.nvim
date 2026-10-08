@@ -406,4 +406,149 @@ describe("hover.preview_target", function()
       assert.is_truthy(joined:find("--proto-redir =http,https", 1, true))
     end)
   end)
+
+  describe("hardening, round 4", function()
+    --- classify.classify with the file system stubbed: a UNC stat may take twenty
+    --- seconds, and nothing here may depend on one.
+    ---@param fn fun(stats: string[])
+    local function without_fs(fn)
+      local uv = vim.uv or vim.loop
+      local original = uv.fs_stat
+      local stats = {}
+      uv.fs_stat = function(path)
+        stats[#stats + 1] = path
+        return { type = "file", size = 1 }
+      end
+      local ok, err = pcall(fn, stats)
+      uv.fs_stat = original
+      assert(ok, err)
+    end
+
+    it("tells a network path from a local path in the long form", function()
+      local classify = require("hover.classify")
+      assert.is_true(classify.is_network_path([[\\server\share]]))
+      assert.is_true(classify.is_network_path([[\\?\UNC\server\share]]))
+      assert.is_false(classify.is_network_path([[\\?\C:\Windows\notepad.exe]]))
+      assert.is_false(classify.is_network_path([[\\.\C:\x]]))
+      assert.is_false(classify.is_network_path("/usr/x"))
+      assert.is_false(classify.is_network_path("C:/x"))
+    end)
+
+    it("follows a relative link in a document that lives on a share", function()
+      without_fs(function(stats)
+        local target = require("hover.classify").classify("b.md", [[\\srv\share\a.md]])
+        assert.equals("markdown", target.type)
+        assert.equals("//srv/share/b.md", target.path)
+        assert.equals(1, #stats)
+      end)
+    end)
+
+    it("does not make a leading double slash when it joins onto a root", function()
+      without_fs(function()
+        local target = require("hover.classify").classify("docs/a.md", "/readme.md")
+        assert.equals("/docs/a.md", target.path)
+        assert.not_equals("missing", target.type)
+      end)
+    end)
+
+    it("says a network path was not looked at, and does not call it broken", function()
+      local target = require("hover.classify").classify([[\\192.0.2.1\share\x.txt]])
+      assert.equals("missing", target.type)
+      assert.is_true(target.refused)
+      local content = require("hover.preview.text").missing(target)
+      assert.equals("HoverInfo", content.highlight)
+      assert.equals("not previewed", content.title)
+      -- a link that is really broken keeps the red mark
+      local broken =
+        require("hover.preview.text").missing({ type = "missing", reason = "no such file" })
+      assert.equals("HoverMissing", broken.highlight)
+    end)
+
+    it("does not report a network path in prose as a broken target", function()
+      local bufnr = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_buf_set_lines(
+        bufnr,
+        0,
+        -1,
+        false,
+        { [[see \\fileserver\share\docs\readme.md here]] }
+      )
+      vim.api.nvim_set_current_buf(bufnr)
+      vim.api.nvim_win_set_cursor(0, { 1, 10 })
+      local found = require("hover.bare_path").under_cursor(bufnr, {})
+      vim.api.nvim_buf_delete(bufnr, { force = true })
+      assert.is_nil(found)
+    end)
+
+    it("cuts every over-long line, also one whose newline is already read", function()
+      local path = dir .. "/lines.txt"
+      vim.fn.writefile({ string.rep("a", 20000), "short", string.rep("b", 70000), "end" }, path)
+      local answers = ask(path, { max_lines = 10 })
+      local lines = answers[1].lines
+      assert.is_true(#lines[1] <= 8192 + 3)
+      assert.equals("short", lines[2])
+      assert.is_true(#lines[3] <= 8192 + 3)
+      assert.equals("end", lines[4])
+    end)
+
+    it("does not cut a multibyte character in half", function()
+      local path = dir .. "/wide.txt"
+      vim.fn.writefile({ string.rep("é", 6000), string.rep("é", 6000) }, path)
+      local answers = ask(path, { max_lines = 5 })
+      for _, line in ipairs(answers[1].lines) do
+        local body = line:sub(1, #line - 3)
+        assert.equals("…", line:sub(#line - 2))
+        assert.equals(0, #body % 2)
+        assert.equals("é", body:sub(-2))
+      end
+    end)
+
+    it("finds the buffer of the document by its exact name", function()
+      local registry = require("hover.registry")
+      registry.reset()
+      local seen = {}
+      registry.register("spec", {
+        previews = {
+          anchor = function(_, _, bufnr)
+            seen[#seen + 1] = bufnr
+            return { lines = { "anchor" } }
+          end,
+        },
+      })
+      local doc = dir .. "/doc.md"
+      vim.fn.writefile({ "# Intro" }, doc .. ".bak")
+      vim.cmd.edit(doc .. ".bak")
+      vim.cmd.enew()
+      ask("#intro", { source_path = doc })
+      registry.reset()
+      assert.same({}, seen)
+    end)
+
+    it("names a picture and a pdf by what they are", function()
+      local svg = dir .. "/pic.svg"
+      vim.fn.writefile({ "<svg/>" }, svg)
+      local pdf = dir .. "/doc.pdf"
+      vim.fn.writefile({ "%PDF-1.1" }, pdf)
+      assert.is_truthy(ask(svg)[1].lines[1]:find("Image", 1, true))
+      assert.is_truthy(ask(pdf)[1].lines[1]:find("PDF document", 1, true))
+    end)
+
+    it("reads a directory in one bounded batch", function()
+      for i = 1, 50 do
+        vim.fn.writefile({ "x" }, dir .. ("/g%02d.txt"):format(i))
+      end
+      local uv = vim.uv or vim.loop
+      local original = uv.fs_scandir
+      uv.fs_scandir = function()
+        error("the whole directory must not be read at once")
+      end
+      local ok, entries, capped = pcall(require("hover.preview.dirbrowse").scan, dir, 10)
+      uv.fs_scandir = original
+      if uv.fs_opendir then
+        assert.is_true(ok, entries)
+        assert.equals(10, #entries)
+        assert.is_true(capped)
+      end
+    end)
+  end)
 end)
