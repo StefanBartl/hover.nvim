@@ -705,8 +705,9 @@ describe("hover.preview_target", function()
       end
       local odd = vim.api.nvim_create_buf(true, false)
       vim.api.nvim_buf_set_name(odd, "term://" .. dir .. "//123:sh")
-      local other = vim.api.nvim_create_buf(true, false)
-      vim.api.nvim_buf_set_name(other, dir .. "/other.md")
+      -- a buffer on a share: its real path is a connection, and it is never asked
+      local share = vim.api.nvim_create_buf(true, false)
+      vim.api.nvim_buf_set_name(share, "//fileserver/share/other.md")
       vim.cmd.enew()
       ask("#intro", { source_path = doc })
       package.loaded["lib.nvim.fs.normkey"] = normkey
@@ -714,7 +715,7 @@ describe("hover.preview_target", function()
       assert.same({ doc_buf }, seen)
       for _, path in ipairs(asked) do
         assert.is_nil(path:find("term://", 1, true))
-        assert.is_nil(path:find("other.md", 1, true))
+        assert.is_nil(path:find("fileserver", 1, true))
       end
     end)
 
