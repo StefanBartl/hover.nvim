@@ -394,16 +394,14 @@ function M._buffer_of(path)
   local candidates = {}
   for _, b in ipairs(api.nvim_list_bufs()) do
     local name = api.nvim_buf_get_name(b)
-    if
-      name ~= ""
-      and not name:find("://", 1, true)
-      and not classify_mod.is_network_path(name)
-      and vim.bo[b].buftype == ""
-    then
+    if name ~= "" and not name:find("://", 1, true) then
+      -- the same spelling is a string compare: also for a document on a share
       if fold(name) == want then
         return b
       end
-      candidates[#candidates + 1] = { b, name }
+      if not classify_mod.is_network_path(name) and vim.bo[b].buftype == "" then
+        candidates[#candidates + 1] = { b, name }
+      end
     end
   end
   if classify_mod.is_network_path(path) then
