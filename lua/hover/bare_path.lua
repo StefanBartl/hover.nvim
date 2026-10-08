@@ -426,6 +426,16 @@ function M.under_cursor(bufnr, opts)
     return nil
   end
 
+  -- A network path is not looked at in any mode: not by `<cfile>`, and not by
+  -- gopath either (which an explicit request asks first, and which stats the
+  -- path -- a connection to that host, twenty seconds if it is gone).
+  if require("hover.classify").is_network_path(expand_path((split_location(token)))) then
+    if trace then
+      trace.stopped_at = "network"
+    end
+    return nil
+  end
+
   -- Second gate, and deliberately *after* the first rather than in front of
   -- it. In a source file a path is written in a comment or a string and never
   -- inside an expression, so a position identifiable as executable code is

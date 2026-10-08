@@ -21,6 +21,9 @@ local M = {}
 
 local uv = vim.uv or vim.loop
 
+--- Entries read of a directory at most, unless the caller says otherwise.
+M.CAP = 5000
+
 --- Scan `dir`'s immediate children, directories first, both groups
 --- alphabetical by name -- the order the directory preview has always shown.
 ---@param dir string absolute directory path
@@ -28,7 +31,7 @@ local uv = vim.uv or vim.loop
 ---@return Hover.DirEntry[]|nil nil when the directory cannot be read
 ---@return boolean capped the directory has more entries than were read
 function M.scan(dir, cap)
-  cap = cap or 5000
+  cap = cap or M.CAP
 
   -- The entries as `{ name, kind }`, at most `cap` of them. `fs_scandir` reads
   -- the directory in one go (in name order on Unix, and NTFS keeps it in name

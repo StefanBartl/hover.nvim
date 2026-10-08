@@ -33,8 +33,9 @@ address it runs later, on the main loop.
 - **A preview a plugin registered for the type wins**, as for the hover (markdown.nvim resolves
   `#heading` anchors this way). The answer is not kept in `hover.cache`.
 - **Text only.** A picture, PDF, office document or video answers with a badge (what it is, how big),
-  whatever its bytes look like; a network (UNC), device or pipe path (`\server\share`, `\.\pipe
-ame`) is not followed; lines never hold a newline; no browser is started and no PDF is downloaded.
+  whatever its bytes look like; a network (UNC), device or pipe path (`\\server\share`,
+  `\\.\pipe\name`) is not followed; lines never hold a newline; no browser is started and no PDF
+  is downloaded.
 - **An address is fetched only if you may:** `links.web` and `links.fetch` are on, or the caller passes `fetch = true`
   (its own consent, e.g. a keypress that asks for exactly this); `fetch = false` forces offline. A
   host named in `links.auth` gets its credential, and the last answer is kept, so asking again costs

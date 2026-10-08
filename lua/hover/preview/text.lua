@@ -84,7 +84,13 @@ local function bounded_lines(f)
           line = cap_line(line)
         end
         return line
-      elseif #pending - pos + 1 > LINE_CAP then
+      elseif
+        -- (a CR at the end of the buffer may be the first half of a CRLF whose
+        -- LF is in the next chunk: it is not part of the line)
+        #pending
+        - pos
+        + 1 - (pending:byte(#pending) == 13 and 1 or 0) > LINE_CAP
+      then
         skipping = cap_line(pending:sub(pos, pos + LINE_CAP))
         pending, pos = "", 1
       end
@@ -290,6 +296,9 @@ function M.directory(target, opts)
     if total > limit then
       out[#out + 1] = capped and ("… (%d+ entries, not all read)"):format(total)
         or ("… (%d entries)"):format(total)
+    elseif capped then
+      -- All that was read is shown, and it is not all there is.
+      out[#out + 1] = ("… (%d+ entries, not all read)"):format(total)
     end
   end
 
