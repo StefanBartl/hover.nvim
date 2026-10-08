@@ -436,7 +436,7 @@ describe("hover.preview_target", function()
 
     it("follows a relative link in a document that lives on a share", function()
       without_fs(function(stats)
-        local target = require("hover.classify").classify("b.md", [[\\srv\share\a.md]])
+        local target = require("hover.classify").classify("b.md", "//srv/share/a.md")
         assert.equals("markdown", target.type)
         assert.equals("//srv/share/b.md", target.path)
         assert.equals(1, #stats)
