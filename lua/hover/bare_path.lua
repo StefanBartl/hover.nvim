@@ -245,15 +245,28 @@ local function via_gopath()
 end
 
 ---@internal
---- Does the line hold a network path as a word of its own (`\\server\share`,
---- `//server/share`, also after a quote or a bracket)? gopath reads the whole
---- line and stats what it finds there, whichever word the cursor is on: with
---- such a path on the line it is not asked at all.
+--- Does the line hold something shaped like a network path -- a host and a
+--- share behind two separators (`\\server\share`, `//server/share`, also inside
+--- a URL or after a quote, a bracket, a backtick) -- anywhere? gopath reads the
+--- whole line and stats what it finds there, whichever word the cursor is on,
+--- and on Windows that stat is a connection to that host (3 s on a name that
+--- does not resolve, 20 s on one that is gone). With such a path on the line it
+--- is not asked at all.
+---
+--- Only on Windows: elsewhere `//host/share` is an ordinary local path and
+--- gopath is as good as it was. A comment (`// see x`, `//TODO x`) has no share
+--- behind the first word, and does not count.
 ---@param line string
+---@param windows boolean|nil  # default: the system we run on
 ---@return boolean
-local function line_has_network_path(line)
-  return line:find("%f[%S][\\/][\\/][^%s\\/]") ~= nil
-    or line:find("[\"'(<%[=,;][\\/][\\/][^%s\\/]") ~= nil
+local function line_has_network_path(line, windows)
+  if windows == nil then
+    windows = vim.fn.has("win32") == 1
+  end
+  if not windows then
+    return false
+  end
+  return line:find("[\\/][\\/][^%s\\/]+[\\/][^%s\\/]") ~= nil
 end
 
 ---@internal
@@ -358,6 +371,9 @@ local function via_cfile(bufnr)
   end
   return nil
 end
+
+--- (For the specs.)
+M._line_has_network_path = line_has_network_path
 
 --- Whether `str` can only have been meant as a path -- the test that decides
 --- whether a *non-existent* target is worth a red mark.

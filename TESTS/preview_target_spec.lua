@@ -573,18 +573,41 @@ describe("hover.preview_target", function()
       end)
     end)
 
-    it("does not let gopath stat a network path, wherever on the line it is", function()
-      local bufnr = vim.api.nvim_create_buf(false, true)
-      vim.api.nvim_buf_set_lines(
-        bufnr,
-        0,
-        -1,
-        false,
-        { "see //fileserver/share/docs/readme.md and notes.md" }
-      )
-      vim.api.nvim_set_current_buf(bufnr)
-      -- the cursor is on notes.md, which is no network path itself
-      vim.api.nvim_win_set_cursor(0, { 1, 46 })
+    it(
+      "recognises something shaped like a network path anywhere on a line, and not a comment",
+      function()
+        local shaped = require("hover.bare_path")._line_has_network_path
+        for _, line in ipairs({
+          [[\\srv\share\a.md and notes.md]],
+          "//srv/share/a.md and notes.md",
+          "see `//srv/share/a.md` and notes.md",
+          "see {\\\\srv\\share\\a.md} and notes.md",
+          "see **//srv/share/a.md** and notes.md",
+          "UNC:\\\\srv\\share\\a.md notes.md",
+          "see http://srv/docs/readme and notes.md",
+        }) do
+          assert.is_true(shaped(line, true), line)
+        end
+        for _, line in ipairs({
+          "    // see findme.md",
+          "    //TODO findme.md",
+          ";//x findme.md",
+          "[//]: # findme.md",
+          [[re.compile("\\d+")  # findme.md]],
+          "nothing here at all",
+        }) do
+          assert.is_false(shaped(line, true), line)
+        end
+        -- elsewhere than on Windows a double slash is an ordinary local path
+        assert.is_false(shaped("//srv/share/a.md and notes.md", false))
+      end
+    )
+
+    it("does not let gopath stat a network path, wherever on the line it is (Windows)", function()
+      if vim.fn.has("win32") ~= 1 then
+        pending("a double slash is an ordinary path here; gopath is asked as before")
+        return
+      end
       local asked = 0
       local saved = package.loaded["gopath.resolve"]
       package.loaded["gopath.resolve"] = {
@@ -594,12 +617,54 @@ describe("hover.preview_target", function()
         end,
       }
       local bare_path = require("hover.bare_path")
-      local ok = pcall(bare_path.under_cursor, bufnr, { force = true })
-      local ok2 = pcall(bare_path.under_cursor, bufnr, {})
+      local ok = true
+      for _, text in ipairs({
+        "//fileserver/share/docs/readme.md and notes.md",
+        "see `//fileserver/share/docs/readme.md` and notes.md",
+        "see http://fileserver/docs/readme and notes.md",
+      }) do
+        local bufnr = vim.api.nvim_create_buf(false, true)
+        vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { text })
+        vim.api.nvim_set_current_buf(bufnr)
+        vim.api.nvim_win_set_cursor(0, { 1, #text - 4 })
+        ok = ok and pcall(bare_path.under_cursor, bufnr, { force = true })
+        ok = ok and pcall(bare_path.under_cursor, bufnr, {})
+        vim.api.nvim_buf_delete(bufnr, { force = true })
+      end
+      package.loaded["gopath.resolve"] = saved
+      assert.is_true(ok)
+      assert.equals(0, asked)
+    end)
+
+    it("still asks gopath on a line with a comment slash", function()
+      local asked = 0
+      local saved = package.loaded["gopath.resolve"]
+      package.loaded["gopath.resolve"] = {
+        resolve_at_cursor = function()
+          asked = asked + 1
+          return nil
+        end,
+      }
+      local bufnr = vim.api.nvim_create_buf(false, true)
+      local text = "    //TODO findme.md"
+      vim.api.nvim_buf_set_lines(bufnr, 0, -1, false, { text })
+      vim.api.nvim_set_current_buf(bufnr)
+      vim.api.nvim_win_set_cursor(0, { 1, #text - 4 })
+      pcall(require("hover.bare_path").under_cursor, bufnr, { force = true })
       package.loaded["gopath.resolve"] = saved
       vim.api.nvim_buf_delete(bufnr, { force = true })
-      assert.is_true(ok and ok2)
-      assert.equals(0, asked)
+      assert.equals(1, asked)
+    end)
+
+    it("takes a document whose buffer was deleted for a document without a buffer", function()
+      local hover_mod = require("hover")
+      local doc = dir .. "/deleted.md"
+      vim.fn.writefile({ "# Intro" }, doc)
+      vim.cmd.edit(doc)
+      local buf = vim.api.nvim_get_current_buf()
+      vim.cmd.enew()
+      vim.cmd("bdelete " .. buf)
+      assert.is_nil(hover_mod._buffer_of(doc))
     end)
 
     it("finds the buffer of a document on a share by its exact name", function()
