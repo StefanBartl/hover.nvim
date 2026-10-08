@@ -447,29 +447,38 @@ function M.preview_target(target, cb, opts)
     -- Text only: no browser render, no PDF download, no inline picture.
     popts.shot_enabled, popts.url_pdf, popts.inline_images = false, false, false
 
+    local claimed = require("hover.registry").preview_for(classified.type)
+
     -- A preview a plugin registered for this type wins, as it does for the
     -- hover (markdown.nvim resolves `#heading` anchors this way). It may decline.
     -- The buffer it is asked about is the document the target is written in
     -- (`opts.bufnr`, or the one loaded for `opts.source_path`), else the
     -- current one. An in-page `#anchor` has no meaning without that document,
-    -- so without it the claim is not asked.
+    -- so without it the claim is not asked. Only looked for when there is a
+    -- claim to ask.
     local bufnr = opts.bufnr
-    if not bufnr and opts.source_path and opts.source_path ~= "" then
+    if claimed and not bufnr and opts.source_path and opts.source_path ~= "" then
       -- By name, exactly: `vim.fn.bufnr(name)` also takes a buffer whose name
-      -- merely contains it (`doc.md.bak` for `doc.md`).
-      -- Both spellings are compared by their real path (a temp directory behind
-      -- a link, a different case on Windows or macOS).
+      -- merely contains it (`doc.md.bak` for `doc.md`). The real path (a temp
+      -- directory behind a link, another case on Windows or macOS) is asked of
+      -- the buffers that have the document's file name only: a buffer on a
+      -- share that is gone would stall the lookup of every other.
       local normkey = require("lib.nvim.fs.normkey")
-      local want = normkey(opts.source_path)
+      local wanted_name = vim.fs.basename(opts.source_path):lower()
+      local want
       for _, b in ipairs(api.nvim_list_bufs()) do
         local name = api.nvim_buf_get_name(b)
-        if name ~= "" and normkey(name) == want then
-          bufnr = b
-          break
+        if name ~= "" and not name:find("://", 1, true) then
+          if vim.fs.basename(name):lower() == wanted_name then
+            want = want or normkey(opts.source_path)
+            if normkey(name) == want then
+              bufnr = b
+              break
+            end
+          end
         end
       end
     end
-    local claimed = require("hover.registry").preview_for(classified.type)
     if claimed and (bufnr or classified.type ~= "anchor") then
       local claimed_ok, claimed_content =
         pcall(claimed, classified, popts, bufnr or api.nvim_get_current_buf())
@@ -1512,6 +1521,9 @@ function M.why()
       ),
       missing_off = ("%s resolved to nothing, and the broken-target marker is off."):format(token),
       ambiguous = ("%s resolved to nothing, and could have been prose. `:Hover paths missing` only reports the unambiguous ones."):format(
+        token
+      ),
+      network = ("%s is a network path, which is not followed from text (a connection to that host would stall the editor)."):format(
         token
       ),
     })[trace.stopped_at]

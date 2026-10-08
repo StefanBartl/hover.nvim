@@ -301,6 +301,7 @@
 ---@class Hover.Target
 ---@field type "image"|"pdf"|"office"|"video"|"markdown"|"file"|"directory"|"url"|"anchor"|"missing"|"git"
 ---@field raw string # The target exactly as written.
+---@field refused? boolean # A `missing` target that was not looked at on purpose (a network path, a FIFO or device): not broken, so not marked as broken.
 ---@field path? string # Absolute, normalized path for local targets.
 ---@field anchor? string # Fragment after `#`, without the `#`.
 ---@field url? string # Normalized URL for `type == "url"`.

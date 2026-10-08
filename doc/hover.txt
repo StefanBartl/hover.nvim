@@ -831,8 +831,9 @@ hover.preview_target({target}, {cb}, {opts})
                                           newline. A preview registered for
                                           the type wins; a picture, PDF,
                                           office document or video answers
-                                          with a badge; a network (UNC) path
-                                          is not followed. An address is
+                                          with a badge; a network (UNC),
+                                          device or pipe path is not
+                                          followed. An address is
                                           fetched only if `links.web` and
                                           `links.fetch` are on, or
                                           `opts.fetch = true`. Also
