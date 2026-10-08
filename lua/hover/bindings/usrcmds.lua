@@ -65,6 +65,8 @@ local function switch_route(name)
         enum = STATES,
         optional = true,
         default = "toggle",
+        -- The help float's line for the slot: the switch's label says which one.
+        desc = ("Switch %s on or off (omit to toggle)"):format(spec and spec.label or name),
       },
     },
     ---@param ctx table
@@ -173,6 +175,12 @@ function M.routes()
           -- Bare `:Hover zoom` goes in. A step has no "toggle" reading, and
           -- `out` undoes a wrong guess in one press.
           default = "in",
+          desc = "Zoom step (default: in)",
+          enum_desc = {
+            ["in"] = "Magnify a detail of the picture",
+            out = "Step back out one level",
+            reset = "Back to the whole picture",
+          },
         },
       },
       ---@param ctx table
@@ -207,6 +215,7 @@ function M.routes()
           name = "direction",
           enum = { "left", "right", "up", "down" },
           optional = false,
+          desc = "Where to move the magnified view",
         },
       },
       ---@param ctx table
@@ -241,6 +250,8 @@ function M.routes()
           enum = STATES,
           optional = true,
           default = "toggle",
+          desc = "Everything on or off (omit to flip as a whole)",
+          enum_desc = { toggle = "On unless everything is on already, then off" },
         },
       },
       ---@param ctx table
@@ -259,6 +270,12 @@ function M.routes()
           name = "mode",
           enum = { "auto", "manual", "off" },
           optional = true,
+          desc = "Mode to set (omit to show the current one)",
+          enum_desc = {
+            auto = "Hovers open by themselves",
+            manual = "Only on request (`:Hover show` or your own key)",
+            off = "Hover switched off",
+          },
         },
       },
       ---@param ctx table
@@ -293,6 +310,7 @@ function M.routes()
             return out
           end)(),
           optional = true,
+          desc = "Target type to flip, or all/none (omit to show)",
         },
       },
       ---@param ctx table
@@ -316,6 +334,7 @@ function M.routes()
           -- validates against -- one list, two consumers.
           enum = require("hover.float").border_names(),
           optional = true,
+          desc = "Border style (omit to show the current one)",
         },
       },
       ---@param ctx table
@@ -388,6 +407,7 @@ function M.routes()
           -- Toggling is the gesture; the explicit form costs no typing
           -- either, since the enum completes.
           default = "toggle",
+          desc = "Full-screen hover on or off (omit to toggle)",
         },
       },
       ---@param ctx table
@@ -424,6 +444,7 @@ function M.routes()
           -- default -- one that `smaller` undoes, so guessing wrong costs one
           -- keypress.
           default = "bigger",
+          desc = "Which way to resize (default: bigger)",
         },
       },
       ---@param ctx table
