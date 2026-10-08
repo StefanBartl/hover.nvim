@@ -396,10 +396,15 @@ function M._buffer_of(path)
     local name = api.nvim_buf_get_name(b)
     if name ~= "" and not name:find("://", 1, true) then
       -- the same spelling is a string compare: also for a document on a share
-      if fold(name) == want then
+      -- (a buffer that is not loaded has no lines to read: it is no document)
+      if fold(name) == want and api.nvim_buf_is_loaded(b) then
         return b
       end
-      if not classify_mod.is_network_path(name) and vim.bo[b].buftype == "" then
+      if
+        not classify_mod.is_network_path(name)
+        and api.nvim_buf_is_loaded(b)
+        and vim.bo[b].buftype == ""
+      then
         candidates[#candidates + 1] = { b, name }
       end
     end
