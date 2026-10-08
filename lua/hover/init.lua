@@ -457,16 +457,15 @@ function M.preview_target(target, cb, opts)
     if not bufnr and opts.source_path and opts.source_path ~= "" then
       -- By name, exactly: `vim.fn.bufnr(name)` also takes a buffer whose name
       -- merely contains it (`doc.md.bak` for `doc.md`).
-      local want = vim.fs.normalize(opts.source_path)
-      local fold = vim.fn.has("win32") == 1
+      -- Both spellings are compared by their real path (a temp directory behind
+      -- a link, a different case on Windows or macOS).
+      local normkey = require("lib.nvim.fs.normkey")
+      local want = normkey(opts.source_path)
       for _, b in ipairs(api.nvim_list_bufs()) do
         local name = api.nvim_buf_get_name(b)
-        if name ~= "" then
-          name = vim.fs.normalize(name)
-          if name == want or (fold and name:lower() == want:lower()) then
-            bufnr = b
-            break
-          end
+        if name ~= "" and normkey(name) == want then
+          bufnr = b
+          break
         end
       end
     end
