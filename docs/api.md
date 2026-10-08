@@ -39,7 +39,10 @@ address it runs later, on the main loop.
   host named in `links.auth` gets its credential, and the last answer is kept, so asking again costs
   no second request.
 - Other options: `max_lines`, `max_width` (default: the hover's own), `timeout_ms`, `line`/`line_end`
-  (a text file starts there).
+  (a text file starts there), `source_path` (the document the target is written in; a relative path
+  is resolved against it, and a network path written in the target is refused while one the
+  document itself lives on is not) and `bufnr` (that document's buffer, which a registered
+  `#anchor` preview needs; found by `source_path` when that buffer is loaded).
 
 `dismiss` rather than `hide` is what a key should call: under `CursorHold` the event fires
 again after any keystroke followed by quiet, so `hide()` makes the float vanish and then

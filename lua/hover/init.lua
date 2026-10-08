@@ -455,8 +455,20 @@ function M.preview_target(target, cb, opts)
     -- so without it the claim is not asked.
     local bufnr = opts.bufnr
     if not bufnr and opts.source_path and opts.source_path ~= "" then
-      local b = vim.fn.bufnr(opts.source_path)
-      bufnr = b > 0 and b or nil
+      -- By name, exactly: `vim.fn.bufnr(name)` also takes a buffer whose name
+      -- merely contains it (`doc.md.bak` for `doc.md`).
+      local want = vim.fs.normalize(opts.source_path)
+      local fold = vim.fn.has("win32") == 1
+      for _, b in ipairs(api.nvim_list_bufs()) do
+        local name = api.nvim_buf_get_name(b)
+        if name ~= "" then
+          name = vim.fs.normalize(name)
+          if name == want or (fold and name:lower() == want:lower()) then
+            bufnr = b
+            break
+          end
+        end
+      end
     end
     local claimed = require("hover.registry").preview_for(classified.type)
     if claimed and (bufnr or classified.type ~= "anchor") then
@@ -495,7 +507,8 @@ function M.preview_target(target, cb, opts)
     elseif kind == "image" or kind == "pdf" or kind == "office" or kind == "video" then
       -- Never read as text, whatever the first bytes look like (an SVG or an
       -- uncompressed PDF is printable): a badge says what it is.
-      content = require("hover.preview.binary").badge(classified)
+      local labels = { image = "Image", pdf = "PDF document" }
+      content = require("hover.preview.binary").badge(classified, { label = labels[kind] })
     else
       -- file, markdown: the lines of the file, or the badge `text.file` gives
       -- anything that is not text.

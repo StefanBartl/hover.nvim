@@ -28,23 +28,45 @@ local uv = vim.uv or vim.loop
 ---@return Hover.DirEntry[]|nil nil when the directory cannot be read
 ---@return boolean capped the directory has more entries than were read
 function M.scan(dir, cap)
-  local handle = uv.fs_scandir(dir)
-  if not handle then
-    return nil
+  cap = cap or 5000
+
+  -- The entries as `{ name, kind }`, at most `cap + 1` of them. `fs_scandir`
+  -- reads the whole directory before it hands out the first name; `fs_opendir`
+  -- with a batch size stops at the batch, so a directory of a million files costs
+  -- one batch.
+  local raw, capped = {}, false
+  local opened = uv.fs_opendir and uv.fs_opendir(dir, nil, cap + 1)
+  if opened then
+    local batch = uv.fs_readdir(opened) or {}
+    uv.fs_closedir(opened)
+    for i, e in ipairs(batch) do
+      if i > cap then
+        capped = true
+        break
+      end
+      raw[i] = { name = e.name, kind = e.type }
+    end
+  else
+    local handle = uv.fs_scandir(dir)
+    if not handle then
+      return nil
+    end
+    while true do
+      local name, kind = uv.fs_scandir_next(handle)
+      if not name then
+        break
+      end
+      if #raw >= cap then
+        capped = true
+        break
+      end
+      raw[#raw + 1] = { name = name, kind = kind }
+    end
   end
 
-  cap = cap or 5000
   local dirs, files = {}, {}
-  local capped = false
-  while true do
-    local name, kind = uv.fs_scandir_next(handle)
-    if not name then
-      break
-    end
-    if #dirs + #files >= cap then
-      capped = true
-      break
-    end
+  for _, e in ipairs(raw) do
+    local name, kind = e.name, e.kind
     local path = vim.fs.joinpath(dir, name)
     -- A symlink is reported as `kind == "link"`, whatever it points at --
     -- `is_dir` is now what decides an *action* (enter it vs. open it as a

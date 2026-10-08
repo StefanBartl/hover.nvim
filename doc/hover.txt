@@ -827,11 +827,19 @@ hover.preview_target({target}, {cb}, {opts})
                                           `{ lines, filetype?, title?,
                                           highlight? }` once, unless the
                                           returned `{ cancel }` handle was
-                                          used first. An address is fetched
-                                          only if `links.fetch` is on or
+                                          used first; no line holds a
+                                          newline. A preview registered for
+                                          the type wins; a picture, PDF,
+                                          office document or video answers
+                                          with a badge; a network (UNC) path
+                                          is not followed. An address is
+                                          fetched only if `links.web` and
+                                          `links.fetch` are on, or
                                           `opts.fetch = true`. Also
                                           `opts.max_lines`, `max_width`,
-                                          `timeout_ms`, `source_path`, `line`,
+                                          `timeout_ms`, `source_path`,
+                                          `bufnr` (the document, for an
+                                          in-page `#anchor`), `line`,
                                           `line_end`.
 
 ==============================================================================

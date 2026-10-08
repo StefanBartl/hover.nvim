@@ -37,6 +37,24 @@ local CHUNK = 65536
 ---@internal
 --- An iterator over the lines of `f`, none longer than `LINE_CAP` bytes (the
 --- rest of such a line is skipped, and a `…` marks the cut).
+--- `line` cut to `LINE_CAP` bytes -- not in the middle of a character -- and a
+--- `…` where it was cut.
+---@param line string
+---@return string
+local function cap_line(line)
+  local n = LINE_CAP
+  -- a continuation byte (10xxxxxx) at n + 1 means byte n is inside a character
+  while n > 0 do
+    local b = line:byte(n + 1)
+    if b and b >= 0x80 and b < 0xC0 then
+      n = n - 1
+    else
+      break
+    end
+  end
+  return line:sub(1, n) .. "…"
+end
+
 ---@param f file*
 ---@return fun(): string|nil
 local function bounded_lines(f)
@@ -56,9 +74,12 @@ local function bounded_lines(f)
       elseif nl then
         local line = pending:sub(pos, nl - 1)
         pos = nl + 1
+        if #line > LINE_CAP then
+          line = cap_line(line)
+        end
         return line
       elseif #pending - pos + 1 > LINE_CAP then
-        skipping = pending:sub(pos, pos + LINE_CAP - 1) .. "…"
+        skipping = cap_line(pending:sub(pos, pos + LINE_CAP))
         pending, pos = "", 1
       end
       if eof then
@@ -288,6 +309,14 @@ end
 ---@param target Hover.Target
 ---@return Hover.Content
 function M.missing(target)
+  if target.refused then
+    -- Not looked at, so not known to be broken: no red mark.
+    local info = { "◆ " .. (target.reason or "not previewed") }
+    if target.path then
+      info[#info + 1] = target.path
+    end
+    return { lines = info, title = "not previewed", highlight = "HoverInfo" }
+  end
   local lines = { "✗ " .. (target.reason or "target does not exist") }
   if target.path then
     lines[#lines + 1] = target.path
