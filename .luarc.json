@@ -8,7 +8,6 @@
     "lua/?/init.lua"
   ],
   "diagnostics.globals": [
-    "vim",
     "describe",
     "it",
     "before_each",
