@@ -19,6 +19,9 @@
 #   scripts/test.sh conformance      the conformance suite K1..K15 of testing.nvim (docs/CONFORMANCE.md);
 #                                    extra options go to `testing conformance .`; exit 1 when the repo is
 #                                    gated (`conformance.gate = true` in .testing.lua) and a check failed
+#   scripts/test.sh surface --from ir.json --baseline surface.baseline.json
+#                                    the surface (commands, keymaps, autocmds) against the checked-in baseline: exit 1
+#                                    when something the specs exercised before is not exercised now (docs/SURFACE.md)
 
 set -euo pipefail
 
@@ -131,6 +134,11 @@ export XDG_CACHE_HOME="$scratch/cache"
 if [[ "${1:-}" == "conformance" ]]; then
   shift
   nvim -n -i NONE --headless -u NONE -l "$DRIVER" conformance . "$@"
+  exit $?
+fi
+if [[ "${1:-}" == "surface" ]]; then
+  shift
+  nvim -n -i NONE --headless -u NONE -l "$DRIVER" surface . "$@"
   exit $?
 fi
 nvim -n -i NONE --headless -u NONE -l "$DRIVER" run . "$@"
