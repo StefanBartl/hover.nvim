@@ -300,7 +300,7 @@ looked healthy while a terminal ran at 1-2 fps. The reader found it in one line
 by switching to half blocks and watching it go smooth. `images.blocks` now
 paints an overlay `virt_text` mark per run of same-coloured cells, carrying the
 glyphs as well as the highlight, and touches the buffer never
-(`images.nvim@67964af`): `changedtick` stands still across a run in all three
+(`images.nvim@de856d7`): `changedtick` stands still across a run in all three
 geometries, and the sextant paint fell from 14.9 ms to 4.4.
 
 **The picture runs on a local clock that mpv corrects, not on mpv itself.**
