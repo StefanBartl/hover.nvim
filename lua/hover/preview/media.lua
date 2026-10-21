@@ -343,6 +343,66 @@ local ZOOM_STEP = 1.5
 --- because that needs images.nvim's calibration and this does not.
 local ZOOM_FLOOR_PX = 32
 
+---@internal
+--- images.nvim's zoom arithmetic (`images.viewport`), when it is the revision
+--- that agrees with the fallback below to the pixel (`API` 2: `rect_for` rounds
+--- the corner down, as `zoom_rect` always has). Zen, the zoomed hover and the
+--- mouse zoom then share one implementation; against an older images.nvim, or
+--- none, the copy here stays in charge until a minimum version is agreed.
+---@return table|nil
+local function viewport()
+  local ok, vp = pcall(require, "images.viewport")
+  if
+    ok
+    and type(vp) == "table"
+    and (tonumber(vp.API) or 0) >= 2
+    and type(vp.rect_for) == "function"
+  then
+    return vp
+  end
+  return nil
+end
+
+--- Public for the spec: whether `zoom_rect` and friends go through
+--- `images.viewport` right now.
+---@return boolean
+function M.uses_viewport()
+  return viewport() ~= nil
+end
+
+---@internal
+---@return number step, integer floor_px
+local function zoom_params()
+  local vp = viewport()
+  if vp and type(vp.ZOOM_STEP) == "number" and type(vp.FLOOR_PX) == "number" then
+    return vp.ZOOM_STEP, vp.FLOOR_PX
+  end
+  return ZOOM_STEP, ZOOM_FLOOR_PX
+end
+
+--- The fallback `zoom_rect` (no `images.viewport`, or an older one). Public
+--- for the spec, which holds the two to the same answers.
+---@param px Hover.Preview.Dims
+---@param level integer
+---@param cx number
+---@param cy number
+---@return { w: integer, h: integer, x: integer, y: integer }|nil
+function M.zoom_rect_own(px, level, cx, cy)
+  if level <= 0 then
+    return nil
+  end
+  local factor = ZOOM_STEP ^ level
+  local w = math.max(ZOOM_FLOOR_PX, math.floor(px.width / factor))
+  local h = math.max(ZOOM_FLOOR_PX, math.floor(px.height / factor))
+  w, h = math.min(w, px.width), math.min(h, px.height)
+
+  local x = math.floor(cx * px.width - w / 2)
+  local y = math.floor(cy * px.height - h / 2)
+  x = math.max(0, math.min(x, px.width - w))
+  y = math.max(0, math.min(y, px.height - h))
+  return { w = w, h = h, x = x, y = y }
+end
+
 --- The rectangle a zoom level and centre select from an image.
 ---
 --- The centre is a fraction of the source rather than a pixel, so it survives
@@ -359,16 +419,12 @@ function M.zoom_rect(px, level, cx, cy)
   if level <= 0 then
     return nil
   end
-  local factor = ZOOM_STEP ^ level
-  local w = math.max(ZOOM_FLOOR_PX, math.floor(px.width / factor))
-  local h = math.max(ZOOM_FLOOR_PX, math.floor(px.height / factor))
-  w, h = math.min(w, px.width), math.min(h, px.height)
-
-  local x = math.floor(cx * px.width - w / 2)
-  local y = math.floor(cy * px.height - h / 2)
-  x = math.max(0, math.min(x, px.width - w))
-  y = math.max(0, math.min(y, px.height - h))
-  return { w = w, h = h, x = x, y = y }
+  local vp = viewport()
+  if not vp then
+    return M.zoom_rect_own(px, level, cx, cy)
+  end
+  local r = vp.rect_for(px, level, cx, cy)
+  return { w = r.w, h = r.h, x = r.x, y = r.y }
 end
 
 --- Whether another step in would show anything new.
@@ -385,9 +441,9 @@ function M.zoom_possible(px, level)
   if not px or level <= 0 then
     return level <= 0
   end
-  local factor = ZOOM_STEP ^ level
-  return math.floor(px.width / factor) >= ZOOM_FLOOR_PX
-    and math.floor(px.height / factor) >= ZOOM_FLOOR_PX
+  local step, floor_px = zoom_params()
+  local factor = step ^ level
+  return math.floor(px.width / factor) >= floor_px and math.floor(px.height / factor) >= floor_px
 end
 
 ---@internal
@@ -652,7 +708,7 @@ local PDF_MAX_DPI = 2400
 ---@param level integer
 ---@return integer
 function M.pdf_dpi(level)
-  return math.floor(PDF_BASE_DPI * ZOOM_STEP ^ math.max(0, level) + 0.5)
+  return math.floor(PDF_BASE_DPI * (zoom_params()) ^ math.max(0, level) + 0.5)
 end
 
 --- Whether another zoom step into a PDF page would be rendered at all.
@@ -688,7 +744,7 @@ end
 ---@param cy number 0..1
 ---@return { w: integer, h: integer, x: integer, y: integer }|nil rect nil at level 0
 function M.pdf_window(base_px, level, cx, cy)
-  local factor = ZOOM_STEP ^ level
+  local factor = (zoom_params()) ^ level
   return M.zoom_rect({
     width = math.floor(base_px.width * factor),
     height = math.floor(base_px.height * factor),

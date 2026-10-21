@@ -119,6 +119,95 @@ describe("how far in a zoom may go", function()
   end)
 end)
 
+-- The zoom arithmetic lives in images.nvim (`images.viewport`), shared with zen and the mouse
+-- zoom; hover keeps its own copy only for an images.nvim without it, or an older one whose
+-- `rect_for` rounded the corner differently. A crop must not move by a pixel either way.
+describe("the zoom arithmetic from images.viewport", function()
+  ---@type table<string, any>
+  local saved
+
+  before_each(function()
+    saved = package.loaded["images.viewport"]
+  end)
+  after_each(function()
+    package.loaded["images.viewport"] = saved
+  end)
+
+  it("gives the same rectangles as hover's own, when images.nvim is there", function()
+    if not pcall(require, "images.viewport") then
+      pending("images.nvim not installed")
+      return
+    end
+    assert.is_true(media.uses_viewport(), "an images.nvim with images.viewport API 2 is used")
+    local sizes =
+      { { 1920, 1080 }, { 1000, 20 }, { 1001, 777 }, { 100, 100 }, { 33, 4000 }, { 7, 7 } }
+    local centres = { 0, 0.1, 0.3333, 0.5, 0.5006, 0.75, 0.999, 1, -2, 3 }
+    local checked = 0
+    for _, size in ipairs(sizes) do
+      local px = { width = size[1], height = size[2] }
+      for level = 0, 12 do
+        for _, cx in ipairs(centres) do
+          for _, cy in ipairs({ 0, 0.4999, 0.5, 1 }) do
+            local got, own =
+              media.zoom_rect(px, level, cx, cy), media.zoom_rect_own(px, level, cx, cy)
+            assert.are.same(
+              own,
+              got,
+              ("%dx%d level %d at %s,%s"):format(px.width, px.height, level, cx, cy)
+            )
+            checked = checked + 1
+          end
+        end
+        assert.equals(
+          media.zoom_possible(px, level),
+          level <= 0
+            or (
+              math.floor(px.width / 1.5 ^ level) >= 32
+              and math.floor(px.height / 1.5 ^ level) >= 32
+            )
+        )
+      end
+    end
+    assert.is_true(checked > 2000)
+  end)
+
+  it("keeps its own arithmetic against an older images.viewport", function()
+    package.loaded["images.viewport"] = {
+      API = 1,
+      rect_for = function()
+        error("an older rect_for must not be called")
+      end,
+    }
+    assert.is_false(media.uses_viewport())
+    assert.are.same(
+      media.zoom_rect_own({ width = 1000, height = 20 }, 1, 0.5006, 0.5),
+      media.zoom_rect({ width = 1000, height = 20 }, 1, 0.5006, 0.5)
+    )
+  end)
+
+  it("goes through images.viewport when it is new enough", function()
+    local asked
+    package.loaded["images.viewport"] = {
+      API = 2,
+      ZOOM_STEP = 1.5,
+      FLOOR_PX = 32,
+      rect_for = function(px, level, cx, cy)
+        asked = { px.width, level, cx, cy }
+        return { x = 1, y = 2, w = 3, h = 4 }
+      end,
+    }
+    assert.are.same(
+      { w = 3, h = 4, x = 1, y = 2 },
+      media.zoom_rect({ width = 50, height = 60 }, 2, 0.25, 0.75)
+    )
+    assert.are.same({ 50, 2, 0.25, 0.75 }, asked)
+    assert.is_nil(
+      media.zoom_rect({ width = 50, height = 60 }, 0, 0.5, 0.5),
+      "level 0 is still no rectangle"
+    )
+  end)
+end)
+
 describe("how far in a PDF page may go, which is a different question", function()
   -- A picture runs out of pixels; a vector page never does, so its ceiling is
   -- a number somebody chose rather than one the source can be asked for. What
