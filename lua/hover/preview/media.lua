@@ -380,6 +380,17 @@ local function zoom_params()
   return ZOOM_STEP, ZOOM_FLOOR_PX
 end
 
+--- How far one pan key moves the centre at zoom `level`, as a fraction of the
+--- source: a quarter of what is on screen, whatever level that is. From the
+--- same step `zoom_rect` uses, so a pan stays a quarter of the view when the
+--- step comes from `images.viewport`.
+---@param level integer
+---@return number
+function M.pan_step(level)
+  local step = zoom_params()
+  return 0.25 / (step ^ math.max(0, level or 0))
+end
+
 --- The fallback `zoom_rect` (no `images.viewport`, or an older one). Public
 --- for the spec, which holds the two to the same answers.
 ---@param px Hover.Preview.Dims

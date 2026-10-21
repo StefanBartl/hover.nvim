@@ -73,12 +73,6 @@ local _suppressed = nil
 --- is a dial; two is a switch with an awkward middle.
 local RESIZE_STEP = 1.25
 
----@type number What one zoom step divides the visible rectangle by.
---- Mirrors `hover.preview.media`'s own constant, and is here only so `nav`
---- can size a step against the view rather than against the source: a quarter
---- of what is on screen, whatever level that is.
-local ZOOM_VIEW_STEP = 1.5
-
 ---@internal
 --- The multiplier the hover on screen is currently asking for.
 ---
@@ -2307,7 +2301,9 @@ function M.nav(dx, dy)
     return false
   end
 
-  local step = 0.25 / (ZOOM_VIEW_STEP ^ (open.zoom or 0))
+  -- A quarter of what is on screen, from the same zoom step the view was cut
+  -- with (`media.pan_step`; it follows `images.viewport` when that is used).
+  local step = require("hover.preview.media").pan_step(open.zoom or 0)
   local cx = math.max(0, math.min(1, (open.zoom_cx or 0.5) + dx * step))
   local cy = math.max(0, math.min(1, (open.zoom_cy or 0.5) + dy * step))
   if cx == (open.zoom_cx or 0.5) and cy == (open.zoom_cy or 0.5) then

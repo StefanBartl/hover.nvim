@@ -185,6 +185,15 @@ describe("the zoom arithmetic from images.viewport", function()
     )
   end)
 
+  it("sizes a pan step from the same zoom step", function()
+    package.loaded["images.viewport"] =
+      { API = 2, ZOOM_STEP = 2, FLOOR_PX = 32, rect_for = function() end }
+    assert.are.equal(0.125, media.pan_step(1), "a quarter of the view at images.viewport's step")
+    package.loaded["images.viewport"] = { API = 1 }
+    assert.are.equal(0.25 / 1.5, media.pan_step(1), "and at hover's own without it")
+    assert.are.equal(0.25, media.pan_step(0))
+  end)
+
   it("goes through images.viewport when it is new enough", function()
     local asked
     package.loaded["images.viewport"] = {
