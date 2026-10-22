@@ -44,6 +44,11 @@ the alternatives that were rejected, and the bugs that changed the design.
   wildcard, why it is the one link feature with no switch and still works with
   `links.web` off, and why a pin whose file has gone says so instead of falling
   back to the page it was written to replace.
+- **[LINKCACHE.md](LINKCACHE.md)** — a fetched page kept across sessions,
+  for the links you name: why both halves of the setting are needed and either
+  alone keeps nothing, why an old page is shown at once while one conditional
+  request goes out behind it, why a dead link is the one refresh answer that
+  throws a kept page away, and what is never written to disk.
 - **[AUTH.md](AUTH.md)** — a credential for the hosts you named: why every
   rule is shaped so a mistake sends *nothing* (no wildcard in the host, no
   literal token, no http, no argv), what an authenticated request can and
@@ -55,6 +60,11 @@ the alternatives that were rejected, and the bugs that changed the design.
   prerequisite rather than a nicety, why it pins by default and why that
   follows from `focusable = false`, and why `z` is the one key it could not
   have.
+- **[COPY.md](COPY.md)** — taking something out of a float that cannot be
+  entered: why the copy is what is on screen rather than what the target is,
+  why a picture is copied as a file and only its path reaches the clipboard,
+  why the clipboard gets a trailing newline, why `Y` — and why entering the
+  float is a separate piece of work.
 - **[ZOOM.md](ZOOM.md)** — the other operation: same box, a narrower view. Why
   a quarter of a second made it a route before it was a key, why a picture is
   cropped and a PDF page re-rendered at a higher DPI instead, why the panning
