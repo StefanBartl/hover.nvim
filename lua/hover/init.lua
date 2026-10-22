@@ -144,8 +144,11 @@ end
 -- Configuration
 -- ---------------------------------------------------------------------------
 
---- Configure the hover. Merged over the current values, so a host can set
---- only what it cares about, and calling it twice does not reset the rest.
+--- Configure the hover. Every writer owns one layer of the configuration
+--- (`markdown` < `setup` < `persist` < `runtime`, see `hover.config`): a call
+--- replaces that writer's previous call -- an option dropped from the spec is
+--- gone after the next `setup()` -- and leaves the other writers' words alone.
+--- Only what is given is set; everything else is the default.
 ---
 --- The pre-move option names (`enabled`, `bare_paths`, `url = { ... }`) are
 --- still accepted and normalized -- see `hover.config`.
@@ -163,8 +166,9 @@ end
 --- twice. A *plugin* should call `register` under its own name instead; two
 --- callers sharing the `"user"` slot would silently delete each other.
 ---@param opts? Hover.Config
+---@param layer? "markdown"|"setup" # Who is speaking; default `"setup"`, the installation spec. markdown.nvim passes `"markdown"`, the lowest word.
 ---@return Hover.Config
-function M.setup(opts)
+function M.setup(opts, layer)
   -- Report the declared external tools (docs/install.json) once, ever, on
   -- the first setup after installation. pcall'd because an older lib.nvim
   -- without lib.nvim.deps must not break setup() over an informational
@@ -185,9 +189,9 @@ function M.setup(opts)
     -- that plugin's state.
     local settings = vim.tbl_extend("force", {}, opts)
     settings.contribute = nil
-    return config.setup(settings)
+    return config.setup(settings, layer)
   end
-  return config.setup(opts)
+  return config.setup(opts, layer)
 end
 
 --- Switch the hover on: install the trigger autocmds, the configured
@@ -2516,7 +2520,7 @@ function M.set_mode(mode, opts)
   opts = opts or {}
 
   _suppressed = nil
-  config.raw().mode = mode
+  config.set_runtime({ "mode" }, mode)
   -- A reader's own act, not the installation spec's -- stays explicit across
   -- sessions until set again. See `hover.persist.touch` (`LUA-87`).
   require("hover.persist").touch("mode")
@@ -2558,17 +2562,6 @@ end
 ---@return string|nil report, string|nil err
 function M.set_auto(which)
   local names = require("hover.config.auto_types")()
-  local raw = config.raw()
-  if type(raw.auto_hover) ~= "table" then
-    -- The boolean forms are folded by `config.normalize` before they are
-    -- stored, so this only happens to a caller that wrote the field directly.
-    local all = raw.auto_hover == true
-    raw.auto_hover = {}
-    for _, name in ipairs(names) do
-      raw.auto_hover[name] = all
-    end
-  end
-
   if which == nil then
     local on, off = {}, {}
     for _, name in ipairs(names) do
@@ -2583,7 +2576,7 @@ function M.set_auto(which)
   if which == "all" or which == "none" then
     local value = which == "all"
     for _, name in ipairs(names) do
-      raw.auto_hover[name] = value
+      config.set_runtime({ "auto_hover", name }, value)
     end
     -- A reader's own act, not the installation spec's -- stays explicit
     -- across sessions until set again. See `hover.persist.touch` (`LUA-87`).
@@ -2598,7 +2591,7 @@ function M.set_auto(which)
   end
 
   local now = not config.auto_hover_for(which)
-  raw.auto_hover[which] = now
+  config.set_runtime({ "auto_hover", which }, now)
   -- Only `which` was touched, not every type -- see `hover.persist.touch`'s
   -- `subkey` parameter, and the module doc's account of the bug this once
   -- was (a single `:Hover auto <type>` persisting the whole table).
@@ -2688,7 +2681,7 @@ function M.set_border(name)
     return nil, ("unknown border %q (%s)"):format(tostring(name), table.concat(names, "|"))
   end
 
-  config.raw().border = name
+  config.set_runtime({ "border" }, name)
   -- Shown now rather than at the next hover: see `float.set_border`.
   float_mod.set_border(name)
   return ("border: %s"):format(name)

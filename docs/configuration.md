@@ -4,6 +4,13 @@ Every option `setup()` and `enable()` accept, with its default. Both take the sa
 see [installation.md](installation.md) for why `enable()` rather than `setup()` is what
 turns the plugin on.
 
+**Who owns what.** The options come in layers, lowest first: `markdown` (markdown.nvim's
+`hover = {}` table), `setup` (your spec), `persist` (what you switched in an earlier session) and
+`runtime` (what you switch now). A second `setup()` replaces the first one's table, it does not add
+to it: an option you removed from the spec is back to its default. What you switch with `:Hover`
+at run time stays across a later `setup()`. An unknown option or a value of the wrong type is
+reported (`:checkhealth hover`) and the default stays.
+
 ```lua
 require("hover").setup({
   mode = "auto",

@@ -571,7 +571,13 @@ describe("hover.show on a pinned link, with the web hover off", function()
     assert.is_nil(report:find("`:Hover auto missing`", 1, true), report)
 
     -- And following that advice is what opens it.
-    config.setup({ auto_hover = { markdown = true } })
+    config.setup({
+      links = {
+        web = false,
+        pins = { { match = "confluence.example.com", show = root .. "/gone.md" } },
+      },
+      auto_hover = { markdown = true },
+    })
     assert.is_true(hover.show({}))
     assert.matches("pinned file not found", shown())
   end)

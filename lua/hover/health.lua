@@ -166,6 +166,11 @@ local function check_config()
     health.ok(("mode: %s"):format(mode))
   end
 
+  -- What the layers dropped or degraded: an unknown option, a value of the wrong type.
+  for _, issue in ipairs(config.issues()) do
+    health.warn(issue)
+  end
+
   -- What opens without being asked, said out loud.
   --
   -- Reported rather than left to the configuration file, because the default

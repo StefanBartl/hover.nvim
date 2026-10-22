@@ -276,22 +276,12 @@ function M.enabled(name)
 end
 
 ---@internal
---- Write `value` at a switch's key path in the merged options table,
---- creating the intermediate tables a partially configured options table may
---- be missing.
+--- Write `value` at a switch's key path, as the reader's own word (the config layer `runtime`).
 ---@param path string[]
 ---@param value boolean
 ---@return nil
 local function write(path, value)
-  local node = require("hover.config").raw()
-  for i = 1, #path - 1 do
-    local key = path[i]
-    if type(node[key]) ~= "table" then
-      node[key] = {}
-    end
-    node = node[key]
-  end
-  node[path[#path]] = value
+  require("hover.config").set_runtime(path, value)
 end
 
 --- Turn a switch on, off, or over.

@@ -40,10 +40,10 @@
 --- type `DEFAULTS.auto_hover` happens to expand to.
 ---
 --- **Loaded at `enable()`, after the installation spec's own `opts` are
---- merged in.** `M.load` is `config.setup(sanitize(snapshot))` under another
---- name, so it is subject to the same merge `config.setup` always does --
+--- merged in.** `M.load` is `config.setup(sanitize(snapshot), "persist")`, the
+--- layer above the spec's --
 --- the order ends up DEFAULTS -> installation spec -> the last session's
---- *touched* switches, and a runtime toggle really does win over a static
+--- *touched* switches -> this session's switches (`runtime`), and a runtime toggle really does win over a static
 --- default until it is toggled back, which is the entire feature -- and a
 --- spec value the reader never touched at all is never shadowed by it.
 ---
@@ -331,7 +331,7 @@ function M.load(opts)
   end
 
   local sanitized = sanitize(saved)
-  require("hover.config").setup(sanitized)
+  require("hover.config").setup(sanitized, "persist")
 
   if sanitized.mode ~= nil then
     M.touch("mode")

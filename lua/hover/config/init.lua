@@ -17,15 +17,12 @@
 ---  * `web` implies `links`, and `fetch` implies `web`. Fetching with no
 ---    float to show it in would do the disclosure and none of the good.
 ---
---- Runtime switches (`:Hover links web on`) mutate the merged table through
---- `M.raw()`, never `DEFAULTS`.
+--- Runtime switches (`:Hover links web on`) are a layer of their own (`M.set_runtime`),
+--- on top of the installation spec's: nothing writes into the live table.
 
 local M = {}
 
 local DEFAULTS = require("hover.config.DEFAULTS")
-
----@type Hover.Config
-local _options = vim.deepcopy(DEFAULTS)
 
 ---@internal
 --- Fold a legacy option shape into the canonical one, in place.
@@ -44,6 +41,14 @@ local function normalize(opts)
     opts.mode = "off"
   end
   opts.enabled = nil
+
+  -- A class given as a bare boolean (`links = false`) is its master switch, the way `keymaps = false` is
+  -- elsewhere: the whole class off, nothing else said.
+  for _, name in ipairs({ "links", "paths", "office" }) do
+    if type(opts[name]) == "boolean" then
+      opts[name] = { enabled = opts[name] }
+    end
+  end
 
   -- `bare_paths` was a flat boolean before the class grew a second switch
   -- (`missing`).
@@ -169,104 +174,120 @@ local function normalize(opts)
   end
 end
 
----@internal
---- Replace, rather than merge, the option lists whose meaning is "exactly
---- these and no others".
----
---- `vim.tbl_deep_extend` merges lists by index, so `{ down = { "<C-n>" } }`
---- would leave the default's second key sitting at index 2 and bind both --
---- and `dismiss_keys = { "<C-c>" }` would leave `<Esc>` bound. A configured
---- key list is a closed, curated set (`ERR-52`), not an addition.
----
---- **Which tables those are is read off `DEFAULTS`, not listed here**, and the
---- list this replaced is why. It named `scroll_keys`, `resize_keys`,
---- `pan_keys` and `keymaps`, and the doc comment above it claimed to be
---- "declared rather than written out" while being a literal -- so adding
---- `zoom_keys` would have been the fifth time in this repository that a
---- hand-kept copy of something `DEFAULTS` already knows fell behind it, and
---- nothing would have failed: a configured `zoom_keys.into` would simply have
---- merged alongside the default instead of replacing it, and bound both.
----
---- The rule is mechanical: every `DEFAULTS` entry whose name ends in `_keys`,
---- plus `keymaps`, which is the one key table that does not. A new key set is
---- picked up by existing, which is the only kind of list that cannot drift.
----@param opts table the user's options, unmerged
----@return nil
-local function replace_key_lists(opts)
-  ---@type string[]
-  local key_tables = { "keymaps" }
-  for name, value in pairs(DEFAULTS) do
-    if type(value) == "table" and name:match("_keys$") then
-      key_tables[#key_tables + 1] = name
-    end
-  end
-  table.sort(key_tables)
+-- ── What the schema cannot infer from DEFAULTS ───────────────────────────────
+-- A key list is a string, a list of strings, or (for `keymaps.show`) `false`; DEFAULTS only shows the list.
+-- Which tables those are is read off DEFAULTS (every `*_key` table plus `keymaps`), so a new key set is picked up
+-- by existing -- the same rule the by-hand `replace_key_lists` followed before the config came from lib.lua.config.
 
-  -- Tables of key lists: whatever direction the user named is replaced, and
-  -- the ones they did not name keep their default.
-  --- CDX: `dismiss_keys`/`open_keys` also end in `_keys` and are `table`-typed
-  --- (flat arrays), so the generic scan above pulls them into this by-index
-  --- merge too, even though they are not direction maps -- a partial
-  --- `dismiss_keys` here merges by index (leaving stray default entries)
-  --- before the flat-list pass below unconditionally overwrites both with
-  --- the user's array. The final state is correct either way since the flat
-  --- pass always wins, but the by-index pass over them is dead work worth a
-  --- second look if `key_tables` is ever used for anything besides this loop.
-  for _, name in ipairs(key_tables) do
-    if type(opts[name]) == "table" and type(_options[name]) == "table" then
-      for key, value in pairs(opts[name]) do
-        _options[name][key] = vim.deepcopy(value)
+---@type table<string, any>
+local EXCEPTIONS = {
+  -- `Hover.Mode`; an unknown value is reported and the default applies (ERR-22).
+  mode = { "string", enum = { "auto", "manual", "off" } },
+  -- Normalized to the full table before the check; a name this plugin does not know is allowed (see `auto_hover_for`).
+  auto_hover = { "table", of = "boolean" },
+  -- A name (checked in `normalize`) or the eight-character list.
+  border = "string|table",
+  filetypes = "string|table",
+  dismiss_keys = "keymap",
+  open_keys = "keymap",
+  ["keymaps.show"] = "keymap",
+  ["video.at"] = "number|string",
+  ["video.step"] = "number|string",
+  ["video.play_at"] = "number|string",
+  ["video.playback"] = { "string", enum = { "window", "inline" } },
+}
+
+for name, value in pairs(DEFAULTS) do
+  if
+    type(value) == "table"
+    and name:match("_keys$")
+    and name ~= "dismiss_keys"
+    and name ~= "open_keys"
+  then
+    for key, default in pairs(value) do
+      if type(default) == "table" then
+        EXCEPTIONS[name .. "." .. key] = "keymap"
       end
     end
   end
-
-  -- Flat key lists: the whole list is the setting.
-  for _, name in ipairs({ "dismiss_keys", "open_keys" }) do
-    if opts[name] ~= nil then
-      _options[name] = vim.deepcopy(opts[name])
-    end
-  end
 end
 
---- Merge `opts` over the current options. Idempotent and additive: a host
---- can set only what it cares about, and calling it twice does not reset
---- the rest.
----@param opts? Hover.Config
----@return Hover.Config options the merged table
-function M.setup(opts)
-  if type(opts) ~= "table" then
-    return _options
-  end
+-- Documented options that have no default: absence means "decide at run time".
+---@type table<string, any>
+local OPTIONAL = {
+  ["links.shot.command"] = "string",
+  ["video.width"] = "number",
+  ["video.run_width"] = "number",
+}
 
+--- Who writes: `markdown` (markdown.nvim's `hover = {}` table, the lowest word), `setup` (the installation spec),
+--- `persist` (what the reader switched in an earlier session) and `runtime` (what they switch now). The reader's
+--- own acts outrank the spec on purpose: a field is only ever persisted after the reader touched it (`LUA-87`),
+--- so a field they never touched is still the spec's.
+local LAYERS = { "markdown", "setup", "persist", "runtime" }
+
+local cfg = require("lib.lua.config").new(DEFAULTS, {
+  name = "hover",
+  layers = LAYERS,
+  schema = EXCEPTIONS,
+  optional = OPTIONAL,
+  normalize = function(opts)
+    normalize(opts)
+  end,
+  notify = function(message)
+    require("hover.notify").warn(message)
+  end,
+})
+
+--- The reader's own switches, written by `set_runtime` into the layer `runtime`.
+---@type table
+local _runtime = {}
+
+--- Replace the options of one writer (`layer`, default `"setup"`) with `opts`; the other writers' stay.
+--- A second call by the same writer replaces its first, so an option dropped from the spec is gone after
+--- the next `setup()` (a legacy shape is folded first, see `normalize`).
+---@param opts? Hover.Config
+---@param layer? "markdown"|"setup"|"persist"
+---@return Hover.Config options the effective table
+function M.setup(opts, layer)
+  if type(opts) ~= "table" then
+    return cfg.get()
+  end
   -- A copy first: `normalize` rewrites keys, and mutating a table the caller
   -- still holds (markdown.nvim passes its own live config through) would
-  -- edit that plugin's configuration as a side effect.
-  local incoming = vim.deepcopy(opts)
-  normalize(incoming)
-
-  -- `tbl_deep_extend` replaces a list-like table as a whole rather than merging
-  -- it by index, so `links.pins` and `links.auth` (ordered lists of rules, the
-  -- first match wins) are replaced by a second `setup()`, never mixed with the
-  -- first call's. `TESTS/pins_spec.lua` and `TESTS/auth_spec.lua` hold that
-  -- contract, in case a Neovim release ever changes it.
-  _options = vim.tbl_deep_extend("force", _options, incoming)
-  replace_key_lists(incoming)
-
-  -- An unknown mode degrades to the default rather than aborting the whole
-  -- setup (`ERR-22`); `:checkhealth hover` reports it.
-  if _options.mode ~= "auto" and _options.mode ~= "manual" and _options.mode ~= "off" then
-    _options.mode = DEFAULTS.mode
-  end
-
-  return _options
+  -- edit that plugin's configuration as a side effect. `layer()` copies.
+  cfg.layer(layer or "setup", opts)
+  return cfg.get()
 end
 
---- The merged options table itself, for the runtime switches that have to
---- write to it. Everything that only *reads* should use `M.get()`, which
---- folds in the global kill switch.
+--- Write one value of the reader's own (`:Hover links web on`, `:Hover border`, ...), as the layer `runtime`:
+--- it survives a later `setup()`, which only replaces its own layer, and `reset()` clears it.
+---@param path string[] key path inside the options
+---@param value any
+---@return nil
+function M.set_runtime(path, value)
+  local node = _runtime
+  for i = 1, #path - 1 do
+    if type(node[path[i]]) ~= "table" then
+      node[path[i]] = {}
+    end
+    node = node[path[i]]
+  end
+  node[path[#path]] = value
+  cfg.layer("runtime", _runtime)
+end
+
+--- What the schema dropped or degraded, for `:checkhealth hover`.
+---@return string[]
+function M.issues()
+  return cfg.issues()
+end
+
+--- The effective options, read only: write through `set_runtime`. Everything that only *reads* should use
+--- `M.get()`, which folds in the global kill switch.
 ---@return Hover.Config
 function M.raw()
-  return _options
+  return cfg.get()
 end
 
 --- The effective configuration: the merged options with
@@ -276,9 +297,9 @@ function M.get()
   if vim.g.hover_disable then
     -- A copy, so the stored options survive the flag being toggled back off
     -- at runtime rather than being permanently overwritten with "off".
-    return vim.tbl_extend("force", _options, { mode = "off" })
+    return vim.tbl_extend("force", cfg.get(), { mode = "off" })
   end
-  return _options
+  return cfg.get()
 end
 
 --- The effective mode.
@@ -611,7 +632,8 @@ end
 --- otherwise carry one spec's `setup()` into the next.
 ---@return nil
 function M.reset()
-  _options = vim.deepcopy(DEFAULTS)
+  _runtime = {}
+  cfg.reset()
 end
 
 return M
