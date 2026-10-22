@@ -450,8 +450,10 @@ A page nobody hovered for four times `max_age_days` is swept.
 
 Only a 2xx answer is kept; an error is shown and forgotten as before. Never a
 page fetched with a |hover-auth| credential or with `user:pw@` in its URL,
-never a PDF (`links.pdf` keeps its own files); a body that is not HTML is kept
-as status and headers only. A token in the query string is part of the URL
+never a PDF (`links.pdf` keeps its own files); a body is kept only for HTML,
+XHTML, XML proper and untyped markup -- JSON, archives, pictures and office
+documents keep status and headers only. A page refused with an HTTP error for
+longer than four times `max_age_days` goes. A token in the query string is part of the URL
 and is kept with it. `:Hover links web off` / `on` still drops what the SESSION
 holds, and no longer re-asks a kept page: `:Hover links cache clear` deletes
 what is on disk.

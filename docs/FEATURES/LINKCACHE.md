@@ -76,7 +76,8 @@ the next hover, and the refresh would have arrived for nothing.
 
 `stale_ok = false` turns the background request into a foreground one: the
 reader waits and sees the answer. Even then, when the request brings nothing
-usable back (no answer, a 5xx), the old page is shown, still `transient`. An
+usable back (no answer, a 5xx, a 4xx other than 404/410/451, a curl that does
+not start), the old page is shown, still `transient`. An
 outage is the one time an old page beats an error.
 
 ## Why a dead link throws the page away
@@ -103,8 +104,12 @@ a 403 challenge, and a lapsed single sign-on answers 401. Both would have
 thrown a good page away for exactly the outage it is kept for. So only the
 three statuses that mean "gone" delete.
 
-A refresh that is still out when `:Hover links cache clear` runs writes
-nothing back: the cache counts its clears, and a refresh writes only when the
+A page refused with an HTTP error does not stay forever either: once the server
+last confirmed it more than four times `max_age_days` ago, the error is the
+answer and the page goes. No answer at all (offline) never deletes.
+
+A request that is still out when `:Hover links cache clear` runs, a refresh or a
+first fetch, writes nothing back: the cache counts its clears, and a refresh writes only when the
 count is the one it started with.
 
 ## What is never written
@@ -124,7 +129,11 @@ count is the one it started with.
 - **Most of an HTML body.** Comments, `<script>`, `<style>`, `<noscript>` and
   `<template>` are removed first (`preview.url.slim`). Nothing the preview shows
   is in them, and on a modern documentation page they are most of the bytes. A
-  body that is not HTML (JSON, an archive) is kept as status and headers only.
+  body is kept only where the preview reads one: HTML, XHTML, XML proper (a media
+  type ending in `/xml` or `+xml`: RSS, Atom, SVG) and an untyped answer that
+  starts like markup. Not `xml` anywhere in the name -- the office formats
+  (`application/vnd.openxmlformats-…`) are ZIP archives -- and not an untyped
+  PDF or picture. Those keep status and headers only.
   The downloaded size is kept with it, so the size line reads the same from
   disk as it did from the network.
 - **Any header but four**: `content-type`, `content-length`, `etag`,

@@ -19,7 +19,7 @@
 --      string to remove. Entities *last*, or a decoded `&lt;` is mistaken for
 --      a tag by the strip that follows.
 --   2. **The frontier.** `<nav>` is dropped and `<navbar>` is not, which is a
---      `%f[%W]` and nothing else -- `[^>]*` alone takes both.
+--      `TAG_END` (`%f[%s/>]`) and nothing else -- `[^>]*` alone takes both.
 --   3. **Wrapping is this module's job, not the float's.** The window sets
 --      `wrap` and `linebreak`, so a long line *looks* right -- and the height
 --      is wrong, because `float.measure` counts list entries rather than the

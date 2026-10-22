@@ -95,6 +95,14 @@ local function decode(s)
 end
 
 ---@internal
+--- Where a tag name ends: at whitespace, `/` or `>`.
+---
+--- Not `%f[%W]`, which is what this used to be: `-` is not a word character,
+--- so `<style-x>` (a custom element) counted as a `<style>` and took
+--- everything up to the next real `</style>` with it.
+local TAG_END = "%f[%s/>]"
+
+---@internal
 --- Pull `<title>` and `<meta name="description">` out of an HTML body.
 --- Deliberately pattern-based: a hover does not justify a real HTML parser,
 --- and a miss degrades to "no title found" rather than being wrong.
@@ -102,7 +110,7 @@ end
 ---@return string|nil title
 ---@return string|nil description
 local function extract_meta(body)
-  local title = body:match("<title[^>]*>(.-)</title>")
+  local title = body:match("<title" .. TAG_END .. "[^>]*>(.-)</title>")
   if title then
     title = decode(vim.trim(title:gsub("%s+", " ")))
     if title == "" then
@@ -213,14 +221,6 @@ local function unescape(s)
     end)
   )
 end
-
----@internal
---- Where a tag name ends: at whitespace, `/` or `>`.
----
---- Not `%f[%W]`, which is what this used to be: `-` is not a word character,
---- so `<style-x>` (a custom element) counted as a `<style>` and took
---- everything up to the next real `</style>` with it.
-local TAG_END = "%f[%s/>]"
 
 ---@internal
 --- Elements dropped with everything inside them. Not "not interesting" --
@@ -421,9 +421,9 @@ function M.page_text(body, opts)
 
   -- `<main>` and `<article>` are the author saying which part of the page is
   -- the page. Where neither is marked up, `<body>` at least drops the head.
-  html = html:match("<main[^>]*>(.-)</main%s*>")
-    or html:match("<article[^>]*>(.-)</article%s*>")
-    or html:match("<body[^>]*>(.-)</body%s*>")
+  html = html:match("<main" .. TAG_END .. "[^>]*>(.-)</main%s*>")
+    or html:match("<article" .. TAG_END .. "[^>]*>(.-)</article%s*>")
+    or html:match("<body" .. TAG_END .. "[^>]*>(.-)</body%s*>")
     or html
 
   -- `TAG_END` is the frontier: the tag name has to end where it is written, or
@@ -674,7 +674,7 @@ local function content_for(target, opts, ok, response)
   -- the tag stripper over one would produce a line of punctuation with the
   -- reader's cursor on it.
   local body = response.body
-  if body and body ~= "" and (ctype or ""):lower():find("text/html", 1, true) then
+  if body and body ~= "" and (ctype or ""):lower():find("html", 1, true) then
     -- One blank above, one below, and room for the URL that follows. Reads the
     -- box `opts` carries rather than the configured one, so a hover put full
     -- screen shows a screenful of the page and not twenty lines of it.
@@ -877,7 +877,11 @@ local GONE_STATUS = { [404] = true, [410] = true, [451] = true }
 ---     failed), so a stale copy is not asked about on every hover.
 ---   * 404, 410, 451: the link is gone. The entry is deleted and the error is
 ---     the answer -- a dead page must not keep saying 200.
----   * no answer, 5xx, any other 4xx: nil. The outage is what the entry is for.
+---   * no answer, 5xx, any other 4xx: nil. The outage is what the entry is for
+---     -- until the server last confirmed the page more than `expire_after`
+---     seconds ago: then an HTTP error is the answer and the page is deleted,
+---     or a page moved behind a sign-on for good would say 200 for ever. No
+---     answer at all (offline) never deletes.
 ---
 --- `generation` is `linkcache.generation()` as it was when the request went
 --- out. When `:Hover links cache clear` has run since, nothing is written or
@@ -889,8 +893,9 @@ local GONE_STATUS = { [404] = true, [410] = true, [451] = true }
 ---@param ok boolean
 ---@param response table|string|nil
 ---@param generation? integer
+---@param expire_after? number seconds; nil keeps a refused page however old
 ---@return table|nil
-local function settle(url, entry, ok, response, generation)
+local function settle(url, entry, ok, response, generation, expire_after)
   if not ok or type(response) ~= "table" then
     return nil
   end
@@ -899,7 +904,10 @@ local function settle(url, entry, ok, response, generation)
   local status = tonumber(response.status) or 0
   if status == 304 then
     if writable then
-      pcall(store.confirm, url, entry, response)
+      local confirmed, err = pcall(store.confirm, url, entry, response)
+      if not confirmed then
+        store.note_error(err)
+      end
     end
     return response_of(entry)
   end
@@ -915,7 +923,35 @@ local function settle(url, entry, ok, response, generation)
     end
     return response
   end
+  if
+    status >= 400
+    and expire_after
+    and os.time() - (tonumber(entry.checked_at) or 0) > expire_after
+  then
+    if writable then
+      store.remove(url)
+    end
+    return response
+  end
   return nil
+end
+
+---@internal
+--- How long a page may keep riding out refusals: four times `max_age_days`,
+--- the sweep's own bound for an unused page.
+---@param policy Hover.LinkCacheOpts|nil
+---@return number|nil
+local function expire_after(policy)
+  local days = policy and tonumber(policy.max_age_days)
+  return days and days > 0 and 4 * days * 24 * 60 * 60 or nil
+end
+
+---@internal
+--- `url` without its `#fragment`: the page a link points into.
+---@param url string
+---@return string
+local function page_of(url)
+  return (url:gsub("#.*$", ""))
 end
 
 ---@internal
@@ -928,7 +964,7 @@ end
 ---@param request table
 ---@param entry Hover.LinkEntry
 ---@return nil
-local function refresh(curl, url, request, entry)
+local function refresh(curl, url, request, entry, policy)
   local store = require("hover.linkcache")
   if not store.claim(url) then
     return
@@ -938,9 +974,11 @@ local function refresh(curl, url, request, entry)
   local generation = store.generation()
   local started = pcall(curl.fetch_raw, url, conditional, function(ok, response)
     store.release(url)
-    local kept = settle(url, entry, ok, response, generation)
-    if kept and _last and _last.url == url then
-      _last = { url = url, ok = true, response = kept }
+    local kept = settle(url, entry, ok, response, generation, expire_after(policy))
+    -- By the page, not the link: a hover on `…#b` while the refresh of `…#a`
+    -- was out holds the same stale page in `_last`, and must get the new one.
+    if kept and _last and page_of(_last.url) == page_of(url) then
+      _last = { url = _last.url, ok = true, response = kept }
     end
   end)
   -- A request that never started has no callback to release its claim.
@@ -1005,16 +1043,16 @@ function M.fetch(target, opts, callback)
         local response = response_of(entry)
         _last = { url = url, ok = true, response = response, stale = stale }
         if stale then
-          refresh(curl, url, request, entry)
+          refresh(curl, url, request, entry, policy)
         end
         answer(target, opts, true, response, stale and transient(callback) or callback)
         return
       end
       -- Too old to show, and the reader said so (`stale_ok = false`): the
       -- same conditional request, in the foreground. Only when it brings
-      -- nothing usable back -- no answer, a 5xx -- is the old entry shown
-      -- after all, marked `transient`: an outage is the one time an old page
-      -- beats an error.
+      -- nothing usable back -- no answer, a 5xx, a 4xx other than 404/410/451,
+      -- a curl that does not start -- is the old entry shown after all, marked
+      -- `transient`: an outage is the one time an old page beats an error.
       request.headers = vim.tbl_extend("force", request.headers, store.validators(entry))
       local generation = store.generation()
       local function fallback()
@@ -1025,7 +1063,7 @@ function M.fetch(target, opts, callback)
       -- pcall like `refresh`: a curl that cannot be started is an outage, and
       -- an outage is where the old page is shown.
       local started = pcall(curl.fetch_raw, url, request, function(ok, response)
-        local kept = settle(url, entry, ok, response, generation)
+        local kept = settle(url, entry, ok, response, generation, expire_after(policy))
         if kept then
           _last = { url = url, ok = true, response = kept }
           answer(target, opts, true, kept, callback)
@@ -1040,8 +1078,10 @@ function M.fetch(target, opts, callback)
     end
   end
 
+  local generation = store.generation()
   curl.fetch_raw(url, request, function(ok, response)
-    if keep and ok then
+    -- Not when `:Hover links cache clear` ran while the request was out.
+    if keep and ok and store.generation() == generation then
       remember(url, response)
     end
     -- Kept whether or not it worked. A host that does not answer costs the

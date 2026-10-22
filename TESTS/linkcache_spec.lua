@@ -469,6 +469,80 @@ describe("hover.linkcache through preview.url.fetch", function()
     local content = fetched(LINK, opts({ max_age_days = 1, stale_ok = false }))
     assert.is_truthy(content and joined(content):find("First", 1, true))
   end)
+
+  -- ── third review ──────────────────────────────────────────────────────
+
+  it("hands the refreshed page to a hover on another #fragment of it", function()
+    fetched(LINK, opts({ max_age_days = 1 }))
+    age(LINK, 3)
+    new_session()
+    hold = true
+    fetched(LINK .. "#a", opts({ max_age_days = 1 }))
+    cache.reset()
+    -- no url.reset(): `_last` now holds the stale page for #b
+    fetched(LINK .. "#b", opts({ max_age_days = 1 }))
+    held[1](true, page("Second"))
+    local content = fetched(LINK .. "#b", opts({ max_age_days = 1 }))
+    assert.is_truthy(joined(content):find("Second", 1, true), joined(content))
+  end)
+
+  it("keeps a body only where the preview reads one", function()
+    assert.is_true(store.keeps_body("text/html; charset=utf-8", "<p>"))
+    assert.is_true(store.keeps_body("application/xhtml+xml", "<p>"))
+    assert.is_true(store.keeps_body("application/rss+xml", "<rss>"))
+    assert.is_true(store.keeps_body("text/xml", "<a/>"))
+    assert.is_false(
+      store.keeps_body(
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "PK"
+      ),
+      "an office document is a ZIP archive"
+    )
+    assert.is_false(store.keeps_body("application/json", "{}"))
+    assert.is_true(store.keeps_body(nil, "  <html><title>T</title>"), "untyped markup")
+    assert.is_false(store.keeps_body(nil, "%PDF-1.4\0binary"), "an untyped PDF")
+    assert.is_false(store.keeps_body("", "<\0>"), "markup-looking, but with a NUL byte")
+  end)
+
+  it("lets a page go that keeps refusing for four times max_age_days", function()
+    fetched(LINK, opts({ max_age_days = 1 }))
+    age(LINK, 5)
+    new_session()
+    reply = { status = 403, status_text = "Forbidden", headers = {}, body = "" }
+    fetched(LINK, opts({ max_age_days = 1 }))
+    assert.same(0, (store.stats()), "a page refused for five days at max_age_days = 1 was kept")
+  end)
+
+  it("keeps a page that only the network cannot reach, however old", function()
+    fetched(LINK, opts({ max_age_days = 1 }))
+    age(LINK, 30)
+    new_session()
+    reply_ok, reply = false, "could not resolve host"
+    fetched(LINK, opts({ max_age_days = 1 }))
+    assert.same(1, (store.stats()))
+  end)
+
+  it("keeps a clear a clear for a first fetch that answers after it", function()
+    hold = true
+    fetched(LINK, opts())
+    store.clear()
+    held[1](true, page("First"))
+    assert.same(0, (store.stats()), "the first fetch wrote after the clear")
+  end)
+
+  it("reads the title from <title>, not from a <title-bar> before it", function()
+    reply = page("Ignored")
+    reply.body =
+      "<html><head><title-bar>Bar</title-bar><title>Real</title></head><body><p>x</p></body></html>"
+    local content = fetched(LINK, opts({ persist = false }))
+    assert.same("Real", content.lines[2], joined(content))
+  end)
+
+  it("forgets a write error once a write works again", function()
+    store.note_error("E739")
+    fetched(LINK, opts())
+    assert.is_nil(store.last_error())
+  end)
 end)
 
 describe("hover.preview.url, second review", function()
@@ -476,6 +550,13 @@ describe("hover.preview.url, second review", function()
     local body = "<html><body><style-x>x</style-x><p>Kept.</p><style>p{}</style></body></html>"
     assert.is_truthy(url.slim(body):find("Kept.", 1, true))
     assert.same({ "x", "Kept." }, url.page_text(body, { max_width = 80, max_lines = 10 }))
+  end)
+
+  it("does not take <title-bar> or <main-menu> for <title> or <main>", function()
+    local body = "<html><head><title-bar>Bar</title-bar><title>Real</title></head><body>"
+      .. "<main-menu><p>Menu</p></main-menu><main><p>Content.</p></main></body></html>"
+    local content = url.page_text(body, { max_width = 80, max_lines = 10 })
+    assert.same({ "Content." }, content)
   end)
 end)
 

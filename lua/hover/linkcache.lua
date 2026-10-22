@@ -49,9 +49,16 @@
 --- URL is the file's name and content. A token in the *query* is kept as part
 --- of the URL, so a pattern should not name links that carry one.
 ---
---- **Only an HTML body is kept.** Anything else -- JSON, an archive, a picture
---- -- keeps its status and headers and an empty body; the preview shows no
---- text for those anyway.
+--- **Only a body the preview reads is kept** (`keeps_body`): HTML, XHTML and
+--- XML proper, and an untyped answer that starts like markup. Anything else --
+--- JSON, an archive, a picture, an office document -- keeps its status and
+--- headers and an empty body.
+---
+--- **A page that keeps refusing goes.** A refresh answered with an error other
+--- than 404/410/451 keeps the page -- but not forever: once the server last
+--- confirmed it more than four times `max_age_days` ago, the error is the
+--- answer and the page is deleted (a page moved behind a sign-on for good would
+--- otherwise say 200 for ever, every hover touching the file past the sweep).
 ---
 --- The files are swept once per session by last use, not by age: a hit
 --- touches the file, so an entry the reader keeps using is kept. One nobody
@@ -218,12 +225,7 @@ function M.write(url, response, body)
   if not headers["content-length"] and type(response.body) == "string" then
     headers["content-length"] = tostring(#response.body)
   end
-  -- The body is kept where the preview reads anything out of it: HTML (the
-  -- page text), any XML (a `<title>`: RSS, Atom, SVG) and an answer that names
-  -- no type at all (a static host or a bucket often does not, and the title is
-  -- still read from it). JSON, an archive, a picture keep status and headers.
-  local ctype = (headers["content-type"] or ""):lower()
-  if not (ctype == "" or ctype:find("html", 1, true) or ctype:find("xml", 1, true)) then
+  if not M.keeps_body(headers["content-type"], body) then
     body = ""
   end
   private_dir()
@@ -237,8 +239,35 @@ function M.write(url, response, body)
   })
   if ok ~= true then
     M.note_error(err or "write failed")
+  else
+    -- A write that works again is the answer to the one that failed.
+    _last_error = nil
   end
   return ok == true
+end
+
+--- Whether a body of `content_type` is kept, rather than status and headers only.
+---
+--- Kept where the preview reads anything out of it: HTML and XHTML (the page
+--- text, the title) and XML proper -- a media type ending in `/xml` or `+xml`
+--- (RSS, Atom, SVG: a `<title>`). Not `xml` anywhere in the name: the office
+--- formats (`application/vnd.openxmlformats-...`) are ZIP archives. An answer
+--- that names no type at all (a static host, a bucket) is kept only when it
+--- starts like markup and has no NUL byte: an untyped PDF or image must not be
+--- stored as megabytes of text-mangled bytes.
+---@param content_type string|nil
+---@param body string|nil
+---@return boolean
+function M.keeps_body(content_type, body)
+  local mt = (content_type or ""):lower():match("^%s*([^;%s]*)") or ""
+  if mt ~= "" then
+    return mt:find("html", 1, true) ~= nil or mt:match("[/+]xml$") ~= nil
+  end
+  if type(body) ~= "string" or body == "" then
+    return false
+  end
+  local head = body:sub(1, 1024)
+  return not head:find("%z") and head:match("^%s*<") ~= nil
 end
 
 --- Remember a failed write, for `:checkhealth hover`: the cache swallows them
@@ -255,8 +284,9 @@ function M.last_error()
   return _last_error
 end
 
---- The current generation; `clear` moves it on. A refresh takes it when it
---- starts and writes only while it is still the same.
+--- The current generation; `clear` moves it on. A request takes it when it
+--- starts (a refresh and a first fetch alike) and writes only while it is
+--- still the same.
 ---@return integer
 function M.generation()
   return _generation
@@ -293,6 +323,8 @@ function M.confirm(url, entry, response)
   local ok, err = require("lib.nvim.fs.json").write(path_for(url), entry)
   if ok ~= true then
     M.note_error(err or "write failed")
+  else
+    _last_error = nil
   end
 end
 
