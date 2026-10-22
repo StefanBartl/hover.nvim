@@ -71,6 +71,15 @@
 ---@field shot? Hover.ShotConfig
 ---@field auth? Hover.AuthRule[] # Credentials for the hosts a hover may authenticate to, for the fetch and the PDF download. A configured list replaces the default. See `hover.auth`.
 ---@field pins? Hover.Pin[] # Links shown as a file of the reader's own. First match wins; a configured list replaces the default rather than merging into it. See `hover.pins`.
+---@field cache? Hover.LinkCacheConfig
+
+--- The fetched text of the links the reader named, kept on disk across
+--- sessions. See `hover.linkcache`.
+---@class Hover.LinkCacheConfig
+---@field persist? boolean # Write fetched pages to disk at all. Default false.
+---@field patterns? string|string[] # One glob or a list, as in `links.pins`, naming the links that are kept. Default empty: nothing is kept.
+---@field max_age_days? number # Age after which a kept page is refreshed in the background, and unused pages are swept. Default 7.
+---@field stale_ok? boolean # Show a page older than `max_age_days` while it is refreshed. Default true; false waits for the refresh instead.
 
 --- A host the reader has named as one a hover may authenticate to.
 ---
@@ -398,6 +407,7 @@
 ---@field url_pdf_max_bytes? integer # Ceiling for that download.
 ---@field url_pdf_timeout_ms? integer # How long it may take.
 ---@field url_pdf_cache_days? integer # How long the document may survive between sessions.
+---@field url_cache? Hover.LinkCacheOpts # `links.cache`, resolved against the defaults.
 ---@field shot_enabled? boolean # Render a hovered link in a headless browser instead of previewing it as text.
 ---@field shot_eager? boolean # Whether the automatic trigger may do that, or only an explicit request.
 ---@field shot_timeout_ms? integer # How long one render may take.
@@ -440,6 +450,7 @@
 ---@field play_external? string # Path already handed to the system's own player (no mpv window available); this only wires the float's `on_close` to `preview.external.reset`, since `preview.video` already made the call and checked it worked.
 ---@field dir_entries? Hover.DirEntry[] # A directory preview's entries, in the same order as the lines that render them -- line `i` of `lines` is entry `i` here. Absent for every other content, and shorter than the directory's real size once truncated: only what is actually shown can be selected or clicked.
 ---@field pending? boolean # Provisional; an async result replaces it (and it is not cached).
+---@field transient? boolean # Final, and shown, but not cached: built from a kept page whose refresh is still out.
 
 --- One child of a browsed directory. Deliberately the only shape
 --- `hover.preview.dirbrowse` deals in -- see that module's header for why.

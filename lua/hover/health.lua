@@ -470,6 +470,44 @@ local function check_config()
       end
     end
   end
+
+  -- `links.cache`: half a configuration is the failure worth naming. Either
+  -- half alone keeps nothing, and says nothing about it.
+  local policy = config.link_cache()
+  local store = require("hover.linkcache")
+  local kept = store.stats()
+  if policy.persist and #policy.patterns == 0 then
+    health.warn("links.cache: `persist` is on, but no `patterns` -- nothing is kept", {
+      'Name the links to keep: `cache = { persist = true, patterns = { "docs.example.com/*" } }`.',
+    })
+  elseif not policy.persist and #policy.patterns > 0 then
+    health.info(
+      ("links.cache: %d pattern(s), but `persist` is off -- nothing is kept"):format(
+        #policy.patterns
+      )
+    )
+  elseif policy.persist then
+    health.ok(
+      ("links.cache: %d pattern(s), refreshed after %s day(s), %d page(s) kept in %s"):format(
+        #policy.patterns,
+        tostring(policy.max_age_days),
+        kept,
+        store.dir()
+      )
+    )
+    if not config.fetch_enabled() then
+      health.info(
+        "links.cache: does nothing while `links.fetch` is off (`:Hover links web fetch on`)."
+      )
+    end
+  end
+  if not policy.persist and kept > 0 then
+    health.info(
+      ("links.cache: %d page(s) still on disk from earlier -- `:Hover links cache clear` deletes them"):format(
+        kept
+      )
+    )
+  end
 end
 
 --- `:checkhealth hover`.

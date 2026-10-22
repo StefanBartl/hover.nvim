@@ -1288,7 +1288,7 @@ function M.show(opts)
   end
 
   build(target, bufnr, preview_opts, function(content)
-    if content and not content.pending then
+    if content and not content.pending and not content.transient then
       cache.put(key, content)
     end
     guarded(content)

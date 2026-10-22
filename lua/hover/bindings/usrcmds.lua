@@ -469,6 +469,51 @@ function M.routes()
       end,
     },
     {
+      path = { "links", "cache" },
+      -- Its own route, not a switch: the switches drop what the session holds
+      -- (`hover.cache` and the last answer), and a page kept on disk has to
+      -- outlive exactly that -- otherwise `:Hover links web off` / `on` would
+      -- throw away the cache it is the whole point to keep.
+      desc = "The pages kept on disk for links.cache: how many, or delete them",
+      args = {
+        {
+          name = "action",
+          enum = { "show", "clear" },
+          optional = true,
+          default = "show",
+          desc = "What to do with the kept pages (default: show)",
+          enum_desc = {
+            show = "How many pages are kept, and where",
+            clear = "Delete every kept page",
+          },
+        },
+      },
+      ---@param ctx table
+      run = function(ctx)
+        local store = require("hover.linkcache")
+        local notify = require("hover.notify")
+        if (ctx and ctx.args and ctx.args.action) == "clear" then
+          local removed = store.clear()
+          -- The session's copies too, or the next hover would still answer
+          -- from memory and the clear would look like it did nothing.
+          require("hover.cache").reset()
+          notify.info(("links.cache: %d page(s) deleted"):format(removed))
+          return
+        end
+        local count, bytes = store.stats()
+        local policy = require("hover.config").link_cache()
+        notify.info(
+          ("links.cache: %d page(s), %d bytes in %s (persist %s, %d pattern(s))"):format(
+            count,
+            bytes,
+            store.dir(),
+            policy.persist and "on" or "off",
+            #policy.patterns
+          )
+        )
+      end,
+    },
+    {
       path = { "why" },
       -- The counterpart to `status`: that one says what is configured, this
       -- one says what happened *here*. A hover that does not open is silent

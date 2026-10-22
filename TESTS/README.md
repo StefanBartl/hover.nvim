@@ -61,6 +61,7 @@ is about that module specifically, as opposed to the module merely being
 | `formats.lua` | `video_spec.lua` | data table + three lookups; no dedicated file needed |
 | `health.lua` | `health_spec.lua` | added by the 2026-09-18 audit — had zero coverage before it; see below |
 | `init.lua` | nearly every spec | `require("hover")` is the plugin's own public surface; exercised end to end throughout |
+| `linkcache.lua` | `linkcache_spec.lua` | driven through `preview.url.fetch` with `lib.nvim.net.curl` stubbed; "a new session" is the in-memory stores dropped with the directory left standing |
 | `notify.lua` | — | a one-line re-export of `lib.nvim.notify`; nothing of its own to test |
 | `persist.lua` | `persist_spec.lua` | |
 | `preview/align_win.lua` | — | excluded, see below |

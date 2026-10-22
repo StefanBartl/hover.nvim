@@ -50,6 +50,7 @@ be tried rather than decided.
 | `:Hover auto [<type>\|all\|none]` | which target types open by themselves. A type toggles it; omitted, it lists what does and what waits to be asked |
 | `:Hover open` | hand what the float is showing to whatever opens it outside Neovim. A media file goes through media.nvim's `play` first, so its configured `player` wins; everything else goes to [open.nvim](https://github.com/StefanBartl/open.nvim)'s system-default handler — what a double-click does, so an `.mp4` reaches the registered player rather than its folder in a file manager — or to `vim.ui.open`. The same thing the borrowed `gf` does, as a command that works without having to know the key |
 | `:Hover dashboard` | the mode, every switch and what opens by itself — as a board where `<CR>` toggles the row under the cursor, `?` lists its keys, and every row carries the command that acts on it. One message where lib.nvim has no UI kit |
+| `:Hover links cache [show\|clear]` | the pages kept on disk for [`links.cache`](configuration.md#the-twelve-switches): how many, and where — or delete them all. Omitted, show. Its own route rather than a switch, because the switches drop what the *session* holds and a kept page exists to outlive exactly that |
 
 Whatever this board shows survives a restart when [`persist = true`](configuration.md#persisting-runtime-changes)
 is set — it is written on `VimLeavePre` and read back the next time `enable()` runs.

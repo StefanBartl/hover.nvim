@@ -191,6 +191,8 @@ local EXCEPTIONS = {
   dismiss_keys = "keymap",
   open_keys = "keymap",
   ["keymaps.show"] = "keymap",
+  -- One glob or a list of them, as a pin's `match` takes (see `link_cache`).
+  ["links.cache.patterns"] = "string|table",
   ["video.at"] = "number|string",
   ["video.step"] = "number|string",
   ["video.play_at"] = "number|string",
@@ -539,6 +541,42 @@ function M.placeholder_grace_ms()
   return 250
 end
 
+--- `links.cache`, every field resolved against the defaults.
+---
+--- `~= nil` for the booleans, for the reason `preview_opts` gives below: a
+--- configured `false` is a value.
+---@return Hover.LinkCacheOpts
+function M.link_cache()
+  local links = M.get().links
+  local cache = type(links) == "table" and type(links.cache) == "table" and links.cache or {}
+  local defaults = DEFAULTS.links.cache
+  local persist, stale_ok = defaults.persist, defaults.stale_ok
+  if cache.persist ~= nil then
+    persist = cache.persist == true
+  end
+  if cache.stale_ok ~= nil then
+    stale_ok = cache.stale_ok == true
+  end
+  local written = cache.patterns
+  if type(written) == "string" then
+    written = { written }
+  elseif type(written) ~= "table" then
+    written = defaults.patterns
+  end
+  local patterns = {}
+  for _, glob in ipairs(written) do
+    if type(glob) == "string" and glob ~= "" then
+      patterns[#patterns + 1] = glob
+    end
+  end
+  return {
+    persist = persist,
+    patterns = patterns,
+    max_age_days = tonumber(cache.max_age_days) or defaults.max_age_days,
+    stale_ok = stale_ok,
+  }
+end
+
 --- The options every previewer is threaded, derived from the effective
 --- configuration.
 ---
@@ -591,6 +629,7 @@ function M.preview_opts()
     url_pdf_max_bytes = pdf.max_bytes or DEFAULTS.links.pdf.max_bytes,
     url_pdf_timeout_ms = pdf.timeout_ms or DEFAULTS.links.pdf.timeout_ms,
     url_pdf_cache_days = pdf.cache_days or DEFAULTS.links.pdf.cache_days,
+    url_cache = M.link_cache(),
     shot_enabled = M.shot_enabled(),
     shot_eager = M.shot_eager(),
     shot_timeout_ms = shot.timeout_ms or DEFAULTS.links.shot.timeout_ms,

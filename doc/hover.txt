@@ -224,6 +224,9 @@ toggles. >
   :Hover links web shot eager [on|off|toggle]
                                          let the trigger do that, not only
                                          an explicit request
+  :Hover links cache [show|clear]        the pages kept on disk for
+                                         `links.cache`: count them, or
+                                         delete them; omitted, show
   :Hover paths [on|off|toggle]           bare paths in prose hover
   :Hover paths missing [on|off|toggle]   a path resolving to nothing is
                                          marked broken
@@ -410,6 +413,38 @@ works with `links.web` off. A pin whose file is gone says "pinned file not
 found" (announced where the file would have opened by itself, so for a PDF or
 image) rather than falling back to the page it replaces, and `<CR>` still
 opens the real URL. `:checkhealth hover` lists pins whose file does not exist.
+
+                                                              *hover-linkcache*
+A FETCHED PAGE CAN OUTLIVE THE SESSION, for the links you name. Without it,
+every restart asks every host again -- for documentation that changes once a
+month and is hovered ten times a day, that is the request this saves:
+>lua
+    links = { cache = {
+      persist = true,
+      patterns = { "docs.example.com/*", "learn.microsoft.com/*" },
+    } }
+<
+`patterns` are the globs of |hover-pins|. Both halves are needed: `persist` is
+off and `patterns` empty by default, and either one alone keeps nothing. A
+kept page is plain text in `stdpath("cache")/hover.nvim/links`.
+
+A kept page is shown at once. Once it is older than `max_age_days` (7) it is
+STILL shown, and one request goes out behind it -- conditional
+(`If-None-Match`, `If-Modified-Since`) when the server gave an `ETag` or a
+`Last-Modified`, so an unchanged page costs a `304` and nothing else. The float
+on screen is not rebuilt; the next hover shows the new page. `stale_ok = false`
+waits for that request instead, and falls back to the old page only when it
+brings nothing usable back. A refresh answered with a 4xx (not 408 or 429)
+deletes the page and shows the error: a dead link must not keep saying 200.
+A page nobody hovered for four times `max_age_days` is swept.
+
+Only a 2xx answer is kept; an error is shown and forgotten as before. Never a
+page fetched with a |hover-auth| credential or with `user:pw@` in its URL,
+never a PDF (`links.pdf` keeps its own files); a body that is not HTML is kept
+as status and headers only. A token in the query string is part of the URL
+and is kept with it. `:Hover links web off` / `on` still drops what the SESSION
+holds, and no longer re-asks a kept page: `:Hover links cache clear` deletes
+what is on disk.
 
                                                                    *hover-shot*
 A LINK CAN BE SHOWN AS A PICTURE OF THE PAGE instead of as text.
@@ -656,6 +691,11 @@ worth asserting.
       },
       -- Links shown as a file of your own; see |hover-pins|.
       pins = {},
+      -- Fetched pages kept on disk for the links named; see
+      -- |hover-linkcache|. Nothing is kept until both halves are set.
+      cache = {
+        persist = false, patterns = {}, max_age_days = 7, stale_ok = true,
+      },
       -- Credentials for named hosts, from environment variables; see
       -- |hover-auth|.
       auth = {},

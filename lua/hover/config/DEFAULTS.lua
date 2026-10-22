@@ -257,6 +257,52 @@ return {
     ---@type Hover.Pin[]
     pins = {},
 
+    --- The fetched text of the links the reader named, kept on disk across
+    --- sessions.
+    ---
+    ---     cache = {
+    ---       persist = true,
+    ---       patterns = { "docs.tricentis.com/*", "learn.microsoft.com/*" },
+    ---     }
+    ---
+    --- **For documentation that changes once a month and is hovered ten
+    --- times a day.** Without this, every restart asks every host again. A
+    --- kept page is shown at once; once it is older than `max_age_days` it
+    --- is still shown, and one request goes out behind it -- conditional
+    --- (`If-None-Match`/`If-Modified-Since`) when the server gave an `ETag`
+    --- or a `Last-Modified`, so an unchanged page costs a `304` and nothing
+    --- else. The float on screen is not rebuilt; the next hover shows the
+    --- new page.
+    ---
+    --- `patterns` are the globs `links.pins` uses. **Empty, so nothing is
+    --- kept until you name something**: a page written here is plain text in
+    --- `stdpath("cache")/hover.nvim/links`. Only a 2xx answer is kept, never
+    --- a page fetched with a `links.auth` credential or `user:pw@` in its
+    --- URL, never a PDF (see `pdf`). A refresh answered with a 4xx deletes
+    --- the page: a dead link must not keep saying 200. `:Hover links cache clear` deletes what is on disk; the
+    --- switches only drop what the session holds. See `hover.linkcache`.
+    cache = {
+      -- Off: nothing is written to disk until this is on *and* `patterns`
+      -- names something.
+      ---@type boolean
+      persist = false,
+
+      ---@type string[]
+      patterns = {},
+
+      -- After this, a kept page is refreshed in the background on its next
+      -- hover; a page nobody hovered for four times this long is swept.
+      ---@type number
+      max_age_days = 7,
+
+      -- Show a page older than `max_age_days` while it is refreshed. `false`
+      -- waits for the refresh instead -- the page is older than this only
+      -- when the refresh brings nothing usable back -- and a hover on it costs
+      -- a round trip again.
+      ---@type boolean
+      stale_ok = true,
+    },
+
     --- A link that answers with a PDF, shown as its first page rather than as
     --- its size.
     ---

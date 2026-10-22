@@ -30,7 +30,7 @@
 --- hover for the session: a URL is not re-fetched every time the cursor
 --- passes it, which also means a server that has since recovered still shows
 --- its old status until the cache is dropped (`:Hover links web off` / `on`
---- does that).
+--- does that -- for every link but the ones kept on disk, below).
 ---
 --- **The last raw answer is kept here as well, and for a different reason.**
 --- That cache holds finished *content*, keyed by what a target is rather than
@@ -39,6 +39,13 @@
 --- request to that host on every keypress. One entry, dropped along with the
 --- content cache, so the off/on gesture still retires a stale status. See
 --- `_last`.
+---
+--- **A link the reader named in `links.cache.patterns` outlives the session.**
+--- Its answer is written to disk (`hover.linkcache`), shown from there on the
+--- next hover, and refreshed in the background once it is older than
+--- `max_age_days`. Off by default, and without a pattern it does nothing.
+--- The off/on gesture does not retire such a page -- the refresh does, and
+--- `:Hover links cache clear` does at once.
 
 local M = {}
 
@@ -476,6 +483,40 @@ function M.page_text(body, opts)
 end
 
 ---@internal
+--- Elements `slim` removes before a body is written to disk: the ones
+--- `page_text` drops anyway and that carry most of a page's bytes.
+---
+--- Not the whole of `DROP`: `<nav>` or `<header>` can hold the `<title>`
+--- `extract_meta` reads, and `<svg>` has `<title>` elements of its own. A
+--- kept body should read as the downloaded one did -- see `M.slim` for where
+--- it may not.
+---@type string[]
+local SLIM = { "script", "style", "noscript", "template" }
+
+--- `body` without what no preview of it ever shows: comments, scripts,
+--- styles. What `hover.linkcache` keeps, so a 2 MB page of which 1.8 MB is
+--- bundled JavaScript costs 200 KB on disk.
+---
+--- Comments go first, for the reason `page_text` gives: a commented-out
+--- `</script>` would end a match early. **The self-closing form goes before
+--- the pair**, or `<script src="a.js"/>` in the head would match up to the
+--- next `</script>` and take the `<title>` between them along.
+---
+--- Not byte-for-byte the same reading in every case, and it does not try to
+--- be: `extract_meta` reads the raw body, so a commented-out `<title>` wins
+--- there and not here. The kept reading is the cleaner of the two.
+---@param body string
+---@return string
+function M.slim(body)
+  local out = (body:gsub("<!%-%-.-%-%->", " "))
+  for _, tag in ipairs(SLIM) do
+    out = out:gsub("<" .. tag .. "%f[%W][^>]-/>", " ")
+    out = out:gsub("<" .. tag .. "%f[%W][^>]*>.-</" .. tag .. "%s*>", " ")
+  end
+  return out
+end
+
+---@internal
 --- The reason phrase for a status code the server did not name itself. Only
 --- the ones a link in a document actually produces — this is a hover, not an
 --- HTTP reference.
@@ -666,7 +707,9 @@ end
 --- already does -- so the documented way to retire a stale status still
 --- retires it. Without that hook this cache would outlive the gesture written
 --- to defeat it.
----@type { url: string, ok: boolean, response: table|string|nil }|nil
+--- `stale` marks an answer read from disk whose refresh is still out: what is
+--- built from it is `transient` (see `transient`).
+---@type { url: string, ok: boolean, response: table|string|nil, stale?: boolean }|nil
 local _last = nil
 
 ---@type boolean Whether the drop above has been registered this session.
@@ -715,6 +758,172 @@ local function answer(target, opts, ok, response, callback)
   callback(content_for(target, opts, ok, response))
 end
 
+---@internal
+--- The request for `url`, and whether a credential went into it.
+---@param url string
+---@param opts Hover.PreviewOpts
+---@return table request
+---@return boolean authed
+local function request_for(url, opts)
+  local request = {
+    method = "GET",
+    timeout_ms = opts.url_timeout_ms or 2000,
+    -- Follow redirects and ask for HTML; without an Accept header some hosts
+    -- answer with an API representation that has no <title> at all.
+    --
+    -- `--globoff`: without it curl expands `[1-100]` and `{a,b}` in the URL
+    -- into one request each, and the link is text out of a document. A hover
+    -- on `p[1-100000]` was thousands of requests -- with a credential, each
+    -- one authenticated.
+    -- `--proto`/`--proto-redir`: a page may redirect to `ftp://`, `gopher://`
+    -- or `file://`; only http(s) is followed.
+    raw_args = {
+      "-L",
+      "--globoff",
+      "--proto",
+      "=http,https",
+      "--proto-redir",
+      "=http,https",
+      "--max-filesize",
+      "2000000",
+    },
+    headers = { Accept = "text/html,application/xhtml+xml" },
+  }
+  -- A host the reader named in `links.auth` gets its credential, over stdin
+  -- and https only. See `hover.auth`.
+  local authed = require("hover.auth").apply(url, request)
+  return request, authed == true
+end
+
+---@internal
+--- A kept entry in the shape curl answers with, so it takes the same road.
+---@param entry Hover.LinkEntry
+---@return table
+local function response_of(entry)
+  return {
+    status = entry.status,
+    status_text = entry.status_text,
+    headers = vim.deepcopy(entry.headers or {}),
+    body = entry.body,
+  }
+end
+
+---@internal
+--- `callback`, with the content marked `transient` on its way through.
+---
+--- A stale entry is shown while its refresh is out; `hover.cache` must not
+--- keep what it built from it, or the next hover would answer from the
+--- session's copy of the old page rather than ask again and find the new one.
+---@param callback fun(content: Hover.Content)
+---@return fun(content: Hover.Content)
+local function transient(callback)
+  return function(content)
+    if type(content) == "table" then
+      content.transient = true
+    end
+    callback(content)
+  end
+end
+
+---@internal
+--- Write a fresh answer to disk, when it is one worth keeping. A PDF is not:
+--- `preview.webpdf` downloads it again to a file of its own, and its body as
+--- curl handed it over is text-mangled (see `links.pdf` in `DEFAULTS.lua`).
+---
+--- **Never raises.** It runs inside curl's callback, ahead of the answer: a
+--- cache directory that cannot be made (`E739`) or a body that cannot be
+--- encoded must cost the cache, not the hover -- the float would otherwise
+--- wait on its placeholder forever.
+---@param url string
+---@param response table|string|nil
+---@return boolean written
+local function remember(url, response)
+  if type(response) ~= "table" or require("hover.preview.webpdf").is_pdf(response) then
+    return false
+  end
+  local ok, written = pcall(function()
+    return require("hover.linkcache").write(url, response, M.slim(response.body or ""))
+  end)
+  return ok and written == true
+end
+
+---@internal
+--- Statuses that say "not now" rather than "not here": the old entry is the
+--- better answer while they last.
+---@type table<integer, boolean>
+local TRANSIENT_STATUS = { [408] = true, [429] = true }
+
+---@internal
+--- What a revalidation came back with, as the response to show from now on,
+--- or nil to keep showing the entry.
+---
+---   * 304: the entry, its clock moved.
+---   * 2xx: the fresh answer -- written when it is one this cache keeps, and
+---     the entry deleted when it is not (the page became a PDF, the write
+---     failed), so a stale copy is not asked about on every hover.
+---   * 4xx other than 408/429: the link is gone. The entry is deleted and the
+---     404 is the answer -- a dead page must not keep saying 200.
+---   * no answer, 5xx, 408, 429: nil. The outage is what the entry is for.
+---
+--- Never raises, for the reason `remember` gives.
+---@param url string
+---@param entry Hover.LinkEntry
+---@param ok boolean
+---@param response table|string|nil
+---@return table|nil
+local function settle(url, entry, ok, response)
+  if not ok or type(response) ~= "table" then
+    return nil
+  end
+  local store = require("hover.linkcache")
+  local status = tonumber(response.status) or 0
+  if status == 304 then
+    pcall(store.confirm, url, entry)
+    return response_of(entry)
+  end
+  if status >= 200 and status < 300 then
+    if not remember(url, response) then
+      store.remove(url)
+    end
+    return response
+  end
+  if status >= 400 and status < 500 and not TRANSIENT_STATUS[status] then
+    store.remove(url)
+    return response
+  end
+  return nil
+end
+
+---@internal
+--- One background request for a stale entry, conditional when it can be.
+---
+--- The float on screen is left alone; the answer goes to disk and to `_last`,
+--- so the next hover -- or a resize of this one -- shows it.
+---@param curl table
+---@param url string
+---@param request table
+---@param entry Hover.LinkEntry
+---@return nil
+local function refresh(curl, url, request, entry)
+  local store = require("hover.linkcache")
+  if not store.claim(url) then
+    return
+  end
+  local conditional = vim.deepcopy(request)
+  conditional.headers = vim.tbl_extend("force", conditional.headers or {}, store.validators(entry))
+  local started = pcall(curl.fetch_raw, url, conditional, function(ok, response)
+    store.release(url)
+    local kept = settle(url, entry, ok, response)
+    if kept and _last and _last.url == url then
+      _last = { url = url, ok = true, response = kept }
+    end
+  end)
+  -- A request that never started has no callback to release its claim.
+  if not started then
+    store.release(url)
+  end
+end
+
 --- Fetch page metadata. Only called when `hover.url.fetch` is on.
 ---
 --- The callback always receives content, never nil: a failed request is an
@@ -743,7 +952,7 @@ function M.fetch(target, opts, callback)
   -- hand is the answer, and `content_for` rebuilds against the *new* box, so
   -- the page text grows without a second request.
   if _last and _last.url == url then
-    answer(target, opts, _last.ok, _last.response, callback)
+    answer(target, opts, _last.ok, _last.response, _last.stale and transient(callback) or callback)
     return
   end
 
@@ -757,35 +966,50 @@ function M.fetch(target, opts, callback)
 
   hook_reset()
 
-  local request = {
-    method = "GET",
-    timeout_ms = opts.url_timeout_ms or 2000,
-    -- Follow redirects and ask for HTML; without an Accept header some hosts
-    -- answer with an API representation that has no <title> at all.
-    --
-    -- `--globoff`: without it curl expands `[1-100]` and `{a,b}` in the URL
-    -- into one request each, and the link is text out of a document. A hover
-    -- on `p[1-100000]` was thousands of requests -- with a credential, each
-    -- one authenticated.
-    -- `--proto`/`--proto-redir`: a page may redirect to `ftp://`, `gopher://`
-    -- or `file://`; only http(s) is followed.
-    raw_args = {
-      "-L",
-      "--globoff",
-      "--proto",
-      "=http,https",
-      "--proto-redir",
-      "=http,https",
-      "--max-filesize",
-      "2000000",
-    },
-    headers = { Accept = "text/html,application/xhtml+xml" },
-  }
-  -- A host the reader named in `links.auth` gets its credential, over stdin
-  -- and https only. See `hover.auth`.
-  require("hover.auth").apply(url, request)
+  local request, authed = request_for(url, opts)
+  local store = require("hover.linkcache")
+  local policy = opts.url_cache
+  local keep = not authed and store.applies(url, policy)
+
+  if keep then
+    pcall(store.sweep, policy.max_age_days)
+    local entry = store.read(url)
+    if entry then
+      local stale = store.stale(entry, policy)
+      if not stale or policy.stale_ok ~= false then
+        local response = response_of(entry)
+        _last = { url = url, ok = true, response = response, stale = stale }
+        if stale then
+          refresh(curl, url, request, entry)
+        end
+        answer(target, opts, true, response, stale and transient(callback) or callback)
+        return
+      end
+      -- Too old to show, and the reader said so (`stale_ok = false`): the
+      -- same conditional request, in the foreground. Only when it brings
+      -- nothing usable back -- no answer, a 5xx -- is the old entry shown
+      -- after all, marked `transient`: an outage is the one time an old page
+      -- beats an error.
+      request.headers = vim.tbl_extend("force", request.headers, store.validators(entry))
+      curl.fetch_raw(url, request, function(ok, response)
+        local kept = settle(url, entry, ok, response)
+        if kept then
+          _last = { url = url, ok = true, response = kept }
+          answer(target, opts, true, kept, callback)
+          return
+        end
+        local old = response_of(entry)
+        _last = { url = url, ok = true, response = old, stale = true }
+        answer(target, opts, true, old, transient(callback))
+      end)
+      return
+    end
+  end
 
   curl.fetch_raw(url, request, function(ok, response)
+    if keep and ok then
+      remember(url, response)
+    end
     -- Kept whether or not it worked. A host that does not answer costs the
     -- full timeout, and paying it again per keypress is the worse half of
     -- this: the float would go back to "rendering…" on every press.
