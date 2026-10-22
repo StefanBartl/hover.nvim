@@ -304,6 +304,21 @@ describe("hover.health, configuration diagnostics", function()
     assert.is_true(any_contains(calls.warn, "is also a resize key"))
   end)
 
+  it("warns when the copy key is one a dismissal or an open already takes", function()
+    config.setup({ copy_keys = { copy = { "q" } } }) -- dismiss_keys defaults to q
+    local calls = run()
+    assert.is_true(any_contains(calls.warn, "it will never copy"))
+    config.reset()
+    assert.is_false(any_contains(run().warn, "it will never copy"))
+  end)
+
+  it("warns when the copy key takes a key a later borrowed list wanted", function()
+    config.setup({ zen_keys = { toggle = { "Y" } } }) -- copy_keys.copy defaults to Y
+    assert.is_true(any_contains(run().warn, "that one will copy instead"))
+    config.reset()
+    assert.is_false(any_contains(run().warn, "that one will copy instead"))
+  end)
+
   it("warns when every preview class is switched off", function()
     config.setup({
       links = false,
@@ -419,6 +434,17 @@ describe("hover.health, links.pins and links.auth", function()
     assert.is_false(any_contains(calls.warn, "links.pins"))
     assert.is_false(any_contains(calls.ok, "links.auth"))
     assert.is_false(any_contains(calls.warn, "links.auth"))
+  end)
+
+  it("names half a link cache, which keeps nothing either way", function()
+    config.setup({ links = { cache = { persist = true } } })
+    assert.is_true(any_contains(run().warn, "no `patterns`"))
+    config.setup({ links = { cache = { patterns = { "docs.example.com/*" } } } })
+    assert.is_true(any_contains(run().info, "`persist` is off"))
+    config.setup({ links = { cache = { persist = true, patterns = { "docs.example.com/*" } } } })
+    local calls = run()
+    assert.is_true(any_contains(calls.ok, "links.cache: 1 pattern(s)"))
+    assert.is_true(any_contains(calls.info, "links.cache: does nothing while `links.fetch` is off"))
   end)
 
   it("counts the pins, and names one whose file is gone", function()

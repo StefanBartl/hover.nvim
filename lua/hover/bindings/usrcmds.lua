@@ -371,6 +371,20 @@ function M.routes()
       end,
     },
     {
+      -- Beside the borrowed `Y`, for the house rule `:Hover open` states above.
+      path = { "copy" },
+      desc = "Copy what the hover shows: its text, or the picture on screen as a file path",
+      run = function()
+        local h = hover()
+        if type(h.copy) ~= "function" then
+          return
+        end
+        local ok, message = h.copy()
+        local notify = require("hover.notify");
+        (ok and notify.info or notify.warn)(message)
+      end,
+    },
+    {
       path = { "dashboard" },
       desc = "Open the board: every switch, its state, and the command that acts on it",
       run = open_dashboard,

@@ -174,6 +174,17 @@ function M.borrow(content, handlers)
     end, "hover: open what this hover is showing")
   end
 
+  -- Copy, for every hover: there is always something on screen to take, and
+  -- the float itself can never be entered to take it the ordinary way.
+  local cp = type(cfg.copy_keys) == "table" and cfg.copy_keys or {}
+  for _, lhs in ipairs(M.keylist(cp.copy)) do
+    take(seen, lhs, function()
+      local ok, message = hover().copy()
+      local notify = require("hover.notify");
+      (ok and notify.info or notify.warn)(message)
+    end, "hover: copy what this hover shows")
+  end
+
   -- Full screen, for *any* hover, and before the scroll keys so a key in both
   -- lists keeps the older meaning.
   --

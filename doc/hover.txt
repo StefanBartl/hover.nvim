@@ -185,6 +185,11 @@ toggles. >
                                          media.nvim's configured player,
                                          anything else to the system
                                          default app, as a double-click
+  :Hover copy                            copy what the float shows: its
+                                         lines into the registers, or the
+                                         picture on screen as a file, its
+                                         path into the registers; copies
+                                         are kept seven days
   :Hover dashboard                       the mode, every switch and what
                                          opens by itself, as a board:
                                          <CR> toggles the row, ? lists
@@ -266,6 +271,9 @@ never hold a mapping of its own.
 >
   q, <Esc>                    dismiss this hover until the cursor reaches
                               another target. Bound for EVERY hover.
+  Y                           copy what the float shows: its lines, or the
+                              picture on screen as a file path. Bound for
+                              EVERY hover. See `:Hover copy`
   F                           full screen, and back. Bound for every hover
                               that has a target
   <M-PageDown>, <C-Down>      next screenful of lines, or next PDF page
@@ -752,6 +760,7 @@ worth asserting.
     },
     dismiss_keys = { "q", "<Esc>" },
     open_keys = { "gf" },
+    copy_keys = { copy = { "Y" } },
     keymaps = { show = false },
   })
 <

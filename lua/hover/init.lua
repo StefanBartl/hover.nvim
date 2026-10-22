@@ -876,6 +876,20 @@ local function present(content)
     end
   end
 
+  -- The picture drawn into the float, if any -- the crop of a zoomed view,
+  -- the rendered page of a PDF -- so `:Hover copy` takes what is on screen
+  -- rather than what the target is.
+  -- And what it cannot take: a playing run is block characters in the buffer
+  -- and the picture in extmarks, a windowed one is a status panel, and a
+  -- placeholder is a sentence about a picture that is not there yet.
+  if _open then
+    _open.image_path = content.image_path
+    _open.copy_refused = (content.playback or content.play_window)
+        and "a playing video has nothing to copy -- stop it first"
+      or content.pending and "still rendering -- copy once it is on screen"
+      or nil
+  end
+
   local c = config.get()
   local max_width, max_height = box()
 
@@ -1776,6 +1790,33 @@ function M.open()
 
   require("hover.notify").warn("nothing here can open " .. what)
   return false
+end
+
+--- Copy what the float shows: its lines into the unnamed register and onto
+--- the clipboard, or -- for a drawn hover -- the picture on screen into a
+--- file of its own, with its path in the registers. See `hover.copy`.
+---
+--- **The float's buffer, not the content it was built from.** What the reader
+--- sees is what is copied: a scrolled text preview gives the lines on screen,
+--- not the file's first twenty.
+---@return boolean copied
+---@return string message
+function M.copy()
+  if not (_open and float.win()) then
+    -- The float went without telling: a `Y` still borrowed would answer this
+    -- forever instead of being `y$` again. The same net `zoomable` keeps.
+    keys.release()
+    return false, "no hover to copy"
+  end
+  local buf = float.buf()
+  local lines = buf and api.nvim_buf_get_lines(buf, 0, -1, false) or {}
+  local target = _open.target
+  return require("hover.copy").take({
+    image_path = _open.image_path,
+    refused = _open.copy_refused,
+    lines = lines,
+    hint = target and (target.url or target.path or target.raw) or nil,
+  })
 end
 
 ---@internal

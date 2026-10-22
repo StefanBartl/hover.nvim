@@ -332,6 +332,69 @@ local function check_config()
     end
   end
 
+  -- The same shape for the copy key: `borrow` takes the dismiss and open keys
+  -- first, for every hover, so a copy key listed there too is bound and never
+  -- copies -- it closes the float, or opens its target, instead.
+  local cfg = config.get()
+  local ck = type(cfg.copy_keys) == "table" and cfg.copy_keys or {}
+  ---@type table<string, string>
+  local earlier = {}
+  for _, lhs in ipairs(keylist(cfg.dismiss_keys)) do
+    earlier[lhs] = "dismiss_keys"
+  end
+  for _, lhs in ipairs(keylist(cfg.open_keys)) do
+    earlier[lhs] = earlier[lhs] or "open_keys"
+  end
+  ---@type string[]
+  local shadowed = {}
+  for _, lhs in ipairs(keylist(ck.copy)) do
+    if earlier[lhs] then
+      shadowed[#shadowed + 1] = ("`%s` is copy_keys.copy and %s"):format(lhs, earlier[lhs])
+    end
+  end
+  if #shadowed > 0 then
+    table.sort(shadowed)
+    shadowed[#shadowed + 1] =
+      "Dismiss and open are bound first, and a key listed twice is taken once."
+    health.warn("a copy key is also a dismiss or open key -- it will never copy", shadowed)
+  end
+
+  -- And the other direction: every borrowed list after copy loses a key copy
+  -- holds, for every hover -- a configuration that had `Y` in, say,
+  -- `zen_keys` before copy existed now copies, and nothing else said so.
+  ---@type table<string, boolean>
+  local copying = {}
+  for _, lhs in ipairs(keylist(ck.copy)) do
+    copying[lhs] = true
+  end
+  ---@type string[]
+  local lost = {}
+  for name, list in pairs(cfg) do
+    if
+      type(list) == "table"
+      and type(name) == "string"
+      and name:match("_keys$")
+      and name ~= "copy_keys"
+      -- Bound before copy; the check above covers them.
+      and name ~= "dismiss_keys"
+      and name ~= "open_keys"
+    then
+      for field, lhs_list in pairs(list) do
+        for _, lhs in ipairs(keylist(lhs_list)) do
+          if copying[lhs] then
+            lost[#lost + 1] = ("`%s` is copy_keys.copy and %s.%s"):format(lhs, name, field)
+          end
+        end
+      end
+    end
+  end
+  if #lost > 0 then
+    table.sort(lost)
+    lost[#lost + 1] =
+      "Copy is bound before these, for every hover, and a key listed twice is taken once."
+    health.warn("a copy key is also another borrowed key -- that one will copy instead", lost)
+  end
+
   -- The route beside the label, for the same reason `:Hover dashboard` grew a
   -- board: `broken-target marker` is a state, `:Hover paths missing` is the
   -- thing to type about it, and only one of them used to be on screen. A

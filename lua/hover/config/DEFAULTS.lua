@@ -898,6 +898,22 @@ return {
   ---@type string|string[]
   open_keys = { "gf" },
 
+  --- Copy what the float shows, borrowed for **every** hover: its lines into
+  --- the unnamed register and onto the clipboard, or a drawn picture -- the
+  --- zoomed crop, the PDF page on screen -- as a file whose path goes there.
+  --- See `hover.copy` and `:Hover copy`.
+  ---
+  --- **`Y` because it already means "yank", and while a float is up the only
+  --- thing worth yanking is in a window that cannot be entered.** The float is
+  --- `focusable = false`, so no motion, no Visual mode and no mouse selection
+  --- reaches it. One key, one finished operation, no prefix -- and what it
+  --- displaces (`y$` on the line underneath) is back the moment the float
+  --- closes, like every other borrow here.
+  copy_keys = {
+    ---@type string|string[]
+    copy = { "Y" },
+  },
+
   --- Move the magnified view, borrowed while a hover is zoomed in -- and,
   --- since 2026-09-24, the mini filetree's selection, borrowed while a
   --- directory hover shows one.

@@ -53,6 +53,7 @@
 ---@field position_keys? Hover.PositionKeys
 ---@field zoom_keys? Hover.ZoomKeys
 ---@field zen_keys? Hover.ZenKeys
+---@field copy_keys? Hover.CopyKeys # Keys that copy what the float shows. See `hover.copy`.
 ---@field dismiss_keys? string|string[] # Keys that wave the hover on screen away. Default `{ "q", "<Esc>" }`; a configured list replaces the default, and an empty one binds nothing.
 ---@field open_keys? string|string[] # Keys that open what the float is showing, through open.nvim or `vim.ui.open`. Default `{ "gf" }`; an empty list binds nothing.
 ---@field keymaps? Hover.Keymaps
@@ -256,6 +257,9 @@
 ---@class Hover.ZenKeys
 ---@field toggle? string|string[] # Default `{ "F" }`.
 
+---@class Hover.CopyKeys
+---@field copy? string|string[] # Default `{ "Y" }`.
+
 ---@class Hover.Keymaps
 ---@field show? string|string[]|false # Show the hover for whatever is under the cursor, ignoring every volume switch. Default false: no key is claimed unless asked for.
 
@@ -293,6 +297,8 @@
 ---@field canvas? Hover.Canvas # Size of the picture currently on screen, so `hover.resize` can tell a step that took effect from one the terminal refused.
 ---@field pinned? boolean # Taken out of the cursor's hands: the trigger neither replaces nor closes it.
 ---@field requested? boolean # This float was opened by an explicit request (`:Hover show`, a `keymaps.show` key) rather than by the trigger. Remembered rather than only passed, so a re-render is a continuation of it: a screenshot asked for stays a screenshot after `F`.
+---@field image_path? string # The picture drawn into the float right now, if any: what `hover.copy` takes. Recorded by `present`.
+---@field copy_refused? string # Why `hover.copy` has nothing to take right now (a playing video, a placeholder). Recorded by `present`.
 ---@field paged? boolean # This hover shows a *paged* document, so `scroll` turns pages rather than moving by lines and `zoom` re-renders rather than crops. Recorded by `present` from the content, because the target type stopped being an accurate proxy once a link could answer with a PDF.
 ---@field zen? boolean # Rendered against the editor's own size rather than the configured box, and centred. Set by `hover.zen`; the resize level still multiplies on top of it.
 ---@field zen_pinned? boolean # `zen` was what pinned this float, so leaving zen may unpin it again. Absent when the reader pinned it themselves, which zen must not undo.

@@ -57,6 +57,7 @@ is about that module specifically, as opposed to the module merely being
 | `config/auto_types.lua` | `switches_spec.lua` | one function, one branch (append `"position"`, sort); exercised as a dependency |
 | `config/DEFAULTS.lua` | — | data only, see below |
 | `config/init.lua` | `config_spec.lua` | |
+| `copy.lua` | `copy_spec.lua` | the clipboard stubbed (lib.nvim's `copy_to_clipboard` may start a process the guards refuse); the text path through a real float, the picture path through `take` |
 | `float.lua` | `registry_spec.lua`, `resize_spec.lua`, `zen_spec.lua`, `zoom_spec.lua`, `video_spec.lua` | the most heavily exercised module in the suite; every sizing/positioning path is driven through a real float |
 | `formats.lua` | `video_spec.lua` | data table + three lookups; no dedicated file needed |
 | `health.lua` | `health_spec.lua` | added by the 2026-09-18 audit — had zero coverage before it; see below |
