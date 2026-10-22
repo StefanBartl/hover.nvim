@@ -442,8 +442,10 @@ STILL shown, and one request goes out behind it -- conditional
 `Last-Modified`, so an unchanged page costs a `304` and nothing else. The float
 on screen is not rebuilt; the next hover shows the new page. `stale_ok = false`
 waits for that request instead, and falls back to the old page only when it
-brings nothing usable back. A refresh answered with a 4xx (not 408 or 429)
-deletes the page and shows the error: a dead link must not keep saying 200.
+brings nothing usable back. A refresh answered with 404, 410 or 451 deletes
+the page and shows the error: a dead link must not keep saying 200. Any other
+4xx (a 403 is as often a bot challenge as a removal), a 5xx or no answer keep
+the old page.
 A page nobody hovered for four times `max_age_days` is swept.
 
 Only a 2xx answer is kept; an error is shown and forgotten as before. Never a

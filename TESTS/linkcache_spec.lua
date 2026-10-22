@@ -365,6 +365,118 @@ describe("hover.linkcache through preview.url.fetch", function()
     assert.same(1, store.clear())
     assert.same(0, (store.stats()))
   end)
+
+  -- ── second review ─────────────────────────────────────────────────────
+
+  it("keeps a clear a clear when a refresh answers after it", function()
+    reply = page("First", { etag = '"v1"' })
+    fetched(LINK, opts({ max_age_days = 1 }))
+    age(LINK, 3)
+    new_session()
+    hold = true
+    fetched(LINK, opts({ max_age_days = 1 }))
+    store.clear()
+    held[1](true, { status = 304, headers = {}, body = "" })
+    assert.same(0, (store.stats()), "the 304 wrote the cleared entry back")
+  end)
+
+  it("keeps the page through a 403, which is a challenge as often as a removal", function()
+    fetched(LINK, opts({ max_age_days = 1 }))
+    age(LINK, 3)
+    new_session()
+    reply = { status = 403, status_text = "Forbidden", headers = {}, body = "" }
+    fetched(LINK, opts({ max_age_days = 1 }))
+    assert.same(1, (store.stats()))
+  end)
+
+  it("takes the validators a 304 brings", function()
+    reply = page("First", { etag = '"v1"' })
+    fetched(LINK, opts({ max_age_days = 1 }))
+    age(LINK, 3)
+    new_session()
+    reply = { status = 304, headers = { etag = '"v2"' }, body = "" }
+    fetched(LINK, opts({ max_age_days = 1 }))
+    assert.same('"v2"', store.read(LINK).headers.etag)
+  end)
+
+  it("refreshes a page once, whichever #fragment the links carry", function()
+    fetched(LINK, opts({ max_age_days = 1 }))
+    age(LINK, 3)
+    new_session()
+    hold = true
+    fetched(LINK .. "#a", opts({ max_age_days = 1 }))
+    url.reset()
+    cache.reset()
+    fetched(LINK .. "#b", opts({ max_age_days = 1 }))
+    assert.same(2, #requests, "a second refresh went out for the same page")
+  end)
+
+  it("reads the page text of an answer whose type is written in capitals", function()
+    reply = page("Shouted")
+    reply.headers["content-type"] = "Text/HTML; charset=UTF-8"
+    local content = fetched(LINK, opts({ persist = false }))
+    local text_lines = 0
+    for _, line in ipairs(content.lines) do
+      if line == "Shouted" then
+        text_lines = text_lines + 1
+      end
+    end
+    assert.same(2, text_lines, "the title and the page text, not the title alone")
+  end)
+
+  it("keeps the body of an answer that names no content type", function()
+    reply = page("Untyped")
+    reply.headers["content-type"] = nil
+    fetched(LINK, opts())
+    new_session()
+    local content = fetched(LINK, opts())
+    assert.is_truthy(joined(content):find("Untyped", 1, true), joined(content))
+  end)
+
+  it("tells checkhealth about a write that failed", function()
+    local blocker = vim.fn.tempname()
+    vim.fn.writefile({ "x" }, blocker)
+    store.dir = function()
+      return blocker .. "/links"
+    end
+    fetched(LINK, opts())
+    assert.is_truthy(store.last_error(), "the failed write was not noted")
+    vim.fn.delete(blocker)
+  end)
+
+  it("tells checkhealth about a write that answered false", function()
+    local real = package.loaded["lib.nvim.fs.json"]
+    package.loaded["lib.nvim.fs.json"] = {
+      read = real.read,
+      write = function()
+        return false, "permission denied"
+      end,
+    }
+    fetched(LINK, opts())
+    package.loaded["lib.nvim.fs.json"] = real
+    assert.is_truthy((store.last_error() or ""):find("permission denied", 1, true))
+  end)
+
+  it("shows the old page when curl cannot even start and stale_ok is off", function()
+    fetched(LINK, opts({ max_age_days = 1, stale_ok = false }))
+    age(LINK, 3)
+    new_session()
+    package.loaded["lib.nvim.net.curl"] = {
+      fetch_raw = function()
+        error("spawn failed")
+      end,
+    }
+    local content = fetched(LINK, opts({ max_age_days = 1, stale_ok = false }))
+    assert.is_truthy(content and joined(content):find("First", 1, true))
+  end)
+end)
+
+describe("hover.preview.url, second review", function()
+  it("does not take a custom element for the element it starts like", function()
+    local body = "<html><body><style-x>x</style-x><p>Kept.</p><style>p{}</style></body></html>"
+    assert.is_truthy(url.slim(body):find("Kept.", 1, true))
+    assert.same({ "x", "Kept." }, url.page_text(body, { max_width = 80, max_lines = 10 }))
+  end)
 end)
 
 describe("hover.preview.url.slim", function()

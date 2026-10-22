@@ -215,6 +215,14 @@ local function unescape(s)
 end
 
 ---@internal
+--- Where a tag name ends: at whitespace, `/` or `>`.
+---
+--- Not `%f[%W]`, which is what this used to be: `-` is not a word character,
+--- so `<style-x>` (a custom element) counted as a `<style>` and took
+--- everything up to the next real `</style>` with it.
+local TAG_END = "%f[%s/>]"
+
+---@internal
 --- Elements dropped with everything inside them. Not "not interesting" --
 --- actively misleading: a nav block reads as a list of unrelated page
 --- headings, and a `<script>` body is source code the reader did not ask to
@@ -418,11 +426,11 @@ function M.page_text(body, opts)
     or html:match("<body[^>]*>(.-)</body%s*>")
     or html
 
-  -- `%f[%W]` is the frontier: the tag name has to end where it is written, or
+  -- `TAG_END` is the frontier: the tag name has to end where it is written, or
   -- `nav` would take `<navbar>` and `header` would take `<header-nav>` with it.
   for _, tag in ipairs(DROP) do
-    html = html:gsub("<" .. tag .. "%f[%W][^>]*>.-</" .. tag .. "%s*>", " ")
-    html = html:gsub("<" .. tag .. "%f[%W][^>]*/>", " ")
+    html = html:gsub("<" .. tag .. TAG_END .. "[^>]*>.-</" .. tag .. "%s*>", " ")
+    html = html:gsub("<" .. tag .. TAG_END .. "[^>]*/>", " ")
   end
 
   -- Every pass above ran against the full body, and finished: nothing that
@@ -444,11 +452,11 @@ function M.page_text(body, opts)
   -- A list is the one structure worth keeping, because losing it turns a list
   -- of options into a sentence that reads as nonsense. The marker goes in as
   -- a sentinel, not the bullet itself -- see `LI_OPEN`.
-  html = html:gsub("<li%f[%W][^>]*>", "\n" .. LI_OPEN .. "\n")
+  html = html:gsub("<li" .. TAG_END .. "[^>]*>", "\n" .. LI_OPEN .. "\n")
   html = html:gsub("</li%s*>", "\n" .. LI_CLOSE .. "\n")
   html = html:gsub("<br%s*/?>", "\n")
   for _, tag in ipairs(BLOCK) do
-    html = html:gsub("<" .. tag .. "%f[%W][^>]*>", "\n")
+    html = html:gsub("<" .. tag .. TAG_END .. "[^>]*>", "\n")
     html = html:gsub("</" .. tag .. "%s*>", "\n")
   end
 
@@ -510,8 +518,8 @@ local SLIM = { "script", "style", "noscript", "template" }
 function M.slim(body)
   local out = (body:gsub("<!%-%-.-%-%->", " "))
   for _, tag in ipairs(SLIM) do
-    out = out:gsub("<" .. tag .. "%f[%W][^>]-/>", " ")
-    out = out:gsub("<" .. tag .. "%f[%W][^>]*>.-</" .. tag .. "%s*>", " ")
+    out = out:gsub("<" .. tag .. TAG_END .. "[^>]-/>", " ")
+    out = out:gsub("<" .. tag .. TAG_END .. "[^>]*>.-</" .. tag .. "%s*>", " ")
   end
   return out
 end
@@ -666,7 +674,7 @@ local function content_for(target, opts, ok, response)
   -- the tag stripper over one would produce a line of punctuation with the
   -- reader's cursor on it.
   local body = response.body
-  if body and body ~= "" and (ctype or ""):find("text/html", 1, true) then
+  if body and body ~= "" and (ctype or ""):lower():find("text/html", 1, true) then
     -- One blank above, one below, and room for the URL that follows. Reads the
     -- box `opts` carries rather than the configured one, so a hover put full
     -- screen shows a screenful of the page and not twenty lines of it.
@@ -841,17 +849,23 @@ local function remember(url, response)
   if type(response) ~= "table" or require("hover.preview.webpdf").is_pdf(response) then
     return false
   end
+  local store = require("hover.linkcache")
   local ok, written = pcall(function()
-    return require("hover.linkcache").write(url, response, M.slim(response.body or ""))
+    return store.write(url, response, M.slim(response.body or ""))
   end)
+  if not ok then
+    store.note_error(written)
+  end
   return ok and written == true
 end
 
 ---@internal
---- Statuses that say "not now" rather than "not here": the old entry is the
---- better answer while they last.
+--- Statuses that say the page is gone, and the only refresh answers that
+--- delete a kept page. Every other 4xx keeps it: a 401 or 403 is as often a
+--- bot challenge or a lapsed sign-on as a removed page, and riding out exactly
+--- that is what a kept page is for.
 ---@type table<integer, boolean>
-local TRANSIENT_STATUS = { [408] = true, [429] = true }
+local GONE_STATUS = { [404] = true, [410] = true, [451] = true }
 
 ---@internal
 --- What a revalidation came back with, as the response to show from now on,
@@ -861,34 +875,44 @@ local TRANSIENT_STATUS = { [408] = true, [429] = true }
 ---   * 2xx: the fresh answer -- written when it is one this cache keeps, and
 ---     the entry deleted when it is not (the page became a PDF, the write
 ---     failed), so a stale copy is not asked about on every hover.
----   * 4xx other than 408/429: the link is gone. The entry is deleted and the
----     404 is the answer -- a dead page must not keep saying 200.
----   * no answer, 5xx, 408, 429: nil. The outage is what the entry is for.
+---   * 404, 410, 451: the link is gone. The entry is deleted and the error is
+---     the answer -- a dead page must not keep saying 200.
+---   * no answer, 5xx, any other 4xx: nil. The outage is what the entry is for.
+---
+--- `generation` is `linkcache.generation()` as it was when the request went
+--- out. When `:Hover links cache clear` has run since, nothing is written or
+--- deleted: the answer is still shown, but the clear stays a clear.
 ---
 --- Never raises, for the reason `remember` gives.
 ---@param url string
 ---@param entry Hover.LinkEntry
 ---@param ok boolean
 ---@param response table|string|nil
+---@param generation? integer
 ---@return table|nil
-local function settle(url, entry, ok, response)
+local function settle(url, entry, ok, response, generation)
   if not ok or type(response) ~= "table" then
     return nil
   end
   local store = require("hover.linkcache")
+  local writable = generation == nil or store.generation() == generation
   local status = tonumber(response.status) or 0
   if status == 304 then
-    pcall(store.confirm, url, entry)
+    if writable then
+      pcall(store.confirm, url, entry, response)
+    end
     return response_of(entry)
   end
   if status >= 200 and status < 300 then
-    if not remember(url, response) then
+    if writable and not remember(url, response) then
       store.remove(url)
     end
     return response
   end
-  if status >= 400 and status < 500 and not TRANSIENT_STATUS[status] then
-    store.remove(url)
+  if GONE_STATUS[status] then
+    if writable then
+      store.remove(url)
+    end
     return response
   end
   return nil
@@ -911,9 +935,10 @@ local function refresh(curl, url, request, entry)
   end
   local conditional = vim.deepcopy(request)
   conditional.headers = vim.tbl_extend("force", conditional.headers or {}, store.validators(entry))
+  local generation = store.generation()
   local started = pcall(curl.fetch_raw, url, conditional, function(ok, response)
     store.release(url)
-    local kept = settle(url, entry, ok, response)
+    local kept = settle(url, entry, ok, response, generation)
     if kept and _last and _last.url == url then
       _last = { url = url, ok = true, response = kept }
     end
@@ -991,17 +1016,26 @@ function M.fetch(target, opts, callback)
       -- after all, marked `transient`: an outage is the one time an old page
       -- beats an error.
       request.headers = vim.tbl_extend("force", request.headers, store.validators(entry))
-      curl.fetch_raw(url, request, function(ok, response)
-        local kept = settle(url, entry, ok, response)
+      local generation = store.generation()
+      local function fallback()
+        local old = response_of(entry)
+        _last = { url = url, ok = true, response = old, stale = true }
+        answer(target, opts, true, old, transient(callback))
+      end
+      -- pcall like `refresh`: a curl that cannot be started is an outage, and
+      -- an outage is where the old page is shown.
+      local started = pcall(curl.fetch_raw, url, request, function(ok, response)
+        local kept = settle(url, entry, ok, response, generation)
         if kept then
           _last = { url = url, ok = true, response = kept }
           answer(target, opts, true, kept, callback)
           return
         end
-        local old = response_of(entry)
-        _last = { url = url, ok = true, response = old, stale = true }
-        answer(target, opts, true, old, transient(callback))
+        fallback()
       end)
+      if not started then
+        fallback()
+      end
       return
     end
   end

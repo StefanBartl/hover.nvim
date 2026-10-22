@@ -35,11 +35,15 @@
 --- **Never for a link with a credential.** A page fetched through
 --- `links.auth` is private content, and this cache is plain files.
 ---
---- **A link gone dead is not kept alive.** A refresh answered with a 4xx
---- (other than 408 and 429, which say "later", not "gone") deletes the entry
---- and its answer is what the next hover shows -- a deleted page must not keep
---- saying 200. A refused connection, a 5xx, a 408 or a 429 leave the old
---- entry standing: that is the outage the cache is there to ride out.
+--- **A link gone dead is not kept alive.** A refresh answered with 404, 410
+--- or 451 deletes the entry and its answer is what the next hover shows -- a
+--- deleted page must not keep saying 200. Every other answer that is not a
+--- page leaves the old entry standing: a refused connection, a 5xx, and any
+--- other 4xx (a 401 or 403 is as often a bot challenge or a lapsed sign-on as
+--- a removal). That is the outage the cache is there to ride out.
+---
+--- **A clear stays a clear.** A refresh that was out when
+--- `:Hover links cache clear` ran writes nothing back (`generation`).
 ---
 --- **Never for a URL with credentials in it** (`https://user:pw@host/`): the
 --- URL is the file's name and content. A token in the *query* is kept as part
@@ -60,10 +64,14 @@ local M = {}
 
 local uv = vim.uv or vim.loop
 
----@type table<string, boolean> URLs with a revalidation in flight.
+---@type table<string, boolean> URLs with a revalidation in flight (fragment taken off).
 local _refreshing = {}
 ---@type boolean Whether this session has already swept the directory.
 local _swept = false
+---@type integer Bumped by `clear`: a refresh that started before it must not write its answer back.
+local _generation = 0
+---@type string|nil The last write that failed, for `:checkhealth hover`.
+local _last_error = nil
 
 ---@class Hover.LinkEntry
 ---@field url string
@@ -210,12 +218,16 @@ function M.write(url, response, body)
   if not headers["content-length"] and type(response.body) == "string" then
     headers["content-length"] = tostring(#response.body)
   end
+  -- The body is kept where the preview reads anything out of it: HTML (the
+  -- page text), any XML (a `<title>`: RSS, Atom, SVG) and an answer that names
+  -- no type at all (a static host or a bucket often does not, and the title is
+  -- still read from it). JSON, an archive, a picture keep status and headers.
   local ctype = (headers["content-type"] or ""):lower()
-  if not (ctype:find("text/html", 1, true) or ctype:find("xhtml", 1, true)) then
+  if not (ctype == "" or ctype:find("html", 1, true) or ctype:find("xml", 1, true)) then
     body = ""
   end
   private_dir()
-  local ok = require("lib.nvim.fs.json").write(path_for(url), {
+  local ok, err = require("lib.nvim.fs.json").write(path_for(url), {
     url = key(url),
     status = status,
     status_text = response.status_text,
@@ -223,7 +235,31 @@ function M.write(url, response, body)
     body = body,
     checked_at = os.time(),
   })
+  if ok ~= true then
+    M.note_error(err or "write failed")
+  end
   return ok == true
+end
+
+--- Remember a failed write, for `:checkhealth hover`: the cache swallows them
+--- (a hover must not fail over its cache), so this is where they are seen.
+---@param err any
+---@return nil
+function M.note_error(err)
+  _last_error = ("%s (%s)"):format(tostring(err), os.date("%Y-%m-%d %H:%M"))
+end
+
+--- The last write that failed this session, or nil.
+---@return string|nil
+function M.last_error()
+  return _last_error
+end
+
+--- The current generation; `clear` moves it on. A refresh takes it when it
+--- starts and writes only while it is still the same.
+---@return integer
+function M.generation()
+  return _generation
 end
 
 --- Delete the entry for `url`, if there is one: the link is gone, or its
@@ -235,13 +271,29 @@ function M.remove(url)
 end
 
 --- Move an entry's clock without touching its content: the server said 304.
+---
+--- The validators a 304 carries replace the kept ones (RFC 9111, 4.3.4): a
+--- server that rotates its `ETag` would otherwise be asked with a stale one,
+--- and every later refresh would cost a full page instead of a 304.
 ---@param url string
 ---@param entry Hover.LinkEntry
+---@param response? table The 304.
 ---@return nil
-function M.confirm(url, entry)
+function M.confirm(url, entry, response)
   entry.checked_at = os.time()
+  local fresh = type(response) == "table" and type(response.headers) == "table" and response.headers
+    or {}
+  entry.headers = type(entry.headers) == "table" and entry.headers or {}
+  for _, name in ipairs({ "etag", "last-modified" }) do
+    if type(fresh[name]) == "string" then
+      entry.headers[name] = fresh[name]
+    end
+  end
   private_dir()
-  require("lib.nvim.fs.json").write(path_for(url), entry)
+  local ok, err = require("lib.nvim.fs.json").write(path_for(url), entry)
+  if ok ~= true then
+    M.note_error(err or "write failed")
+  end
 end
 
 --- The request headers that make a refresh of `entry` conditional. Empty when
@@ -265,6 +317,8 @@ end
 ---@param url string
 ---@return boolean
 function M.claim(url)
+  -- By the page, not the link: `…/d#a` and `…/d#b` are one entry and one refresh.
+  url = key(url)
   if _refreshing[url] then
     return false
   end
@@ -276,7 +330,7 @@ end
 ---@param url string
 ---@return nil
 function M.release(url)
-  _refreshing[url] = nil
+  _refreshing[key(url)] = nil
 end
 
 ---@internal
@@ -351,6 +405,8 @@ end
 --- the session holds.
 ---@return integer removed The entries deleted.
 function M.clear()
+  -- A refresh still out would otherwise write the entry it started from back.
+  _generation = _generation + 1
   for _, file in ipairs(files(".json.tmp")) do
     pcall(os.remove, file)
   end
@@ -368,6 +424,7 @@ end
 function M.reset()
   _refreshing = {}
   _swept = false
+  _last_error = nil
 end
 
 return M

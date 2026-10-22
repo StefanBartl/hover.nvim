@@ -278,9 +278,10 @@ return {
     --- kept until you name something**: a page written here is plain text in
     --- `stdpath("cache")/hover.nvim/links`. Only a 2xx answer is kept, never
     --- a page fetched with a `links.auth` credential or `user:pw@` in its
-    --- URL, never a PDF (see `pdf`). A refresh answered with a 4xx deletes
-    --- the page: a dead link must not keep saying 200. `:Hover links cache clear` deletes what is on disk; the
-    --- switches only drop what the session holds. See `hover.linkcache`.
+    --- URL, never a PDF (see `pdf`). A refresh answered with 404, 410 or
+    --- 451 deletes the page: a dead link must not keep saying 200.
+    --- `:Hover links cache clear` deletes what is on disk; the switches only
+    --- drop what the session holds. See `hover.linkcache`.
     cache = {
       -- Off: nothing is written to disk until this is on *and* `patterns`
       -- names something.

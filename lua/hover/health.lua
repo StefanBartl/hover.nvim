@@ -564,6 +564,15 @@ local function check_config()
       )
     end
   end
+  local write_error = store.last_error()
+  if write_error then
+    health.warn(
+      "links.cache: the last write failed -- pages are shown but not kept: " .. write_error,
+      {
+        ("Check that %s can be created and written."):format(store.dir()),
+      }
+    )
+  end
   if not policy.persist and kept > 0 then
     health.info(
       ("links.cache: %d page(s) still on disk from earlier -- `:Hover links cache clear` deletes them"):format(

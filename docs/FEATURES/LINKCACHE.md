@@ -86,16 +86,26 @@ things:
 
 | Refresh answer | What happens | Why |
 | --- | --- | --- |
-| `304` | clock moves, page stays | the server said so |
+| `304` | clock moves, page stays, the validators it brings replace the kept ones | the server said so (RFC 9111, 4.3.4) |
 | `2xx` | the new page is written | it is the new page |
-| `4xx`, except `408` and `429` | **the page is deleted**, the error is shown | the link is gone, and a deleted page must not keep saying `HTTP 200` |
-| no answer, `5xx`, `408`, `429` | the old page stays | "later", not "gone": the outage is what the page is kept for |
+| `404`, `410`, `451` | **the page is deleted**, the error is shown | the link is gone, and a deleted page must not keep saying `HTTP 200` |
+| no answer, `5xx`, any other `4xx` | the old page stays | "later", or "not you", rather than "gone": the outage is what the page is kept for |
 
 The first version kept the old page for every non-2xx answer. A review
 reproduced the consequence: a deleted documentation page showed its old title
 under `HTTP 200` forever, because every hover touched the file and the sweep
 never got to it. "Is this link still there?" is the question a link hover is
 asked, and the cache had made the answer wrong.
+
+The second version deleted on every 4xx but 408 and 429, and a second review
+pointed at the other side: Cloudflare and similar front ends answer curl with
+a 403 challenge, and a lapsed single sign-on answers 401. Both would have
+thrown a good page away for exactly the outage it is kept for. So only the
+three statuses that mean "gone" delete.
+
+A refresh that is still out when `:Hover links cache clear` runs writes
+nothing back: the cache counts its clears, and a refresh writes only when the
+count is the one it started with.
 
 ## What is never written
 
