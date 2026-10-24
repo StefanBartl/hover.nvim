@@ -184,7 +184,7 @@ end
 ---
 --- **`opts.nth` steps past the winner.** Several plugins can have something to
 --- say about one place, and they often do: a dotted name is both "what is this
---- module" (documentation.nvim) and "who imports it" (insights.nvim). First
+--- module" (docmap.nvim) and "who imports it" (insights.nvim). First
 --- match wins is right for a *source*, where the answers compete to describe
 --- the same target -- and wrong here, where they are different sentences about
 --- the same place, and the loser is invisible rather than outranked. Which one

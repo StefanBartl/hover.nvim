@@ -193,7 +193,7 @@ local function check_config()
       if #off > 0 then
         -- One string, no advice list: `health.info` takes a message and
         -- nothing else, and a second argument is dropped in silence -- the
-        -- same trap documentation.nvim's own health section fell into
+        -- same trap docmap.nvim's own health section fell into
         -- (`9f128bb`). The LuaLS scan is what saw it here, after a green
         -- suite.
         health.info(

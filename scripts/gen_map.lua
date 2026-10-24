@@ -7,7 +7,7 @@
 ---   nvim --headless -l scripts/gen_map.lua --full             # + LuaLS enrichment
 ---
 --- Everything above the options table is copied verbatim from
---- documentation.nvim's `scripts/gen_map.lua`; see its docs/REUSE.md.
+--- docmap.nvim's `scripts/gen_map.lua`; see its docs/REUSE.md.
 ---
 --- `docs/map/` is gitignored, so `--check` is deliberately NOT run in CI: it
 --- compares the freshly generated map against the files on disk, and on a
@@ -20,7 +20,7 @@ vim.opt.runtimepath:prepend(root)
 --- Put a dependency on the runtimepath, if it is not already reachable.
 ---
 --- A headless `nvim -l` run starts with no plugin manager, so nothing beyond
---- `root` is on the rtp -- `documentation` and `lib.nvim` both have to be
+--- `root` is on the rtp -- `docmap` and `lib.nvim` both have to be
 --- found by hand. Three candidates, in descending order of explicitness: an
 --- environment variable (what CI sets), a `.deps/` checkout (what CI clones
 --- into), and a sibling checkout (what a local development tree looks like).
@@ -63,9 +63,9 @@ local function ensure(modname, dirname)
 end
 
 ensure("lib.nvim.fs.read", "lib.nvim")
-ensure("documentation.core.cli", "documentation.nvim")
+ensure("docmap.core.cli", "docmap.nvim")
 
-local opts = require("documentation.config").build(root, {
+local opts = require("docmap.config").build(root, {
   source = "lua/hover",
   title = "hover.nvim",
   out_dir = "docs/map",
@@ -104,5 +104,5 @@ local opts = require("documentation.config").build(root, {
   },
 })
 
-local code = require("documentation.core.cli").run(opts, _G.arg or {})
+local code = require("docmap.core.cli").run(opts, _G.arg or {})
 vim.cmd("cq " .. code)

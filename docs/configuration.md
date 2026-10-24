@@ -354,7 +354,7 @@ the switches above: `paths.enabled = false` means a bare path is not a target at
 nothing finds it; leaving `file` out of `auto_hover` means it is found and waits for you
 to ask. Two consequences worth knowing before you keep the default:
 
-- **Position previews are off with the rest.** documentation.nvim saying what a module is,
+- **Position previews are off with the rest.** docmap.nvim saying what a module is,
   insights.nvim saying who imports it — those answer on `:Hover show` and not on their own.
 - **It saves the float, not the work before it.** To know that something is a picture, the
   path still has to be resolved. What you get is quiet, not speed.
@@ -403,7 +403,7 @@ lib.nvim), in which case nothing breaks — switches simply stop surviving a res
 ## When two plugins answer
 
 More than one plugin can have something to say about one place. On a dotted name two
-routinely do: documentation.nvim answers *what this module is*, insights.nvim *who
+routinely do: docmap.nvim answers *what this module is*, insights.nvim *who
 imports it*. Both are true and they are different sentences, so the answers are a **ring**
 rather than a race — `<M-n>` or `:Hover next` steps to the next one, and past the last it
 returns to the first. With only one answer it says so, because a key that silently does

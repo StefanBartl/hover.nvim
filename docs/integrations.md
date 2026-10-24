@@ -93,7 +93,7 @@ including `on_request` for an answer that costs a process start.
 | [media.nvim](https://github.com/StefanBartl/media.nvim) | named | lifting a still (or a played run, or sound for it) out of a video with ffmpeg/mpv, and describing the file with ffprobe | a `.mp4` shows what it is and how big, and says which half is missing |
 | [reposcope.nvim](https://github.com/StefanBartl/reposcope.nvim) | registry | `owner/repo` under the cursor, as the path of its cached README | no repository hover |
 | [migrate.nvim](https://github.com/StefanBartl/migrate.nvim) | registry | a *position* preview: this line uses a deprecated API, and what replaces it | no deprecation notice in the float |
-| [documentation.nvim](https://github.com/StefanBartl/documentation.nvim) | registry | a *position* preview: what the dotted module under the cursor is, out of the generated map | no module summary |
+| [docmap.nvim](https://github.com/StefanBartl/docmap.nvim) | registry | a *position* preview: what the dotted module under the cursor is, out of the generated map | no module summary |
 | [spotlight.nvim](https://github.com/StefanBartl/spotlight.nvim) | registry | a *position* preview: how often a spotlighted token occurs in this buffer | no occurrence count |
 | [insights.nvim](https://github.com/StefanBartl/insights.nvim) | registry | a *position* preview: which files import the module under the cursor, out of its own remembered scan | no importer list in the float |
 | [sandbox.nvim](https://github.com/StefanBartl/sandbox.nvim) | registry | a *position* preview, **request-only**: whether the container image under the cursor is pulled, how big it is, and what runs from it | no image hover |
@@ -370,7 +370,7 @@ Each is documented on its own side, because that is where the code is:
 | markdown.nvim | source + preview | link and `<figure>` scanning; `#heading` sections | [docs/hover.md](https://github.com/StefanBartl/markdown.nvim/blob/main/docs/hover.md) |
 | reposcope.nvim | source | `owner/repo` → the path of its cached README | [docs/hover.md](https://github.com/StefanBartl/reposcope.nvim/blob/main/docs/hover.md) |
 | migrate.nvim | position | this line uses a deprecated API, and what replaces it | [docs/hover.md](https://github.com/StefanBartl/migrate.nvim/blob/main/docs/hover.md) |
-| documentation.nvim | position | what the dotted module under the cursor is | [docs/hover.md](https://github.com/StefanBartl/documentation.nvim/blob/main/docs/hover.md) |
+| docmap.nvim | position | what the dotted module under the cursor is | [docs/hover.md](https://github.com/StefanBartl/docmap.nvim/blob/main/docs/hover.md) |
 | spotlight.nvim | position | how often a spotlighted token occurs in this buffer | [docs/hover.md](https://github.com/StefanBartl/spotlight.nvim/blob/main/docs/hover.md) |
 | insights.nvim | position | which files import the module under the cursor | [docs/hover.md](https://github.com/StefanBartl/insights.nvim/blob/main/docs/hover.md) |
 | sandbox.nvim | position (`on_request`) | is this container image pulled, how big, what runs from it | [docs/FEATURES/HOVER.md](https://github.com/StefanBartl/sandbox.nvim/blob/main/docs/FEATURES/HOVER.md) |
@@ -405,7 +405,7 @@ itself rather than relying on a switch here:
   it genuinely migrates.
 - reposcope.nvim answers only for slugs its cache confirms — never for
   arbitrary `owner/repo`-shaped text, which is spelled exactly like `and/or`.
-- documentation.nvim answers only for names in the generated map, and says so
+- docmap.nvim answers only for names in the generated map, and says so
   when the map is older than the code.
 - spotlight.nvim answers only for tokens that are already spotlighted, because
   a spotlight is the only available signal that this token matters to the

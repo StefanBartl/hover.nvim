@@ -24,11 +24,11 @@ API, how often this token occurs in the buffer, what the module in this
 until the kind existed "no target" meant "no hover", full stop.
 
 **Four plugins were waiting on the same missing piece** — migrate.nvim,
-documentation.nvim, spotlight.nvim, sandbox.nvim — which is the strongest
+docmap.nvim, spotlight.nvim, sandbox.nvim — which is the strongest
 evidence that the gap was real rather than theoretical.
 
 **Positions are a ring, not a race.** Several plugins can answer for one
-place, and on a dotted name two routinely do: documentation.nvim says what the
+place, and on a dotted name two routinely do: docmap.nvim says what the
 module is, insights.nvim says who imports it. First-match-wins is right for a
 *source* — those compete to describe the same target — and wrong here, where
 the answers are different sentences about the same place and the loser is
